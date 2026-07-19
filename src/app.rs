@@ -720,7 +720,7 @@ impl Desktop {
             }
             Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 68, 20),
             Launch::About => (Box::new(About::new()), "✨", 70, 28),
-            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 52, 18),
+            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 29, 20),
             Launch::Clock => (Box::new(ClockApp::new()), "⏱", 56, 16),
             Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 80, 26),
             Launch::Calendar => (Box::new(Calendar::new()), "📅", 48, 18),

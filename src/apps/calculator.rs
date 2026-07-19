@@ -1,17 +1,31 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::crossterm::event::{
+    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::{Action, AppWindow};
 
+// macOS calculator palette
+const BODY_BG: Color = Color::Rgb(38, 37, 42);
+const BTN_DIGIT: Color = Color::Rgb(89, 88, 94);
+const BTN_FUNC: Color = Color::Rgb(63, 62, 68);
+const BTN_OP: Color = Color::Rgb(255, 159, 10);
+
+#[derive(Clone, Copy, PartialEq)]
+enum Key {
+    Ch(char),
+    Clear,
+    Neg,
+    Percent,
+    Eq,
+}
+
 pub struct Calculator {
     expr: String,
     result: String,
-    history: Vec<String>,
-    scroll: usize,
+    buttons: Vec<(Rect, Key)>,
 }
 
 impl Calculator {
@@ -19,8 +33,7 @@ impl Calculator {
         Calculator {
             expr: String::new(),
             result: String::from("0"),
-            history: Vec::new(),
-            scroll: 0,
+            buttons: Vec::new(),
         }
     }
 
@@ -32,15 +45,71 @@ impl Calculator {
         match eval_expr(raw) {
             Ok(v) => {
                 let formatted = format_num(v);
-                self.history.push(format!("{raw} = {formatted}"));
-                if self.history.len() > 40 {
-                    self.history.remove(0);
-                }
                 self.result = formatted.clone();
                 self.expr = formatted;
             }
-            Err(e) => self.result = format!("✗ {e}"),
+            Err(_) => {
+                self.result = "Error".into();
+                self.expr.clear();
+            }
         }
+    }
+
+    fn clear(&mut self) {
+        self.expr.clear();
+        self.result = "0".into();
+    }
+
+    fn percent(&mut self) {
+        if self.expr.trim().is_empty() {
+            return;
+        }
+        match eval_expr(&format!("({})/100", self.expr)) {
+            Ok(v) => {
+                let formatted = format_num(v);
+                self.result = formatted.clone();
+                self.expr = formatted;
+            }
+            Err(_) => {
+                self.result = "Error".into();
+                self.expr.clear();
+            }
+        }
+    }
+
+    fn negate(&mut self) {
+        if let Some(rest) = self.expr.strip_prefix('-') {
+            self.expr = rest.to_string();
+        } else if !self.expr.is_empty() {
+            self.expr.insert(0, '-');
+        }
+    }
+
+    fn press(&mut self, k: Key) {
+        match k {
+            Key::Ch(c) => self.expr.push(c),
+            Key::Clear => self.clear(),
+            Key::Neg => self.negate(),
+            Key::Percent => self.percent(),
+            Key::Eq => self.evaluate(),
+        }
+    }
+
+    /// What the big display shows: the live entry, or the last result.
+    fn display_text(&self) -> String {
+        let src = if self.expr.is_empty() {
+            &self.result
+        } else {
+            &self.expr
+        };
+        src.chars()
+            .map(|c| match c {
+                '*' => '×',
+                '/' => '÷',
+                '-' => '−',
+                _ => c,
+            })
+            .collect()
     }
 }
 
@@ -49,94 +118,147 @@ impl AppWindow for Calculator {
         "Calculator".into()
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height < 4 {
+    fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
+        self.buttons.clear();
+        if area.width < 11 || area.height < 3 {
             return;
         }
-        let accent = Style::default()
-            .fg(Color::Rgb(0, 210, 180))
-            .add_modifier(Modifier::BOLD);
-        let dim = Style::default().fg(Color::Rgb(130, 140, 165));
-        let val = Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD);
+        let buf = f.buffer_mut();
+        let blank = " ".repeat(area.width as usize);
+        for y in area.top()..area.bottom() {
+            buf.set_string(area.x, y, &blank, Style::default().bg(BODY_BG));
+        }
 
-        let mut lines = vec![
-            Line::from(Span::styled("  + − × ÷  ·  ( )  ·  ^  ·  %", dim)),
-            Line::default(),
-            Line::from(vec![
-                Span::styled("  ▶ ", accent),
-                Span::styled(
-                    format!("{}{}", self.expr, if focused { "█" } else { "" }),
-                    val,
-                ),
-            ]),
-            Line::from(Span::styled(format!("  = {}", self.result), accent)),
-            Line::default(),
-            Line::from(Span::styled("  History", accent)),
+        // ------- layout: display strip on top, 5 rows x 4 cols of buttons
+        let hgap: u16 = 1;
+        let vgap: u16 = u16::from(area.height >= 17);
+        let btn_h = ((area.height.saturating_sub(2 + vgap * 4)) / 5).clamp(1, 3);
+        let grid_h = btn_h * 5 + vgap * 4;
+        let display_h = area.height.saturating_sub(grid_h).max(2);
+        let col_w = (area.width - 3 * hgap) / 4;
+        let used = col_w * 4 + 3 * hgap;
+        let left = area.x + (area.width - used) / 2;
+
+        // ------- display: big right-aligned readout
+        let text = self.display_text();
+        let max = used.saturating_sub(2) as usize;
+        let chars: Vec<char> = text.chars().collect();
+        let shown: String = if chars.len() > max {
+            chars[chars.len() - max..].iter().collect()
+        } else {
+            text
+        };
+        let tw = shown.chars().count() as u16;
+        buf.set_string(
+            left + used - tw - 1,
+            area.y + display_h - 2,
+            &shown,
+            Style::default()
+                .fg(Color::White)
+                .bg(BODY_BG)
+                .add_modifier(Modifier::BOLD),
+        );
+
+        // ------- button grid
+        let ac: &str = if self.expr.is_empty() { "AC" } else { "C" };
+        let rows: [&[(&str, Key, u16)]; 5] = [
+            &[
+                (ac, Key::Clear, 1),
+                ("±", Key::Neg, 1),
+                ("%", Key::Percent, 1),
+                ("÷", Key::Ch('/'), 1),
+            ],
+            &[
+                ("7", Key::Ch('7'), 1),
+                ("8", Key::Ch('8'), 1),
+                ("9", Key::Ch('9'), 1),
+                ("×", Key::Ch('*'), 1),
+            ],
+            &[
+                ("4", Key::Ch('4'), 1),
+                ("5", Key::Ch('5'), 1),
+                ("6", Key::Ch('6'), 1),
+                ("−", Key::Ch('-'), 1),
+            ],
+            &[
+                ("1", Key::Ch('1'), 1),
+                ("2", Key::Ch('2'), 1),
+                ("3", Key::Ch('3'), 1),
+                ("+", Key::Ch('+'), 1),
+            ],
+            &[
+                ("0", Key::Ch('0'), 2),
+                (".", Key::Ch('.'), 1),
+                ("=", Key::Eq, 1),
+            ],
         ];
 
-        let hist_h = area.height.saturating_sub(8) as usize;
-        let start = self.history.len().saturating_sub(hist_h + self.scroll);
-        let end = self.history.len().saturating_sub(self.scroll);
-        for item in self.history.get(start..end).into_iter().flatten() {
-            lines.push(Line::from(Span::styled(
-                format!("  {item}"),
-                Style::default().fg(Color::Rgb(180, 190, 210)),
-            )));
+        let mut y = area.y + display_h;
+        for row in rows {
+            let mut x = left;
+            for &(label, key, span) in row {
+                let bw = col_w * span + hgap * (span - 1);
+                let bg = match key {
+                    Key::Clear | Key::Neg | Key::Percent => BTN_FUNC,
+                    Key::Eq | Key::Ch('+' | '-' | '*' | '/') => BTN_OP,
+                    _ => BTN_DIGIT,
+                };
+                let style = Style::default()
+                    .fg(Color::White)
+                    .bg(bg)
+                    .add_modifier(Modifier::BOLD);
+                let pad = " ".repeat(bw as usize);
+                for yy in y..y + btn_h {
+                    buf.set_string(x, yy, &pad, style);
+                }
+                // fake rounded corners
+                if btn_h >= 2 && bw >= 3 {
+                    let corner = Style::default().bg(BODY_BG);
+                    buf.set_string(x, y, " ", corner);
+                    buf.set_string(x + bw - 1, y, " ", corner);
+                    buf.set_string(x, y + btn_h - 1, " ", corner);
+                    buf.set_string(x + bw - 1, y + btn_h - 1, " ", corner);
+                }
+                let lw = label.chars().count() as u16;
+                buf.set_string(x + (bw.saturating_sub(lw)) / 2, y + btn_h / 2, label, style);
+                self.buttons.push((Rect::new(x, y, bw, btn_h), key));
+                x += bw + hgap;
+            }
+            y += btn_h + vgap;
         }
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            "  Enter =  ·  Esc/C clear  ·  Backspace  ·  Ctrl+L clear hist",
-            dim,
-        )));
-
-        f.render_widget(Paragraph::new(lines), area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         match k.code {
-            KeyCode::Esc => {
-                self.expr.clear();
-                self.result = "0".into();
-            }
-            KeyCode::Char('c' | 'C') if !ctrl => {
-                self.expr.clear();
-                self.result = "0".into();
-            }
-            KeyCode::Char('l') if ctrl => {
-                self.history.clear();
-                self.scroll = 0;
-            }
+            KeyCode::Esc => self.clear(),
+            KeyCode::Char('c' | 'C') if !ctrl => self.clear(),
             KeyCode::Enter => self.evaluate(),
             KeyCode::Backspace => {
                 self.expr.pop();
             }
-            KeyCode::Up => {
-                self.scroll = (self.scroll + 1).min(self.history.len());
-            }
-            KeyCode::Down => {
-                self.scroll = self.scroll.saturating_sub(1);
-            }
+            KeyCode::Char('=') if !ctrl => self.evaluate(),
             KeyCode::Char(c) if !ctrl => {
-                if "0123456789+-*/()^.% ".contains(c) || c == 'e' || c == 'E' {
-                    let mapped = match c {
-                        '*' => '×',
-                        '/' => '÷',
-                        _ => c,
-                    };
-                    // store ASCII ops internally
-                    let store = match c {
-                        '×' => '*',
-                        '÷' => '/',
-                        _ => c,
-                    };
-                    let _ = mapped;
-                    self.expr.push(store);
+                if "0123456789+-*/()^.% eE".contains(c) {
+                    self.expr.push(c);
                 }
             }
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        if let MouseEventKind::Down(MouseButton::Left) = m.kind {
+            let hit = self.buttons.iter().find(|(r, _)| {
+                m.column >= r.x
+                    && m.column < r.x + r.width
+                    && m.row >= r.y
+                    && m.row < r.y + r.height
+            });
+            if let Some(&(_, key)) = hit {
+                self.press(key);
+            }
         }
         Action::None
     }
