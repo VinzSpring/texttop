@@ -48,14 +48,20 @@ on headless boxes use `xvfb-run`.
 
 | App | What it does |
 |-----|--------------|
-| 🗂 Files | Browse drives/folders; Enter opens files with the right app |
+| 🗂 Files | Browse drives/folders with filter, rename, delete, mkdir, copy/cut/paste, sort, preview, bookmarks; Enter opens with the right app; F3 hex · F4 edit · Ctrl+T terminal here |
 | 🌐 Web | **Real graphical browser** (Edge / WebKit): JS, CSS, media — with **hybrid rendering**: pixels for images/layout, and the page's text extracted and drawn as crisp terminal characters (F3 toggles). F4 for URL, click links, type into forms, F9/F10 zoom |
 | 🖥 Terminal | Full shell (`portable-pty` + vt100) inside a desktop window |
 | 🧩 Programs | Run executables / `.app` bundles: terminal, args form, or detached |
 | 🎵 Audio | Plays mp3/wav/flac/ogg (rodio) with visualizer, seek + volume |
 | 🖼 Images | Quadrant-pixel truecolor rendering (2×2 pixels per cell) |
 | 🎬 Video | Engine-based playback **with sound** — any format the platform webview plays |
-| 📝 Editor | Text editor with line numbers, Ctrl+S saves |
+| 📝 Editor | Text editor with line numbers and syntax highlighting (Rust, Python, JS/TS, C/C++, Go, Java, JSON, TOML, YAML, HTML, CSS, SQL, Shell, Markdown, …). Ctrl+S saves, Ctrl+H toggles highlight |
+| 🧮 Calculator | Expression calculator (`+ − * / ^ %` and parentheses) with history |
+| ⏱ Clock | Live clock, stopwatch, and countdown timer |
+| 📅 Calendar | Month calendar — jump by day/week/month/year |
+| 📌 Notes | Sticky notepad persisted to `~/.texttop_notes.txt` |
+| 🔢 Hex | Hex/ASCII dump viewer (Files → F3) |
+| 💻 System | OS/CPU info, special folders, environment snapshot |
 
 ## Desktop controls
 

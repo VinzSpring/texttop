@@ -8,6 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::syntax::{self, HlState, Lang};
 use super::{Action, AppWindow};
 
 pub struct Editor {
@@ -18,6 +19,8 @@ pub struct Editor {
     scroll: usize,
     modified: bool,
     status: String,
+    lang: Lang,
+    highlight: bool,
 }
 
 fn bidx(s: &str, cx: usize) -> usize {
@@ -26,7 +29,8 @@ fn bidx(s: &str, cx: usize) -> usize {
 
 impl Editor {
     pub fn new(path: Option<PathBuf>) -> Self {
-        let mut status = String::from("Ctrl+S saves");
+        let mut status = String::from("Ctrl+S saves · Ctrl+H toggle highlight");
+        let lang = Lang::from_path(path.as_deref());
         let lines = match &path {
             Some(p) => match fs::read(p) {
                 Ok(bytes) => {
@@ -56,6 +60,8 @@ impl Editor {
             scroll: 0,
             modified: false,
             status,
+            lang,
+            highlight: lang != Lang::Plain,
         }
     }
 
@@ -69,11 +75,24 @@ impl Editor {
             Some(p) => match fs::write(p, self.lines.join("\n")) {
                 Ok(_) => {
                     self.modified = false;
-                    self.status = format!("saved {} lines ✓", self.lines.len());
+                    self.lang = Lang::from_path(Some(p));
+                    self.status = format!("saved {} lines ✓ · {}", self.lines.len(), self.lang.label());
                 }
                 Err(e) => self.status = format!("✗ save failed: {e}"),
             },
         }
+    }
+
+    fn paint_line(&self, line: &str, state: &mut HlState, hscroll: usize, content_w: usize) -> Vec<Span<'static>> {
+        if !self.highlight || self.lang == Lang::Plain {
+            let visible: String = line.chars().skip(hscroll).take(content_w).collect();
+            return vec![Span::styled(
+                visible,
+                Style::default().fg(Color::Rgb(220, 222, 232)),
+            )];
+        }
+        let spans = syntax::highlight_line(self.lang, line, state);
+        syntax::slice_spans(spans, hscroll, content_w)
     }
 }
 
@@ -107,15 +126,22 @@ impl AppWindow for Editor {
         let content_w = area.width.saturating_sub(gutter) as usize;
         let hscroll = self.cx.saturating_sub(content_w.saturating_sub(1));
 
+        let mut state = if self.highlight {
+            syntax::state_before(self.lang, &self.lines, self.scroll)
+        } else {
+            HlState::default()
+        };
+
         let mut out: Vec<Line> = Vec::new();
         for (i, line) in self.lines.iter().enumerate().skip(self.scroll).take(text_h) {
             let num = Span::styled(
                 format!("{:>4} ", i + 1),
                 Style::default().fg(Color::Rgb(90, 95, 120)),
             );
-            let visible: String = line.chars().skip(hscroll).take(content_w).collect();
-            let body = Span::styled(visible, Style::default().fg(Color::Rgb(220, 222, 232)));
-            out.push(Line::from(vec![num, body]));
+            let mut body = self.paint_line(line, &mut state, hscroll, content_w);
+            let mut spans = vec![num];
+            spans.append(&mut body);
+            out.push(Line::from(spans));
         }
         f.render_widget(Paragraph::new(out), Rect::new(area.x, area.y, area.width, text_h as u16));
 
@@ -130,11 +156,17 @@ impl AppWindow for Editor {
             }
         }
 
+        let hl = if self.highlight {
+            self.lang.label()
+        } else {
+            "plain"
+        };
         let status = format!(
-            " {}  ·  Ln {}, Col {}  ·  {} ",
+            " {}  ·  Ln {}, Col {}  ·  {}  ·  {} ",
             if self.modified { "modified •" } else { "saved ✓" },
             self.cy + 1,
             self.cx + 1,
+            hl,
             self.status
         );
         f.render_widget(
@@ -152,6 +184,14 @@ impl AppWindow for Editor {
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         match k.code {
             KeyCode::Char('s') if ctrl => self.save(),
+            KeyCode::Char('h') if ctrl => {
+                self.highlight = !self.highlight;
+                self.status = if self.highlight {
+                    format!("highlight on ({})", self.lang.label())
+                } else {
+                    "highlight off".into()
+                };
+            }
             KeyCode::Char(c) if !ctrl && !alt => {
                 let i = bidx(&self.lines[self.cy], self.cx);
                 self.lines[self.cy].insert(i, c);

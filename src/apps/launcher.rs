@@ -472,6 +472,7 @@ impl AppWindow for AppLauncher {
                         return Action::Launch(Launch::Terminal {
                             program: Some(self.path.clone()),
                             args: Vec::new(),
+                            cwd: None,
                         })
                     }
                     1 => self.parse_help(),
@@ -538,6 +539,7 @@ impl AppWindow for AppLauncher {
                             return Action::Launch(Launch::Terminal {
                                 program: Some(self.path.clone()),
                                 args: self.collected_args(),
+                                cwd: None,
                             });
                         }
                         Some(FormRow::RunDetached) => {

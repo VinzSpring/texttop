@@ -87,10 +87,8 @@ pub struct TextRun {
 /// rendered text from screenshots (the TUI redraws it crisply).
 pub const EXTRACT_JS: &str = r##"(function(){
  try{
-  var st=document.getElementById('__ttp_style');
-  if(!st){st=document.createElement('style');st.id='__ttp_style';
-    st.textContent='*{-webkit-text-fill-color:transparent !important;caret-color:transparent !important;text-shadow:none !important;}';
-    document.documentElement.appendChild(st);}
+  // Extract first; only hide pixel text once we have words to redraw.
+  // Hiding up-front left pages blank while the DOM was still loading.
   var out=[];var vw=innerWidth,vh=innerHeight;var count=0;
   function push(r,txt,cs){
     if(!r||r.width<=0||r.height<=0)return;
@@ -125,6 +123,12 @@ pub const EXTRACT_JS: &str = r##"(function(){
       push(e2.getBoundingClientRect(),v.substring(0,200),getComputedStyle(e2));
     }
   }
+  var st=document.getElementById('__ttp_style');
+  if(count>0){
+    if(!st){st=document.createElement('style');st.id='__ttp_style';
+      st.textContent='*{-webkit-text-fill-color:transparent !important;caret-color:transparent !important;text-shadow:none !important;}';
+      document.documentElement.appendChild(st);}
+  }else if(st){st.remove();}
   return JSON.stringify(out);
  }catch(e){return '[]';}
 })()"##;

@@ -11,9 +11,11 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear};
 use ratatui::Frame;
 
 use crate::apps::{
-    about::About, audioplayer::AudioPlayer, editor::Editor, filebrowser::FileBrowser,
-    imageviewer::ImageViewer, launcher::AppLauncher, terminal::Terminal,
-    videoplayer::VideoPlayer, webbrowser::WebBrowser, Action, AppWindow, Launch,
+    about::About, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
+    clock::ClockApp, editor::Editor, filebrowser::FileBrowser, hexviewer::HexViewer,
+    imageviewer::ImageViewer, launcher::AppLauncher, notes::Notes, sysinfo::SysInfo,
+    terminal::Terminal, videoplayer::VideoPlayer, webbrowser::WebBrowser, Action, AppWindow,
+    Launch,
 };
 use crate::gfx;
 
@@ -49,6 +51,12 @@ enum MenuAction {
     Web,
     Terminal,
     Editor,
+    Calculator,
+    Clock,
+    Calendar,
+    Notes,
+    Hex,
+    SysInfo,
     Wallpaper,
     About,
     Quit,
@@ -59,6 +67,12 @@ const MENU: &[(&str, MenuAction)] = &[
     ("🌐  Web Browser", MenuAction::Web),
     ("🖥  Terminal", MenuAction::Terminal),
     ("📝  Text Editor", MenuAction::Editor),
+    ("🧮  Calculator", MenuAction::Calculator),
+    ("⏱  Clock & Timer", MenuAction::Clock),
+    ("📅  Calendar", MenuAction::Calendar),
+    ("📌  Notes", MenuAction::Notes),
+    ("🔢  Hex Viewer", MenuAction::Hex),
+    ("💻  System Info", MenuAction::SysInfo),
     ("🎨  Wallpaper", MenuAction::Wallpaper),
     ("✨  About & Help", MenuAction::About),
     ("⏻  Exit texttop", MenuAction::Quit),
@@ -69,6 +83,9 @@ const ICONS: &[(&str, &str, MenuAction)] = &[
     ("🌐", "Web", MenuAction::Web),
     ("🖥", "Terminal", MenuAction::Terminal),
     ("📝", "Editor", MenuAction::Editor),
+    ("🧮", "Calc", MenuAction::Calculator),
+    ("📌", "Notes", MenuAction::Notes),
+    ("💻", "System", MenuAction::SysInfo),
     ("✨", "About", MenuAction::About),
 ];
 
@@ -320,8 +337,9 @@ impl Desktop {
     }
 
     fn render_start_menu(&mut self, f: &mut Frame, taskbar_y: u16) {
-        let h = MENU.len() as u16 + 2;
-        let w = 30u16.min(self.screen.width.saturating_sub(2));
+        let want = MENU.len() as u16 + 2;
+        let h = want.min(taskbar_y.max(1));
+        let w = 34u16.min(self.screen.width.saturating_sub(2));
         let rect = Rect::new(1, taskbar_y.saturating_sub(h), w, h);
         self.menu_rect = rect;
         f.render_widget(Clear, rect);
@@ -646,11 +664,36 @@ impl Desktop {
                 self.spawn(Launch::Terminal {
                     program: None,
                     args: Vec::new(),
+                    cwd: None,
                 });
                 self.start_open = false;
             }
             MenuAction::Editor => {
                 self.spawn(Launch::Editor(None));
+                self.start_open = false;
+            }
+            MenuAction::Calculator => {
+                self.spawn(Launch::Calculator);
+                self.start_open = false;
+            }
+            MenuAction::Clock => {
+                self.spawn(Launch::Clock);
+                self.start_open = false;
+            }
+            MenuAction::Calendar => {
+                self.spawn(Launch::Calendar);
+                self.start_open = false;
+            }
+            MenuAction::Notes => {
+                self.spawn(Launch::Notes);
+                self.start_open = false;
+            }
+            MenuAction::Hex => {
+                self.spawn(Launch::Hex(None));
+                self.start_open = false;
+            }
+            MenuAction::SysInfo => {
+                self.spawn(Launch::SysInfo);
                 self.start_open = false;
             }
             MenuAction::Wallpaper => {
@@ -666,17 +709,23 @@ impl Desktop {
 
     fn spawn(&mut self, launch: Launch) {
         let (app, icon, w, h): (Box<dyn AppWindow>, &'static str, u16, u16) = match launch {
-            Launch::Files(p) => (Box::new(FileBrowser::new(p)), "🗂", 66, 24),
+            Launch::Files(p) => (Box::new(FileBrowser::new(p)), "🗂", 72, 26),
             Launch::Web(u) => (Box::new(WebBrowser::new(u)), "🌐", 94, 32),
             Launch::Audio(p) => (Box::new(AudioPlayer::new(p)), "🎵", 58, 17),
             Launch::Image(p) => (Box::new(ImageViewer::new(p)), "🖼", 78, 30),
             Launch::Video(p) => (Box::new(VideoPlayer::new(p)), "🎬", 86, 30),
             Launch::Editor(p) => (Box::new(Editor::new(p)), "📝", 76, 26),
-            Launch::Terminal { program, args } => {
-                (Box::new(Terminal::new(program, args)), "🖥", 84, 26)
+            Launch::Terminal { program, args, cwd } => {
+                (Box::new(Terminal::new(program, args, cwd)), "🖥", 84, 26)
             }
             Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 68, 20),
-            Launch::About => (Box::new(About::new()), "✨", 68, 24),
+            Launch::About => (Box::new(About::new()), "✨", 70, 28),
+            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 52, 18),
+            Launch::Clock => (Box::new(ClockApp::new()), "⏱", 56, 16),
+            Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 80, 26),
+            Launch::Calendar => (Box::new(Calendar::new()), "📅", 48, 18),
+            Launch::SysInfo => (Box::new(SysInfo::new()), "💻", 72, 26),
+            Launch::Notes => (Box::new(Notes::new()), "📌", 64, 22),
         };
         let scr = self.screen;
         let w = w.min(scr.width.saturating_sub(4).max(24));

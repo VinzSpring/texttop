@@ -300,6 +300,7 @@ impl AppWindow for WebBrowser {
             }
             _ => {
                 let frame = self.engine.frame();
+                let texts = self.engine.texts();
                 if let Some(fr) = &frame {
                     gfx::draw_rgb_cached(
                         f.buffer_mut(),
@@ -310,10 +311,12 @@ impl AppWindow for WebBrowser {
                         fr.seq as usize,
                         &mut self.cache,
                     );
-                    if self.overlay {
+                    // Only composite crisp text when we actually have runs —
+                    // otherwise keep the pixel frame (avoids blank pages).
+                    if self.overlay && !texts.is_empty() {
                         self.draw_text_overlay(f, content, Some(fr));
                     }
-                } else if self.overlay && !self.engine.texts().is_empty() {
+                } else if self.overlay && !texts.is_empty() {
                     self.draw_text_overlay(f, content, None);
                 } else {
                     let spin = SPINNER[(self.t / 2) as usize % SPINNER.len()];

@@ -28,7 +28,7 @@ pub struct Terminal {
 
 impl Terminal {
     /// `program` None → the user's shell (PowerShell).
-    pub fn new(program: Option<PathBuf>, args: Vec<String>) -> Self {
+    pub fn new(program: Option<PathBuf>, args: Vec<String>, cwd: Option<PathBuf>) -> Self {
         let (rows, cols) = (24u16, 80u16);
         let parser = Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 0)));
         let default_shell = if cfg!(windows) {
@@ -109,7 +109,9 @@ impl Terminal {
                 c
             }
         };
-        if let Some(home) = dirs::home_dir() {
+        if let Some(dir) = cwd.filter(|p| p.is_dir()) {
+            cmd.cwd(dir);
+        } else if let Some(home) = dirs::home_dir() {
             if program.is_none() {
                 cmd.cwd(home);
             } else if let Some(dir) = program.as_ref().and_then(|p| p.parent()) {

@@ -60,10 +60,17 @@ pub mod audioplayer {
         }
     }
 }
+pub mod calculator;
+pub mod calendar;
+pub mod clock;
 pub mod editor;
 pub mod filebrowser;
+pub mod hexviewer;
 pub mod imageviewer;
 pub mod launcher;
+pub mod notes;
+pub mod syntax;
+pub mod sysinfo;
 pub mod terminal;
 pub mod videoplayer;
 pub mod webbrowser;
@@ -92,9 +99,16 @@ pub enum Launch {
     Terminal {
         program: Option<PathBuf>,
         args: Vec<String>,
+        cwd: Option<PathBuf>,
     },
     AppLauncher(PathBuf),
     About,
+    Calculator,
+    Clock,
+    Hex(Option<PathBuf>),
+    Calendar,
+    SysInfo,
+    Notes,
 }
 
 pub trait AppWindow {
