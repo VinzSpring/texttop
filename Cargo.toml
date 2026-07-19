@@ -1,0 +1,60 @@
+[package]
+name = "texttop"
+version = "0.2.0"
+edition = "2021"
+description = "A colorful text-based desktop environment for your terminal"
+
+[features]
+default = ["audio", "web-engine"]
+# Audio playback (rodio). On Linux needs ALSA headers at build time
+# (Ubuntu/Debian: libasound2-dev · Fedora: alsa-lib-devel).
+audio = ["dep:rodio"]
+# Embedded browser/video engine.
+# Windows: WebView2 · Linux: WebKitGTK · macOS: WKWebView (webkit crate).
+web-engine = [
+    "dep:webview2-com",
+    "dep:windows",
+    "dep:windows-core",
+    "dep:gtk",
+    "dep:webkit2gtk",
+    "dep:javascriptcore-rs",
+    "dep:webkit",
+]
+
+[dependencies]
+ratatui = "0.29"
+anyhow = "1"
+chrono = "0.4"
+dirs = "5"
+image = "0.25"
+url = "2"
+serde_json = "1"
+unicode-width = "0.2"
+portable-pty = "0.8"
+vt100 = "0.15"
+rodio = { version = "0.19", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = { version = "0.38", optional = true }
+windows = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_LibraryLoader",
+    "Win32_Graphics_Gdi",
+] }
+windows-core = { version = "0.61", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = { version = "0.18", optional = true }
+webkit2gtk = { version = "2.0", optional = true, features = ["v2_38"] }
+javascriptcore-rs = { version = "1.1", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Off-screen WKWebView (requires Xcode CLT / macOS 13+).
+webkit = { version = "0.3", optional = true }
+
+[profile.release]
+lto = true
+opt-level = 3
