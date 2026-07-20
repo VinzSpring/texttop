@@ -176,4 +176,15 @@ impl AppWindow for HexViewer {
         }
         Action::None
     }
+
+    fn accepts_drop(&self) -> bool {
+        true
+    }
+
+    fn on_drop(&mut self, paths: &[PathBuf], _cut: bool) -> Action {
+        if let Some(p) = paths.first().filter(|p| p.is_file()) {
+            self.load(p.clone());
+        }
+        Action::None
+    }
 }

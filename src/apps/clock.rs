@@ -1,13 +1,13 @@
 use std::time::Instant;
 
 use chrono::{Datelike, Local};
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::scroll::{self, ScrollState};
 use super::{Action, AppWindow};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -27,6 +27,9 @@ pub struct ClockApp {
     timer_running: bool,
     timer_started: Option<Instant>,
     timer_done: bool,
+    scroll: ScrollState,
+    line_count: usize,
+    view_h: u16,
 }
 
 impl ClockApp {
@@ -41,6 +44,9 @@ impl ClockApp {
             timer_running: false,
             timer_started: None,
             timer_done: false,
+            scroll: ScrollState::default(),
+            line_count: 0,
+            view_h: 12,
         }
     }
 
@@ -197,14 +203,24 @@ impl AppWindow for ClockApp {
 
         lines.push(Line::default());
         lines.push(Line::from(Span::styled(
-            "  Tab cycle modes · 1/2/3 jump",
+            "  Tab cycle modes · 1/2/3 jump · wheel scrolls if clipped",
             dim,
         )));
 
-        f.render_widget(Paragraph::new(lines), area);
+        self.line_count = lines.len();
+        self.view_h = area.height;
+        scroll::render_scrollable(f, area, &lines, &mut self.scroll);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
+        // Prefer app controls; only scroll with PgUp/PgDn/Home/End when clipped
+        if matches!(
+            k.code,
+            KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End
+        ) {
+            self.scroll.on_key(k, self.line_count, self.view_h);
+            return Action::None;
+        }
         match k.code {
             KeyCode::Tab => {
                 self.mode = match self.mode {
@@ -282,6 +298,11 @@ impl AppWindow for ClockApp {
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
         }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        self.scroll.on_mouse(m, self.line_count, self.view_h);
         Action::None
     }
 

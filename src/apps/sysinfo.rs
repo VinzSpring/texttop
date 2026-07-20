@@ -3,25 +3,29 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::Local;
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::scroll::{self, ScrollState};
 use super::{Action, AppWindow};
 use crate::gfx;
 
 pub struct SysInfo {
-    scroll: u16,
+    scroll: ScrollState,
+    line_count: usize,
+    view_h: u16,
     started: std::time::Instant,
 }
 
 impl SysInfo {
     pub fn new() -> Self {
         SysInfo {
-            scroll: 0,
+            scroll: ScrollState::default(),
+            line_count: 0,
+            view_h: 20,
             started: std::time::Instant::now(),
         }
     }
@@ -120,7 +124,10 @@ impl SysInfo {
             "   * session uptime (since this window opened)",
             dim,
         )));
-        out.push(Line::from(Span::styled("   ↑↓ scroll · F5 refresh view · q close", dim)));
+            out.push(Line::from(Span::styled(
+                "   ↑↓ / wheel scroll · F5 refresh · q close",
+                dim,
+            )));
         out
     }
 }
@@ -193,23 +200,26 @@ impl AppWindow for SysInfo {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        f.render_widget(
-            Paragraph::new(self.lines()).scroll((self.scroll, 0)),
-            area,
-        );
+        let lines = self.lines();
+        self.line_count = lines.len();
+        self.view_h = area.height;
+        scroll::render_scrollable(f, area, &lines, &mut self.scroll);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
+        if self.scroll.on_key(k, self.line_count, self.view_h) {
+            return Action::None;
+        }
         match k.code {
-            KeyCode::Up => self.scroll = self.scroll.saturating_sub(1),
-            KeyCode::Down => self.scroll = self.scroll.saturating_add(1).min(40),
-            KeyCode::PageUp => self.scroll = self.scroll.saturating_sub(8),
-            KeyCode::PageDown => self.scroll = (self.scroll + 8).min(40),
-            KeyCode::Home => self.scroll = 0,
             KeyCode::F(5) => {} // every render pulls fresh data already
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
         }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        self.scroll.on_mouse(m, self.line_count, self.view_h);
         Action::None
     }
 }

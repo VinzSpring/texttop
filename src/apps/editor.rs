@@ -298,4 +298,22 @@ impl AppWindow for Editor {
         }
         Action::None
     }
+
+    fn accepts_drop(&self) -> bool {
+        true
+    }
+
+    fn on_drop(&mut self, paths: &[PathBuf], _cut: bool) -> Action {
+        let Some(p) = paths.first() else {
+            return Action::None;
+        };
+        if p.is_dir() {
+            return Action::Launch(super::Launch::Files(p.clone()));
+        }
+        if self.modified {
+            return Action::Launch(super::Launch::Editor(Some(p.clone())));
+        }
+        *self = Editor::new(Some(p.clone()));
+        Action::None
+    }
 }

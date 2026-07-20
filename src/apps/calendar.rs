@@ -1,21 +1,27 @@
 use chrono::{Datelike, Duration, Local, NaiveDate};
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::scroll::{self, ScrollState};
 use super::{Action, AppWindow};
 
 pub struct Calendar {
     cursor: NaiveDate,
+    scroll: ScrollState,
+    line_count: usize,
+    view_h: u16,
 }
 
 impl Calendar {
     pub fn new() -> Self {
         Calendar {
             cursor: Local::now().date_naive(),
+            scroll: ScrollState::default(),
+            line_count: 0,
+            view_h: 16,
         }
     }
 
@@ -135,11 +141,36 @@ impl AppWindow for Calendar {
             "  ←→ day · ↑↓ week · [/] month · T today · PgUp/PgDn year",
             dim,
         )));
+        lines.push(Line::from(Span::styled(
+            "  mouse wheel / Ctrl+↑↓ scroll if clipped",
+            dim,
+        )));
 
-        f.render_widget(Paragraph::new(lines), area);
+        self.line_count = lines.len();
+        self.view_h = area.height;
+        scroll::render_scrollable(f, area, &lines, &mut self.scroll);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
+        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        if ctrl
+            && matches!(k.code, KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown)
+        {
+            self.scroll.on_key(
+                KeyEvent::new(
+                    match k.code {
+                        KeyCode::Up => KeyCode::Up,
+                        KeyCode::Down => KeyCode::Down,
+                        KeyCode::PageUp => KeyCode::PageUp,
+                        _ => KeyCode::PageDown,
+                    },
+                    KeyModifiers::NONE,
+                ),
+                self.line_count,
+                self.view_h,
+            );
+            return Action::None;
+        }
         match k.code {
             KeyCode::Left => self.cursor -= Duration::days(1),
             KeyCode::Right => self.cursor += Duration::days(1),
@@ -177,6 +208,11 @@ impl AppWindow for Calendar {
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
         }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        self.scroll.on_mouse(m, self.line_count, self.view_h);
         Action::None
     }
 }

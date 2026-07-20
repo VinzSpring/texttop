@@ -3,6 +3,8 @@
 //! typing are forwarded into the page (native input on Windows, simulated
 //! pointer events on Linux).
 
+use std::path::PathBuf;
+
 use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
@@ -512,5 +514,26 @@ impl AppWindow for WebBrowser {
 
     fn on_tick(&mut self) {
         self.t += 1;
+    }
+
+    fn accepts_drop(&self) -> bool {
+        true
+    }
+
+    fn on_drop(&mut self, paths: &[PathBuf], _cut: bool) -> Action {
+        let Some(p) = paths.first() else {
+            return Action::None;
+        };
+        if p.is_dir() {
+            return Action::Launch(super::Launch::Terminal {
+                program: None,
+                args: Vec::new(),
+                cwd: Some(p.clone()),
+            });
+        }
+        // navigate to local file / html
+        let url = p.to_string_lossy().to_string();
+        self.engine.send(Cmd::Navigate(normalize_url(&url)));
+        Action::None
     }
 }

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,8 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::gitutil::{self, GitLetter};
+use super::snaputil;
 use super::{file_icon, launch_for_path, Action, AppWindow, Launch};
 use crate::gfx;
 
@@ -42,6 +45,41 @@ struct Entry {
     is_up: bool,
     size: u64,
     modified: Option<SystemTime>,
+    git: Option<GitLetter>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum FileMenuAction {
+    Open,
+    Edit,
+    Hex,
+    Copy,
+    Cut,
+    Paste,
+    Rename,
+    Delete,
+    NewFolder,
+    NewFile,
+    TerminalHere,
+    Refresh,
+    TogglePreview,
+    DragCopy,
+    DragCut,
+    PinToDesktop,
+    GitStage,
+    GitUnstage,
+    GitDiff,
+    GitOpen,
+    SnapshotCreate,
+    SnapshotHistory,
+    Compare,
+}
+
+struct FileContext {
+    x: u16,
+    y: u16,
+    items: Vec<(String, FileMenuAction)>,
+    sel: usize,
 }
 
 pub struct FileBrowser {
@@ -59,6 +97,12 @@ pub struct FileBrowser {
     filter: String,
     clipboard: Option<(ClipOp, PathBuf)>,
     preview_text: String,
+    context: Option<FileContext>,
+    drag_from: Option<(usize, Instant)>,
+    git_root: Option<PathBuf>,
+    git_summary: String,
+    /// Multi-select marks (canonical paths of files/dirs).
+    marked: HashSet<PathBuf>,
 }
 
 impl FileBrowser {
@@ -78,6 +122,11 @@ impl FileBrowser {
             filter: String::new(),
             clipboard: None,
             preview_text: String::new(),
+            context: None,
+            drag_from: None,
+            git_root: None,
+            git_summary: String::new(),
+            marked: HashSet::new(),
         };
         fb.refresh();
         fb
@@ -90,6 +139,8 @@ impl FileBrowser {
         self.entries.clear();
         match &self.cwd {
             None => {
+                self.git_root = None;
+                self.git_summary.clear();
                 #[cfg(windows)]
                 {
                     for letter in b'A'..=b'Z' {
@@ -102,6 +153,7 @@ impl FileBrowser {
                                 is_up: false,
                                 size: 0,
                                 modified: None,
+                                git: None,
                             });
                         }
                     }
@@ -121,6 +173,7 @@ impl FileBrowser {
                     is_up: true,
                     size: 0,
                     modified: None,
+                    git: None,
                 });
                 match fs::read_dir(dir) {
                     Ok(rd) => {
@@ -139,6 +192,7 @@ impl FileBrowser {
                                 is_up: false,
                                 size: md.as_ref().map(|m| m.len()).unwrap_or(0),
                                 modified: md.and_then(|m| m.modified().ok()),
+                                git: None,
                             });
                         }
                         self.sort_items(&mut items);
@@ -147,6 +201,23 @@ impl FileBrowser {
                         self.status = format!("{n} items · sort:{}", self.sort_label());
                     }
                     Err(e) => self.status = format!("error: {e}"),
+                }
+                // git badges
+                self.git_root = gitutil::find_root(dir);
+                if let Some(root) = self.git_root.clone() {
+                    let st = gitutil::short_stat(&root);
+                    self.git_summary = st.summary();
+                    for e in &mut self.entries {
+                        if e.is_up {
+                            continue;
+                        }
+                        e.git = gitutil::letter_for(&root, &e.name, &e.path);
+                    }
+                    if !self.git_summary.is_empty() {
+                        self.status = format!("{} · {}", self.status, self.git_summary);
+                    }
+                } else {
+                    self.git_summary.clear();
                 }
             }
         }
@@ -214,6 +285,57 @@ impl FileBrowser {
             .and_then(|&i| self.entries.get(i))
     }
 
+    /// Marked files, or the current file if nothing is marked.
+    fn selected_files(&self) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = self
+            .marked
+            .iter()
+            .filter(|p| p.is_file())
+            .cloned()
+            .collect();
+        if paths.is_empty() {
+            if let Some(e) = self.current().filter(|e| !e.is_up && !e.is_dir) {
+                paths.push(e.path.clone());
+            }
+        }
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    fn toggle_mark_current(&mut self) {
+        let Some(e) = self.current().filter(|e| !e.is_up) else {
+            return;
+        };
+        let p = e.path.clone();
+        if !self.marked.remove(&p) {
+            self.marked.insert(p);
+        }
+        let n = self.marked.len();
+        self.status = if n == 0 {
+            "selection cleared".into()
+        } else {
+            format!("{n} selected · Space toggle · Ctrl+A all · Esc clear")
+        };
+        self.move_sel(1);
+    }
+
+    fn mark_all_filtered(&mut self) {
+        self.marked.clear();
+        for &ei in &self.filtered {
+            let e = &self.entries[ei];
+            if !e.is_up {
+                self.marked.insert(e.path.clone());
+            }
+        }
+        self.status = format!("{} selected", self.marked.len());
+    }
+
+    fn clear_marks(&mut self) {
+        self.marked.clear();
+        self.status = "selection cleared".into();
+    }
+
     fn go_up(&mut self) {
         let parent = self.cwd.as_ref().and_then(|d| d.parent().map(|p| p.to_path_buf()));
         #[cfg(windows)]
@@ -225,6 +347,7 @@ impl FileBrowser {
             self.cwd = Some(parent.unwrap_or_else(|| PathBuf::from("/")));
         }
         self.filter.clear();
+        self.marked.clear();
         self.refresh();
     }
 
@@ -239,6 +362,7 @@ impl FileBrowser {
         if e.is_dir {
             self.cwd = Some(e.path.clone());
             self.filter.clear();
+            self.marked.clear();
             self.refresh();
             return Action::None;
         }
@@ -494,45 +618,338 @@ impl FileBrowser {
         self.clipboard = Some((op, path));
     }
 
+    fn paste_paths(&mut self, paths: &[PathBuf], cut: bool) {
+        let Some(dir) = self.cwd.clone() else {
+            self.status = "cannot paste here".into();
+            return;
+        };
+        for src in paths {
+            let Some(name) = src.file_name() else {
+                continue;
+            };
+            let mut dest = dir.join(name);
+            if dest.exists() {
+                dest = unique_path(&dest);
+            }
+            let result = if src.is_dir() {
+                copy_dir_all(src, &dest)
+            } else {
+                fs::copy(src, &dest).map(|_| ())
+            };
+            match result {
+                Ok(()) => {
+                    if cut {
+                        let _ = if src.is_dir() {
+                            fs::remove_dir_all(src)
+                        } else {
+                            fs::remove_file(src)
+                        };
+                    }
+                    self.status = format!(
+                        "{} → {}",
+                        if cut { "moved" } else { "copied" },
+                        dest.file_name().unwrap().to_string_lossy()
+                    );
+                }
+                Err(err) => self.status = format!("drop failed: {err}"),
+            }
+        }
+        self.refresh();
+    }
+
     fn paste(&mut self) {
         let Some((op, src)) = self.clipboard.clone() else {
             self.status = "clipboard empty".into();
             return;
         };
-        let Some(dir) = self.cwd.clone() else {
-            self.status = "cannot paste here".into();
-            return;
-        };
-        let Some(name) = src.file_name() else {
-            self.status = "invalid clipboard path".into();
-            return;
-        };
-        let mut dest = dir.join(name);
-        if dest.exists() {
-            dest = unique_path(&dest);
+        let cut = matches!(op, ClipOp::Cut);
+        self.paste_paths(&[src], cut);
+        if cut {
+            self.clipboard = None;
         }
-        let result = if src.is_dir() {
-            copy_dir_all(&src, &dest)
-        } else {
-            fs::copy(&src, &dest).map(|_| ())
-        };
-        match result {
-            Ok(()) => {
-                if matches!(op, ClipOp::Cut) {
-                    let _ = if src.is_dir() {
-                        fs::remove_dir_all(&src)
-                    } else {
-                        fs::remove_file(&src)
-                    };
-                    self.clipboard = None;
-                    self.status = format!("moved → {}", dest.file_name().unwrap().to_string_lossy());
-                } else {
-                    self.status = format!("pasted → {}", dest.file_name().unwrap().to_string_lossy());
-                }
-                self.refresh();
+    }
+
+    fn open_file_context(&mut self, col: u16, row: u16) {
+        let mut items = Vec::new();
+        let cur = self.current().map(|e| (e.is_up, e.is_dir));
+        match cur {
+            Some((true, _)) => {
+                items.push(("Open parent".into(), FileMenuAction::Open));
             }
-            Err(err) => self.status = format!("paste failed: {err}"),
+            Some((false, is_dir)) => {
+                items.push(("Open".into(), FileMenuAction::Open));
+                if !is_dir {
+                    items.push(("Edit".into(), FileMenuAction::Edit));
+                    items.push(("Hex".into(), FileMenuAction::Hex));
+                }
+                items.push(("Copy".into(), FileMenuAction::Copy));
+                items.push(("Cut".into(), FileMenuAction::Cut));
+                items.push(("Drag copy…".into(), FileMenuAction::DragCopy));
+                items.push(("Drag cut…".into(), FileMenuAction::DragCut));
+                items.push(("Pin to desktop".into(), FileMenuAction::PinToDesktop));
+                if self.git_root.is_some() {
+                    items.push(("Git: stage".into(), FileMenuAction::GitStage));
+                    items.push(("Git: unstage".into(), FileMenuAction::GitUnstage));
+                    items.push(("Git: diff".into(), FileMenuAction::GitDiff));
+                }
+                let cur_path = self.current().map(|e| e.path.clone());
+                let n_files = self.selected_files().len();
+                let marks = self.marked.len();
+                if (!is_dir && cur_path.is_some()) || (marks > 0 && n_files > 0) {
+                    let label = if n_files > 1 {
+                        format!("Create {n_files} snapshots")
+                    } else {
+                        "Create snapshot".into()
+                    };
+                    items.push((label, FileMenuAction::SnapshotCreate));
+                }
+                if !is_dir {
+                    if let Some(ref p) = cur_path {
+                        let hist = snaputil::count_for(p);
+                        let label = if hist > 0 {
+                            format!("Snapshot history ({hist})")
+                        } else {
+                            "Snapshot history".into()
+                        };
+                        items.push((label, FileMenuAction::SnapshotHistory));
+                    }
+                }
+                if n_files >= 2 {
+                    items.push((
+                        format!("Compare {n_files} files"),
+                        FileMenuAction::Compare,
+                    ));
+                }
+                items.push(("Rename".into(), FileMenuAction::Rename));
+                items.push(("Delete".into(), FileMenuAction::Delete));
+            }
+            None => {}
         }
+        if self.clipboard.is_some() {
+            items.push(("Paste".into(), FileMenuAction::Paste));
+        }
+        items.push(("New folder".into(), FileMenuAction::NewFolder));
+        items.push(("New file".into(), FileMenuAction::NewFile));
+        if self.cwd.is_some() {
+            items.push(("Terminal here".into(), FileMenuAction::TerminalHere));
+        }
+        if self.git_root.is_some() || self.cwd.is_some() {
+            items.push(("Open Git here".into(), FileMenuAction::GitOpen));
+        }
+        items.push(("Toggle preview".into(), FileMenuAction::TogglePreview));
+        items.push(("Refresh".into(), FileMenuAction::Refresh));
+        self.context = Some(FileContext {
+            x: col,
+            y: row,
+            items,
+            sel: 0,
+        });
+    }
+
+    fn run_file_menu(&mut self, action: FileMenuAction) -> Action {
+        match action {
+            FileMenuAction::Open => return self.open_sel(),
+            FileMenuAction::Edit => {
+                if let Some(path) = self
+                    .current()
+                    .filter(|e| !e.is_dir && !e.is_up)
+                    .map(|e| e.path.clone())
+                {
+                    return Action::Launch(Launch::Editor(Some(path)));
+                }
+            }
+            FileMenuAction::Hex => {
+                if let Some(path) = self
+                    .current()
+                    .filter(|e| !e.is_dir && !e.is_up)
+                    .map(|e| e.path.clone())
+                {
+                    return Action::Launch(Launch::Hex(Some(path)));
+                }
+            }
+            FileMenuAction::Copy => self.copy_sel(false),
+            FileMenuAction::Cut => self.copy_sel(true),
+            FileMenuAction::Paste => self.paste(),
+            FileMenuAction::Rename => {
+                if let Some((name, is_up)) = self.current().map(|e| (e.name.clone(), e.is_up)) {
+                    if !is_up {
+                        self.start_prompt(Prompt::Rename, name);
+                    }
+                }
+            }
+            FileMenuAction::Delete => {
+                if let Some((name, is_up)) = self.current().map(|e| (e.name.clone(), e.is_up)) {
+                    if !is_up {
+                        self.start_prompt(Prompt::DeleteConfirm, String::new());
+                        self.status = format!("delete {name}?");
+                    }
+                }
+            }
+            FileMenuAction::NewFolder => self.start_prompt(Prompt::Mkdir, String::new()),
+            FileMenuAction::NewFile => self.start_prompt(Prompt::NewFile, String::new()),
+            FileMenuAction::TerminalHere => {
+                if let Some(dir) = self.cwd.clone() {
+                    return Action::Launch(Launch::Terminal {
+                        program: None,
+                        args: Vec::new(),
+                        cwd: Some(dir),
+                    });
+                }
+            }
+            FileMenuAction::Refresh => self.refresh(),
+            FileMenuAction::TogglePreview => {
+                self.preview = !self.preview;
+                self.update_preview();
+            }
+            FileMenuAction::DragCopy | FileMenuAction::DragCut => {
+                if let Some(e) = self.current().filter(|e| !e.is_up) {
+                    return Action::BeginFileDrag {
+                        path: e.path.clone(),
+                        cut: matches!(action, FileMenuAction::DragCut),
+                    };
+                }
+            }
+            FileMenuAction::PinToDesktop => {
+                if let Some(e) = self.current().filter(|e| !e.is_up) {
+                    return Action::PinToDesktop(e.path.clone());
+                }
+            }
+            FileMenuAction::GitStage => {
+                if let (Some(root), Some(e)) = (
+                    self.git_root.clone(),
+                    self.current().filter(|e| !e.is_up),
+                ) {
+                    match gitutil::stage(&root, &e.path) {
+                        Ok(()) => {
+                            self.status = format!("staged {}", e.name);
+                            self.refresh();
+                        }
+                        Err(err) => self.status = err,
+                    }
+                }
+            }
+            FileMenuAction::GitUnstage => {
+                if let (Some(root), Some(e)) = (
+                    self.git_root.clone(),
+                    self.current().filter(|e| !e.is_up),
+                ) {
+                    match gitutil::unstage(&root, &e.path) {
+                        Ok(()) => {
+                            self.status = format!("unstaged {}", e.name);
+                            self.refresh();
+                        }
+                        Err(err) => self.status = err,
+                    }
+                }
+            }
+            FileMenuAction::GitDiff | FileMenuAction::GitOpen => {
+                return Action::Launch(Launch::Git(self.git_root.clone().or(self.cwd.clone())));
+            }
+            FileMenuAction::SnapshotCreate => {
+                let paths = self.selected_files();
+                if paths.is_empty() {
+                    self.status = "select a file first".into();
+                } else {
+                    let (_ok, _fail, msg) = snaputil::create_many(&paths);
+                    self.status = msg;
+                }
+            }
+            FileMenuAction::SnapshotHistory => {
+                if let Some(path) = self
+                    .current()
+                    .filter(|e| !e.is_dir && !e.is_up)
+                    .map(|e| e.path.clone())
+                {
+                    return Action::Launch(Launch::Snapshots(path));
+                }
+            }
+            FileMenuAction::Compare => {
+                let paths = self.selected_files();
+                if paths.len() < 2 {
+                    self.status = "mark 2+ files (Space) then Compare".into();
+                } else {
+                    return Action::Launch(Launch::Compare(paths));
+                }
+            }
+        }
+        Action::None
+    }
+
+    fn render_context(&mut self, f: &mut Frame, area: Rect) {
+        let Some(ctx) = &self.context else {
+            return;
+        };
+        use unicode_width::UnicodeWidthStr;
+        let w = ctx
+            .items
+            .iter()
+            .map(|(l, _)| l.width() + 2)
+            .max()
+            .unwrap_or(12)
+            .clamp(12, 36) as u16;
+        let h = (ctx.items.len() as u16 + 2).min(area.height.max(3));
+        let mut x = ctx.x.min(area.x + area.width.saturating_sub(w));
+        let mut y = ctx.y.min(area.y + area.height.saturating_sub(h));
+        if x < area.x {
+            x = area.x;
+        }
+        if y < area.y {
+            y = area.y;
+        }
+        let rect = Rect::new(x, y, w, h);
+        f.render_widget(ratatui::widgets::Clear, rect);
+        let block = ratatui::widgets::Block::default()
+            .borders(ratatui::widgets::Borders::ALL)
+            .border_type(ratatui::widgets::BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Rgb(160, 170, 200)))
+            .style(Style::default().bg(Color::Rgb(18, 22, 38)));
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+        let buf = f.buffer_mut();
+        for (i, (label, _)) in ctx.items.iter().enumerate() {
+            let iy = inner.y + i as u16;
+            if iy >= inner.y + inner.height {
+                break;
+            }
+            let style = if i == ctx.sel {
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::Rgb(0, 110, 170))
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+                    .fg(Color::Rgb(210, 214, 228))
+                    .bg(Color::Rgb(18, 22, 38))
+            };
+            let pad = " ".repeat(inner.width as usize);
+            buf.set_string(inner.x, iy, &pad, style);
+            buf.set_string(inner.x, iy, &format!(" {label}"), style);
+        }
+        // store adjusted rect via rewriting x/y for hit tests
+        if let Some(c) = &mut self.context {
+            c.x = rect.x;
+            c.y = rect.y;
+        }
+    }
+
+    fn context_hit(&self, col: u16, row: u16) -> Option<usize> {
+        let ctx = self.context.as_ref()?;
+        use unicode_width::UnicodeWidthStr;
+        let w = ctx
+            .items
+            .iter()
+            .map(|(l, _)| l.width() + 2)
+            .max()
+            .unwrap_or(12)
+            .clamp(12, 28) as u16;
+        let h = ctx.items.len() as u16 + 2;
+        if col >= ctx.x && col < ctx.x + w && row > ctx.y && row < ctx.y + h - 1 {
+            let idx = (row - ctx.y - 1) as usize;
+            if idx < ctx.items.len() {
+                return Some(idx);
+            }
+        }
+        None
     }
 
     fn jump_bookmark(&mut self, which: char) {
@@ -700,7 +1117,7 @@ impl AppWindow for FileBrowser {
                 gfx::fmt_size(e.size)
             };
             let date = Self::fmt_mtime(e.modified);
-            let meta_w = 22usize; // date + size
+            let meta_w = 24usize; // git + date + size
             let name_w = list.width.saturating_sub(4 + meta_w as u16) as usize;
             let mut name = e.name.clone();
             if name.chars().count() > name_w {
@@ -708,17 +1125,41 @@ impl AppWindow for FileBrowser {
             }
             let pad = name_w.saturating_sub(name.chars().count());
             let selected = row == self.sel;
+            let marked = self.marked.contains(&e.path);
             let base = if selected && focused {
                 Style::default().fg(Color::White).bg(Color::Rgb(0, 96, 150))
             } else if selected {
                 Style::default().fg(Color::White).bg(Color::Rgb(48, 52, 74))
+            } else if marked {
+                Style::default().fg(color).bg(Color::Rgb(40, 48, 28))
             } else {
                 Style::default().fg(color)
             };
+            let git_ch = e.git.map(|g| g.as_char()).unwrap_or(' ');
+            let git_fg = e
+                .git
+                .map(|g| g.color())
+                .unwrap_or(Color::Rgb(60, 70, 90));
+            let mark_ch = if marked { '●' } else { ' ' };
+            let sel_bg = if selected {
+                if focused {
+                    Color::Rgb(0, 96, 150)
+                } else {
+                    Color::Rgb(48, 52, 74)
+                }
+            } else if marked {
+                Color::Rgb(40, 48, 28)
+            } else {
+                Color::Reset
+            };
             lines.push(Line::from(vec![
-                Span::styled(format!(" {icon} "), base),
+                Span::styled(format!("{mark_ch}{icon} "), base),
                 Span::styled(
-                    format!("{}{} ", name, " ".repeat(pad)),
+                    format!("{git_ch} "),
+                    Style::default().fg(git_fg).bg(sel_bg),
+                ),
+                Span::styled(
+                    format!("{}{} ", name, " ".repeat(pad.saturating_sub(2))),
                     if selected {
                         base.add_modifier(Modifier::BOLD)
                     } else {
@@ -734,11 +1175,11 @@ impl AppWindow for FileBrowser {
                     }),
                 ),
                 Span::styled(
-                    format!("{size:>8} "),
+                    format!("{size:>8}"),
                     base.fg(if selected {
                         Color::White
                     } else {
-                        Color::Rgb(130, 135, 155)
+                        Color::Rgb(120, 130, 155)
                     }),
                 ),
             ]));
@@ -793,9 +1234,14 @@ impl AppWindow for FileBrowser {
                 ),
                 None => String::new(),
             };
+            let marks = if self.marked.is_empty() {
+                String::new()
+            } else {
+                format!(" · {} sel", self.marked.len())
+            };
             format!(
-                " {}{}  │ / filter · F2 rename · Del · F7/F8 new · Tab sort · Ctrl+P preview · Ctrl+T term ",
-                self.status, clip
+                " {}{}{}  │ Space mark · right-click snapshot/compare · / filter · Ctrl+C/X/V ",
+                self.status, clip, marks
             )
         };
         f.render_widget(
@@ -808,11 +1254,41 @@ impl AppWindow for FileBrowser {
             .style(Style::default().bg(Color::Rgb(18, 22, 36))),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
         );
+
+        if self.context.is_some() {
+            self.render_context(f, area);
+        }
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
+
+        if self.context.is_some() {
+            match k.code {
+                KeyCode::Esc => self.context = None,
+                KeyCode::Up => {
+                    if let Some(ctx) = &mut self.context {
+                        ctx.sel = ctx.sel.checked_sub(1).unwrap_or(ctx.items.len() - 1);
+                    }
+                }
+                KeyCode::Down => {
+                    if let Some(ctx) = &mut self.context {
+                        let n = ctx.items.len();
+                        ctx.sel = (ctx.sel + 1) % n.max(1);
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(ctx) = self.context.take() {
+                        if let Some((_, action)) = ctx.items.get(ctx.sel) {
+                            return self.run_file_menu(*action);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            return Action::None;
+        }
 
         if let Some((_, ref mut input)) = self.prompt {
             match k.code {
@@ -845,6 +1321,9 @@ impl AppWindow for FileBrowser {
             }
             KeyCode::Enter => return self.open_sel(),
             KeyCode::Backspace => self.go_up(),
+            KeyCode::Esc if !self.marked.is_empty() => self.clear_marks(),
+            KeyCode::Char(' ') if !ctrl && !alt => self.toggle_mark_current(),
+            KeyCode::Char('a') if ctrl => self.mark_all_filtered(),
             KeyCode::Tab => {
                 self.sort = match self.sort {
                     SortBy::Name => SortBy::Size,
@@ -887,6 +1366,9 @@ impl AppWindow for FileBrowser {
                         cwd: Some(dir),
                     });
                 }
+            }
+            KeyCode::Char('g') if ctrl => {
+                return Action::Launch(Launch::Git(self.git_root.clone().or(self.cwd.clone())));
             }
             KeyCode::Char('h') if ctrl => {
                 self.show_hidden = !self.show_hidden;
@@ -960,28 +1442,109 @@ impl AppWindow for FileBrowser {
         if self.prompt.is_some() {
             return Action::None;
         }
+
+        if self.context.is_some() {
+            match m.kind {
+                MouseEventKind::Down(MouseButton::Left)
+                | MouseEventKind::Down(MouseButton::Right) => {
+                    if let Some(idx) = self.context_hit(m.column, m.row) {
+                        let action = self.context.as_ref().unwrap().items[idx].1;
+                        self.context = None;
+                        return self.run_file_menu(action);
+                    }
+                    self.context = None;
+                    if !matches!(m.kind, MouseEventKind::Down(MouseButton::Right)) {
+                        return Action::None;
+                    }
+                }
+                MouseEventKind::Moved => {
+                    if let Some(idx) = self.context_hit(m.column, m.row) {
+                        if let Some(ctx) = &mut self.context {
+                            ctx.sel = idx;
+                        }
+                    }
+                    return Action::None;
+                }
+                _ => return Action::None,
+            }
+        }
+
         let list = Self::list_area(area, self.preview);
         match m.kind {
+            MouseEventKind::Down(MouseButton::Right) => {
+                if m.row >= list.y && m.row < list.y + list.height {
+                    let idx = self.scroll + (m.row - list.y) as usize;
+                    if idx < self.filtered.len() {
+                        self.sel = idx;
+                        self.update_preview();
+                    }
+                }
+                self.open_file_context(m.column, m.row);
+            }
             MouseEventKind::Down(MouseButton::Left) => {
                 if m.row >= list.y && m.row < list.y + list.height {
                     let idx = self.scroll + (m.row - list.y) as usize;
                     if idx < self.filtered.len() {
-                        let dbl = matches!(self.last_click, Some((t, li))
-                            if li == idx && t.elapsed().as_millis() < 450);
                         self.sel = idx;
                         self.update_preview();
+                        if m.modifiers.contains(KeyModifiers::CONTROL) {
+                            if let Some(e) = self.current().filter(|e| !e.is_up) {
+                                let p = e.path.clone();
+                                if !self.marked.remove(&p) {
+                                    self.marked.insert(p);
+                                }
+                                self.status = format!("{} selected", self.marked.len());
+                            }
+                            self.drag_from = None;
+                            return Action::None;
+                        }
+                        let dbl = matches!(self.last_click, Some((t, li))
+                            if li == idx && t.elapsed().as_millis() < 450);
                         if dbl {
                             self.last_click = None;
+                            self.drag_from = None;
                             return self.open_sel();
                         }
                         self.last_click = Some((Instant::now(), idx));
+                        self.drag_from = Some((idx, Instant::now()));
                     }
                 }
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some((idx, started)) = self.drag_from {
+                    // require a short hold/move before committing to drag
+                    if started.elapsed().as_millis() > 120 && idx == self.sel {
+                        if let Some(e) = self.current().filter(|e| !e.is_up) {
+                            let path = e.path.clone();
+                            self.drag_from = None;
+                            return Action::BeginFileDrag {
+                                path,
+                                cut: false,
+                            };
+                        }
+                    }
+                }
+            }
+            MouseEventKind::Up(_) => {
+                self.drag_from = None;
             }
             MouseEventKind::ScrollUp => self.move_sel(-3),
             MouseEventKind::ScrollDown => self.move_sel(3),
             _ => {}
         }
         Action::None
+    }
+
+    fn on_drop(&mut self, paths: &[PathBuf], cut: bool) -> Action {
+        self.paste_paths(paths, cut);
+        Action::None
+    }
+
+    fn accepts_drop(&self) -> bool {
+        self.cwd.is_some()
+    }
+
+    fn workspace_path(&self) -> Option<PathBuf> {
+        self.cwd.clone()
     }
 }

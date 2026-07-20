@@ -63,12 +63,20 @@ pub mod audioplayer {
 pub mod calculator;
 pub mod calendar;
 pub mod clock;
+pub mod compare;
 pub mod editor;
 pub mod filebrowser;
+pub mod git;
+pub mod gitutil;
 pub mod hexviewer;
 pub mod imageviewer;
 pub mod launcher;
 pub mod notes;
+pub mod processes;
+pub mod scroll;
+pub mod search;
+pub mod snaputil;
+pub mod snapshots;
 pub mod syntax;
 pub mod sysinfo;
 pub mod terminal;
@@ -86,6 +94,10 @@ pub enum Action {
     None,
     Close,
     Launch(Launch),
+    /// Start dragging a file; desktop shows a ghost and handles drop targets.
+    BeginFileDrag { path: PathBuf, cut: bool },
+    /// Add a desktop shortcut for this path.
+    PinToDesktop(PathBuf),
 }
 
 #[derive(Clone, Debug)]
@@ -109,6 +121,13 @@ pub enum Launch {
     Calendar,
     SysInfo,
     Notes,
+    Git(Option<PathBuf>),
+    Search(Option<PathBuf>),
+    Processes,
+    /// Per-file snapshot history viewer.
+    Snapshots(PathBuf),
+    /// Visual diff of N files (pick any two).
+    Compare(Vec<PathBuf>),
 }
 
 pub trait AppWindow {
@@ -119,6 +138,18 @@ pub trait AppWindow {
         Action::None
     }
     fn on_tick(&mut self) {}
+    /// Whether this window can accept a file drop.
+    fn accepts_drop(&self) -> bool {
+        false
+    }
+    /// Accept a file dropped onto this window (e.g. File Manager paste / open).
+    fn on_drop(&mut self, _paths: &[PathBuf], _cut: bool) -> Action {
+        Action::None
+    }
+    /// Path the desktop should treat as the active workspace (git / search).
+    fn workspace_path(&self) -> Option<PathBuf> {
+        None
+    }
 }
 
 /// Pick the right app for a file based on its extension.

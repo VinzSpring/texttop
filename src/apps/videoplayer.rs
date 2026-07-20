@@ -202,4 +202,15 @@ impl AppWindow for VideoPlayer {
             self.fps_window = std::time::Instant::now();
         }
     }
+
+    fn accepts_drop(&self) -> bool {
+        true
+    }
+
+    fn on_drop(&mut self, paths: &[PathBuf], _cut: bool) -> Action {
+        if let Some(p) = paths.first().filter(|p| p.is_file()) {
+            return Action::Launch(super::Launch::Video(p.clone()));
+        }
+        Action::None
+    }
 }

@@ -98,6 +98,21 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+/// Opt-in debug log (`TEXTTOP_ENGINE_LOG=1`) → %TEMP%\texttop-engine.log
+fn log_engine(msg: &str) {
+    if std::env::var_os("TEXTTOP_ENGINE_LOG").is_none() {
+        return;
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("texttop-engine.log"))
+    {
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
 unsafe fn take_pwstr(p: PWSTR) -> String {
     if p.is_null() {
         return String::new();
@@ -179,13 +194,14 @@ fn run(
     let controller_slot: Rc<RefCell<Option<ICoreWebView2Controller>>> = Rc::default();
     let webview_slot: Rc<RefCell<Option<ICoreWebView2>>> = Rc::default();
 
-    // "-sw" suffix: browser args (--disable-gpu) only apply to a freshly
+    // "-sw2" suffix: browser args (--disable-gpu etc.) only apply to a freshly
     // spawned browser process, and processes are shared per data folder —
-    // a distinct folder guarantees old GPU-mode processes are never reused
+    // a distinct folder guarantees processes started with older flag sets
+    // are never reused
     let data_dir = dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
         .join("texttop")
-        .join("webview2-sw");
+        .join("webview2-sw2");
     let _ = std::fs::create_dir_all(&data_dir);
     let data_w = wide(&data_dir.to_string_lossy());
 
@@ -194,8 +210,19 @@ fn run(
         // --disable-gpu: GPU-composited layers come back transparent/black
         // from CapturePreview on some machines; software rendering is
         // reliable and plenty fast for ~10 fps captures.
+        //
+        // The host window lives fully off-screen (-32000,-32000). Chromium's
+        // native occlusion tracker treats such windows as occluded and stops
+        // rasterizing, which makes CapturePreview return blank/white frames
+        // (text extraction still works, so pages showed text on white).
+        // Disable occlusion detection and background throttling so the page
+        // keeps painting.
         opts.set_additional_browser_arguments(
-            "--autoplay-policy=no-user-gesture-required --disable-gpu".to_string(),
+            "--autoplay-policy=no-user-gesture-required --disable-gpu \
+             --disable-features=CalculateNativeWinOcclusion \
+             --disable-backgrounding-occluded-windows \
+             --disable-renderer-backgrounding"
+                .to_string(),
         );
     }
     let iopts: ICoreWebView2EnvironmentOptions = opts.into();
@@ -317,6 +344,13 @@ fn run(
     }
 
     let capturing = Rc::new(Cell::new(false));
+    // Identifies the current in-flight capture. CapturePreview's completion
+    // handler can silently never fire (e.g. when a navigation swaps the
+    // renderer process while a capture is pending); the watchdog below bumps
+    // this id and clears `capturing` so captures resume. A late completion
+    // from an abandoned capture is ignored via the id mismatch.
+    let cap_id = Rc::new(Cell::new(0u64));
+    let mut cap_started = Instant::now();
     let render_hwnd = Rc::new(Cell::new(HWND::default()));
     let mouse_down = Rc::new(Cell::new(false));
     let mut last_cap = Instant::now() - Duration::from_secs(1);
@@ -376,16 +410,26 @@ fn run(
                 poll_navigation(&webview, &info, &frame, &texts);
             }
         }
+        if capturing.get() && cap_started.elapsed() >= Duration::from_millis(1500) {
+            // watchdog: abandon a capture whose completion never fired
+            log_engine("capture watchdog: abandoning hung capture");
+            cap_id.set(cap_id.get() + 1);
+            capturing.set(false);
+        }
         if !capturing.get() && last_cap.elapsed() >= Duration::from_millis(30) {
             let webview = webview_slot.borrow().clone();
             if let Some(webview) = webview {
                 capturing.set(true);
+                cap_id.set(cap_id.get() + 1);
+                cap_started = Instant::now();
                 last_cap = Instant::now();
                 start_capture(
                     &webview,
                     frame.clone(),
                     info.clone(),
                     capturing.clone(),
+                    cap_id.clone(),
+                    cap_id.get(),
                     super::page_gen(),
                 );
             }
@@ -606,6 +650,7 @@ unsafe fn poll_navigation(
     // Skip the very first URL assignment (empty → loaded) so we don't
     // wipe the initial paint; only real navigations clear state.
     if !i.url.is_empty() && i.url != url {
+        log_engine(&format!("poll_navigation clear: '{}' -> '{}'", i.url, url));
         clear_page_state(frame, texts);
         i.url = url;
         let mut p2 = PWSTR::null();
@@ -648,11 +693,14 @@ fn exec_script(webview: &ICoreWebView2, script: &str) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn start_capture(
     webview: &ICoreWebView2,
     frame: Arc<Mutex<Option<Arc<Frame>>>>,
     info: Arc<Mutex<PageInfo>>,
     capturing: Rc<Cell<bool>>,
+    cap_id: Rc<Cell<u64>>,
+    my_id: u64,
     gen: u64,
 ) {
     unsafe {
@@ -704,8 +752,17 @@ fn start_capture(
         };
         let stream_cb = stream.clone();
         let capturing_cb = capturing.clone();
+        let cap_id_cb = cap_id.clone();
         let handler = CapturePreviewCompletedHandler::create(Box::new(
             move |res: windows_core::Result<()>| {
+                if let Err(e) = &res {
+                    log_engine(&format!("capture failed: {e}"));
+                }
+                if cap_id_cb.get() != my_id {
+                    // watchdog already gave up on this capture; a newer one
+                    // owns the `capturing` flag now
+                    return Ok(());
+                }
                 if res.is_ok() && super::page_gen() == gen {
                     if let Some(png) = read_stream(&stream_cb) {
                         if let Ok(img) = image::load_from_memory(&png) {

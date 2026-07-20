@@ -13,7 +13,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use super::{Action, AppWindow};
+use super::{Action, AppWindow, Launch};
 
 pub struct Terminal {
     title: String,
@@ -339,5 +339,26 @@ impl AppWindow for Terminal {
                 }
             }
         }
+    }
+
+    fn accepts_drop(&self) -> bool {
+        true
+    }
+
+    fn on_drop(&mut self, paths: &[std::path::PathBuf], _cut: bool) -> Action {
+        let Some(p) = paths.first() else {
+            return Action::None;
+        };
+        if p.is_dir() {
+            return Action::Launch(Launch::Terminal {
+                program: None,
+                args: Vec::new(),
+                cwd: Some(p.clone()),
+            });
+        }
+        // type the path into the shell
+        let s = format!("{} ", p.display());
+        self.send(s.as_bytes());
+        Action::None
     }
 }
