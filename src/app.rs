@@ -14,9 +14,10 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::apps::{
     about::About, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
-    clock::ClockApp, compare::CompareApp, editor::Editor, filebrowser::FileBrowser, git::GitApp,
-    hexviewer::HexViewer, imageviewer::ImageViewer, launcher::AppLauncher, notes::Notes,
-    processes::Processes, search::SearchApp, snapshots::SnapshotsApp, sysinfo::SysInfo,
+    clock::ClockApp, compare::CompareApp, editor::Editor, filebrowser::FileBrowser,
+    game2048::Game2048, git::GitApp, hexviewer::HexViewer, imageviewer::ImageViewer,
+    launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes, processes::Processes,
+    search::SearchApp, snake::Snake, snapshots::SnapshotsApp, sysinfo::SysInfo,
     terminal::Terminal, videoplayer::VideoPlayer, webbrowser::WebBrowser, Action, AppWindow,
     Launch,
 };
@@ -33,6 +34,9 @@ const THEMES: &[((u8, u8, u8), (u8, u8, u8), &str)] = &[
     ((3, 30, 52), (0, 96, 116), "ocean"),
     ((34, 8, 10), (140, 66, 12), "sunset"),
     ((6, 30, 18), (22, 88, 54), "forest"),
+    ((14, 6, 34), (0, 110, 100), "aurora"),
+    ((44, 10, 64), (150, 40, 80), "vapor"),
+    ((30, 30, 38), (8, 8, 12), "graphite"),
 ];
 
 const ICON_W: u16 = 12;
@@ -45,6 +49,8 @@ struct Win {
     minimized: bool,
     restore: Option<Rect>,
     icon: &'static str,
+    /// What spawned this window — lets us restore the session on next start.
+    launch: Launch,
     app: Box<dyn AppWindow>,
 }
 
@@ -82,7 +88,11 @@ enum MenuAction {
     Notes,
     Hex,
     SysInfo,
+    Snake,
+    Minesweeper,
+    Game2048,
     Wallpaper,
+    Keys,
     About,
     Quit,
 }
@@ -103,7 +113,11 @@ impl MenuAction {
             MenuAction::Notes => "Notes",
             MenuAction::Hex => "Hex",
             MenuAction::SysInfo => "SysInfo",
+            MenuAction::Snake => "Snake",
+            MenuAction::Minesweeper => "Minesweeper",
+            MenuAction::Game2048 => "Game2048",
             MenuAction::Wallpaper => "Wallpaper",
+            MenuAction::Keys => "Keys",
             MenuAction::About => "About",
             MenuAction::Quit => "Quit",
         }
@@ -124,7 +138,11 @@ impl MenuAction {
             "Notes" => MenuAction::Notes,
             "Hex" => MenuAction::Hex,
             "SysInfo" => MenuAction::SysInfo,
+            "Snake" => MenuAction::Snake,
+            "Minesweeper" => MenuAction::Minesweeper,
+            "Game2048" => MenuAction::Game2048,
             "Wallpaper" => MenuAction::Wallpaper,
+            "Keys" => MenuAction::Keys,
             "About" => MenuAction::About,
             "Quit" => MenuAction::Quit,
             _ => return None,
@@ -132,35 +150,52 @@ impl MenuAction {
     }
 }
 
-const MENU: &[(&str, MenuAction)] = &[
-    ("🗂  File Manager", MenuAction::Files),
-    ("🌿  Git", MenuAction::Git),
-    ("🔎  Project Search", MenuAction::Search),
-    ("⚙  Processes", MenuAction::Processes),
-    ("🌐  Web Browser", MenuAction::Web),
-    ("🖥  Terminal", MenuAction::Terminal),
-    ("📝  Text Editor", MenuAction::Editor),
-    ("🧮  Calculator", MenuAction::Calculator),
-    ("⏱  Clock & Timer", MenuAction::Clock),
-    ("📅  Calendar", MenuAction::Calendar),
-    ("📌  Notes", MenuAction::Notes),
-    ("🔢  Hex Viewer", MenuAction::Hex),
-    ("💻  System Info", MenuAction::SysInfo),
-    ("🎨  Wallpaper", MenuAction::Wallpaper),
-    ("✨  About & Help", MenuAction::About),
-    ("⏻  Exit texttop", MenuAction::Quit),
+/// (label, action, group) — groups become section headers in the start menu.
+const MENU: &[(&str, MenuAction, &str)] = &[
+    ("🗂  File Manager", MenuAction::Files, "System"),
+    ("🖥  Terminal", MenuAction::Terminal, "System"),
+    ("⚙  Processes", MenuAction::Processes, "System"),
+    ("💻  System Info", MenuAction::SysInfo, "System"),
+    ("🌿  Git", MenuAction::Git, "Development"),
+    ("🔎  Project Search", MenuAction::Search, "Development"),
+    ("📝  Text Editor", MenuAction::Editor, "Development"),
+    ("🔢  Hex Viewer", MenuAction::Hex, "Development"),
+    ("🌐  Web Browser", MenuAction::Web, "Internet"),
+    ("🧮  Calculator", MenuAction::Calculator, "Tools"),
+    ("⏱  Clock & Timer", MenuAction::Clock, "Tools"),
+    ("📅  Calendar", MenuAction::Calendar, "Tools"),
+    ("📌  Notes", MenuAction::Notes, "Tools"),
+    ("🐍  Snake", MenuAction::Snake, "Games"),
+    ("💣  Minesweeper", MenuAction::Minesweeper, "Games"),
+    ("🎮  2048", MenuAction::Game2048, "Games"),
+    ("🎨  Wallpaper", MenuAction::Wallpaper, "Settings"),
+    ("⌨  Shortcut Keys", MenuAction::Keys, "Settings"),
+    ("✨  About & Help", MenuAction::About, "Settings"),
+    ("⏻  Exit texttop", MenuAction::Quit, "Settings"),
 ];
 
 const DEFAULT_ICONS: &[(&str, &str, MenuAction)] = &[
     ("🗂", "Files", MenuAction::Files),
-    ("🌿", "Git", MenuAction::Git),
-    ("🔎", "Search", MenuAction::Search),
+    ("🌐", "Web", MenuAction::Web),
     ("🖥", "Terminal", MenuAction::Terminal),
     ("📝", "Editor", MenuAction::Editor),
+    ("🌿", "Git", MenuAction::Git),
+    ("🔎", "Search", MenuAction::Search),
     ("⚙", "Procs", MenuAction::Processes),
     ("📌", "Notes", MenuAction::Notes),
+    ("🧮", "Calc", MenuAction::Calculator),
+    ("⏱", "Clock", MenuAction::Clock),
+    ("📅", "Calendar", MenuAction::Calendar),
+    ("💻", "System", MenuAction::SysInfo),
+    ("🔢", "Hex", MenuAction::Hex),
+    ("🐍", "Snake", MenuAction::Snake),
+    ("💣", "Mines", MenuAction::Minesweeper),
+    ("🎮", "2048", MenuAction::Game2048),
     ("✨", "About", MenuAction::About),
 ];
+
+/// Desktop icons per column before wrapping to the next one.
+const ICONS_PER_COL: usize = 8;
 
 #[derive(Clone)]
 enum DeskKind {
@@ -215,6 +250,9 @@ pub struct Desktop {
     next_id: u64,
     start_open: bool,
     start_sel: usize,
+    /// Live text filter typed while the start menu is open.
+    start_filter: String,
+    show_keys: bool,
     icons: Vec<DeskIcon>,
     icon_sel: usize,
     last_click: Option<(Instant, i32)>,
@@ -251,6 +289,8 @@ impl Desktop {
             next_id: 0,
             start_open: false,
             start_sel: 0,
+            start_filter: String::new(),
+            show_keys: false,
             icons: default_icons(),
             icon_sel: 0,
             last_click: None,
@@ -277,8 +317,32 @@ impl Desktop {
             git_label: String::new(),
         };
         d.load_desktop();
-        d.spawn(Launch::About);
+        d.add_missing_default_apps();
+        if !d.load_session() {
+            d.spawn(Launch::About);
+        }
         d
+    }
+
+    /// New releases add app icons; place any the saved desktop doesn't have
+    /// yet into free slots without disturbing the user's layout.
+    fn add_missing_default_apps(&mut self) {
+        for (emoji, label, action) in DEFAULT_ICONS {
+            let exists = self
+                .icons
+                .iter()
+                .any(|i| matches!(&i.kind, DeskKind::App(a) if a == action));
+            if !exists {
+                let (x, y) = self.next_icon_slot();
+                self.icons.push(DeskIcon {
+                    emoji: (*emoji).to_string(),
+                    label: (*label).to_string(),
+                    kind: DeskKind::App(*action),
+                    x,
+                    y,
+                });
+            }
+        }
     }
 
     // ---------------------------------------------------------- rendering
@@ -453,6 +517,9 @@ impl Desktop {
         }
         if self.context.is_some() {
             self.render_context_menu(f);
+        }
+        if self.show_keys {
+            self.render_keys_overlay(f);
         }
 
         // transient status toast above taskbar
@@ -778,45 +845,153 @@ impl Desktop {
         }
     }
 
+    /// Start-menu entries matching the current typed filter (label or group).
+    fn filtered_menu(&self) -> Vec<usize> {
+        if self.start_filter.is_empty() {
+            return (0..MENU.len()).collect();
+        }
+        let q = self.start_filter.to_lowercase();
+        (0..MENU.len())
+            .filter(|&i| {
+                MENU[i].0.to_lowercase().contains(&q) || MENU[i].2.to_lowercase().contains(&q)
+            })
+            .collect()
+    }
+
+    /// Display rows: group headers interleaved with items. `Some(fi)` indexes
+    /// into `filtered`; `None` marks a header. Headers are dropped while a
+    /// text filter is active so results stay compact.
+    fn start_rows(&self, filtered: &[usize]) -> Vec<(Option<usize>, String)> {
+        let show_headers = self.start_filter.is_empty();
+        let mut rows = Vec::new();
+        let mut last_group = "";
+        for (fi, &mi) in filtered.iter().enumerate() {
+            let (label, action, group) = MENU[mi];
+            if show_headers && group != last_group {
+                rows.push((None, format!(" {group}")));
+                last_group = group;
+            }
+            let text = if action == MenuAction::Wallpaper {
+                format!("  {label}  · {}", THEMES[self.theme % THEMES.len()].2)
+            } else {
+                format!("  {label}")
+            };
+            rows.push((Some(fi), text));
+        }
+        rows
+    }
+
     fn render_start_menu(&mut self, f: &mut Frame, taskbar_y: u16) {
-        let want = MENU.len() as u16 + 2;
+        let filtered = self.filtered_menu();
+        let rows = self.start_rows(&filtered);
+        let want = rows.len().max(1) as u16 + 2;
         let h = want.min(taskbar_y.max(1));
-        let w = 34u16.min(self.screen.width.saturating_sub(2));
+        let w = 36u16.min(self.screen.width.saturating_sub(2));
         let rect = Rect::new(1, taskbar_y.saturating_sub(h), w, h);
         self.menu_rect = rect;
         f.render_widget(Clear, rect);
+        let title = if self.start_filter.is_empty() {
+            " ⊞ texttop · type to search ".to_string()
+        } else {
+            format!(" 🔎 {}_ ", self.start_filter)
+        };
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(ACCENT))
             .title(Span::styled(
-                " ⊞ texttop ",
+                title,
                 Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             ))
             .style(Style::default().bg(MENU_BG));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
         let buf = f.buffer_mut();
-        for (i, (label, action)) in MENU.iter().enumerate() {
-            let iy = inner.y + i as u16;
+        if filtered.is_empty() {
+            buf.set_string(
+                inner.x,
+                inner.y,
+                " no match — Esc clears ",
+                Style::default().fg(Color::Rgb(150, 155, 175)).bg(MENU_BG),
+            );
+            return;
+        }
+        for (row, (item, text)) in rows.iter().enumerate() {
+            let iy = inner.y + row as u16;
             if iy >= inner.y + inner.height {
                 break;
             }
-            let mut text = format!(" {label}");
-            if *action == MenuAction::Wallpaper {
-                text = format!(" {label}  · {}", THEMES[self.theme % THEMES.len()].2);
-            }
-            let style = if i == self.start_sel {
-                Style::default()
+            let style = match item {
+                None => Style::default()
+                    .fg(Color::Rgb(110, 125, 165))
+                    .bg(MENU_BG)
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                Some(fi) if *fi == self.start_sel => Style::default()
                     .fg(Color::White)
                     .bg(Color::Rgb(0, 110, 170))
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::Rgb(210, 214, 228)).bg(MENU_BG)
+                    .add_modifier(Modifier::BOLD),
+                Some(_) => Style::default().fg(Color::Rgb(210, 214, 228)).bg(MENU_BG),
             };
             let pad = " ".repeat(inner.width as usize);
             buf.set_string(inner.x, iy, &pad, style);
-            buf.set_string(inner.x, iy, &text, style);
+            buf.set_string(inner.x, iy, text, style);
+        }
+    }
+
+    fn render_keys_overlay(&self, f: &mut Frame) {
+        const KEYS: &[(&str, &str)] = &[
+            ("F1", "start menu (type to search)"),
+            ("Alt+Tab · F6", "window switcher"),
+            ("Ctrl+W", "close window"),
+            ("F11 · Ctrl+Shift+↑", "maximize / restore"),
+            ("Ctrl+Shift+←/→", "snap left / right"),
+            ("Ctrl+arrows", "move window"),
+            ("Ctrl+D", "show desktop"),
+            ("drag to edge", "snap · top edge maximizes"),
+            ("double-click title", "maximize"),
+            ("middle-click taskbar", "close that window"),
+            ("right-click", "context menus everywhere"),
+            ("F5", "clean dead desktop shortcuts"),
+            ("F12", "this overlay"),
+        ];
+        let w = 54u16.min(self.screen.width.saturating_sub(2));
+        let h = (KEYS.len() as u16 + 4).min(self.screen.height.saturating_sub(2));
+        let x = self.screen.width.saturating_sub(w) / 2;
+        let y = self.screen.height.saturating_sub(h) / 3;
+        let rect = Rect::new(x, y, w, h);
+        f.render_widget(Clear, rect);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(ACCENT))
+            .title(Span::styled(
+                " ⌨ desktop shortcuts · any key closes ",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ))
+            .style(Style::default().bg(MENU_BG));
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+        let buf = f.buffer_mut();
+        for (i, (k, d)) in KEYS.iter().enumerate() {
+            let iy = inner.y + 1 + i as u16;
+            if iy >= inner.y + inner.height {
+                break;
+            }
+            buf.set_string(
+                inner.x + 1,
+                iy,
+                format!("{k:>20}"),
+                Style::default()
+                    .fg(Color::Rgb(150, 200, 255))
+                    .bg(MENU_BG)
+                    .add_modifier(Modifier::BOLD),
+            );
+            buf.set_string(
+                inner.x + 23,
+                iy,
+                *d,
+                Style::default().fg(Color::Rgb(200, 205, 222)).bg(MENU_BG),
+            );
         }
     }
 
@@ -874,6 +1049,12 @@ impl Desktop {
     // ---------------------------------------------------------- input
 
     pub fn on_key(&mut self, k: KeyEvent) {
+        // the shortcut overlay swallows the next key press
+        if self.show_keys {
+            self.show_keys = false;
+            return;
+        }
+
         // Esc cancels file drag / menus first
         if matches!(k.code, KeyCode::Esc) {
             if self.drag.take().is_some() {
@@ -892,7 +1073,12 @@ impl Desktop {
                 return;
             }
             if self.start_open {
-                self.start_open = false;
+                if !self.start_filter.is_empty() {
+                    self.start_filter.clear();
+                    self.start_sel = 0;
+                } else {
+                    self.start_open = false;
+                }
                 return;
             }
         }
@@ -951,13 +1137,33 @@ impl Desktop {
         }
 
         if self.start_open {
+            let filtered = self.filtered_menu();
+            let n = filtered.len();
             match k.code {
                 KeyCode::Esc | KeyCode::F(1) => self.start_open = false,
                 KeyCode::Up => {
-                    self.start_sel = self.start_sel.checked_sub(1).unwrap_or(MENU.len() - 1)
+                    if n > 0 {
+                        self.start_sel = self.start_sel.checked_sub(1).unwrap_or(n - 1);
+                    }
                 }
-                KeyCode::Down => self.start_sel = (self.start_sel + 1) % MENU.len(),
-                KeyCode::Enter => self.activate_menu(MENU[self.start_sel].1),
+                KeyCode::Down => {
+                    if n > 0 {
+                        self.start_sel = (self.start_sel + 1) % n;
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(&mi) = filtered.get(self.start_sel) {
+                        self.activate_menu(MENU[mi].1);
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.start_filter.pop();
+                    self.start_sel = 0;
+                }
+                KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.start_filter.push(c);
+                    self.start_sel = 0;
+                }
                 _ => {}
             }
             return;
@@ -977,7 +1183,12 @@ impl Desktop {
             KeyCode::F(1) => {
                 self.start_open = true;
                 self.start_sel = 0;
+                self.start_filter.clear();
                 self.overflow_open = false;
+                return;
+            }
+            KeyCode::F(12) => {
+                self.show_keys = true;
                 return;
             }
             KeyCode::F(5) => {
@@ -1097,6 +1308,13 @@ impl Desktop {
         let (col, row) = (m.column, m.row);
         let taskbar_y = self.screen.height.saturating_sub(1);
 
+        if self.show_keys {
+            if matches!(m.kind, MouseEventKind::Down(_)) {
+                self.show_keys = false;
+            }
+            return;
+        }
+
         // context menu eats clicks first
         if let Some(ctx) = &self.context {
             let r = ctx.rect;
@@ -1166,6 +1384,7 @@ impl Desktop {
                     if col < self.start_w {
                         self.start_open = !self.start_open;
                         self.start_sel = 0;
+                        self.start_filter.clear();
                         self.context = None;
                         self.overflow_open = false;
                         return;
@@ -1218,9 +1437,13 @@ impl Desktop {
                     if col >= r.x && col < r.x + r.width && row >= r.y && row < r.y + r.height {
                         if row > r.y && row < r.y + r.height - 1 {
                             let idx = (row - r.y - 1) as usize;
-                            if idx < MENU.len() {
-                                self.start_sel = idx;
-                                self.activate_menu(MENU[idx].1);
+                            let filtered = self.filtered_menu();
+                            let rows = self.start_rows(&filtered);
+                            if let Some((Some(fi), _)) = rows.get(idx) {
+                                if let Some(&mi) = filtered.get(*fi) {
+                                    self.start_sel = *fi;
+                                    self.activate_menu(MENU[mi].1);
+                                }
                             }
                         }
                     } else {
@@ -1873,19 +2096,39 @@ impl Desktop {
                 self.spawn(Launch::SysInfo);
                 self.start_open = false;
             }
+            MenuAction::Snake => {
+                self.spawn(Launch::Snake);
+                self.start_open = false;
+            }
+            MenuAction::Minesweeper => {
+                self.spawn(Launch::Minesweeper);
+                self.start_open = false;
+            }
+            MenuAction::Game2048 => {
+                self.spawn(Launch::Game2048);
+                self.start_open = false;
+            }
             MenuAction::Wallpaper => {
                 self.theme = (self.theme + 1) % THEMES.len();
                 self.save_desktop();
+            }
+            MenuAction::Keys => {
+                self.show_keys = true;
+                self.start_open = false;
             }
             MenuAction::About => {
                 self.spawn(Launch::About);
                 self.start_open = false;
             }
-            MenuAction::Quit => self.should_quit = true,
+            MenuAction::Quit => {
+                self.save_session();
+                self.should_quit = true;
+            }
         }
     }
 
     fn spawn(&mut self, launch: Launch) {
+        let saved = launch.clone();
         let (app, icon, prefer_w, prefer_h, min_w, min_h): (
             Box<dyn AppWindow>,
             &'static str,
@@ -1905,7 +2148,7 @@ impl Desktop {
             }
             Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 72, 22, 40, 12),
             Launch::About => (Box::new(About::new()), "✨", 78, 34, 48, 14),
-            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 22, 24, 14),
+            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 26, 24, 14),
             Launch::Clock => (Box::new(ClockApp::new()), "⏱", 58, 18, 36, 10),
             Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 84, 28, 48, 12),
             Launch::Calendar => (Box::new(Calendar::new()), "📅", 52, 20, 36, 12),
@@ -1916,6 +2159,9 @@ impl Desktop {
             Launch::Processes => (Box::new(Processes::new()), "⚙", 72, 26, 40, 12),
             Launch::Snapshots(p) => (Box::new(SnapshotsApp::new(p)), "⏱", 84, 28, 48, 12),
             Launch::Compare(paths) => (Box::new(CompareApp::new(paths)), "↔", 90, 30, 48, 12),
+            Launch::Snake => (Box::new(Snake::new()), "🐍", 64, 24, 30, 10),
+            Launch::Minesweeper => (Box::new(Minesweeper::new()), "💣", 56, 22, 30, 12),
+            Launch::Game2048 => (Box::new(Game2048::new()), "🎮", 44, 22, 28, 12),
         };
         let scr = self.screen;
         let taskbar = 1u16;
@@ -1936,6 +2182,7 @@ impl Desktop {
             minimized: false,
             restore: None,
             icon,
+            launch: saved,
             app,
         });
         self.next_id += 1;
@@ -2398,6 +2645,64 @@ impl Desktop {
         }
     }
 
+    fn session_path() -> PathBuf {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".texttop_session.json")
+    }
+
+    /// Persist open windows (what they are + where) so the next start
+    /// brings the whole desktop back.
+    pub fn save_session(&self) {
+        let wins: Vec<serde_json::Value> = self
+            .windows
+            .iter()
+            .filter_map(|w| {
+                launch_json(&w.launch).map(|l| {
+                    serde_json::json!({
+                        "launch": l,
+                        "x": w.rect.x, "y": w.rect.y,
+                        "w": w.rect.width, "h": w.rect.height,
+                        "min": w.minimized,
+                    })
+                })
+            })
+            .collect();
+        let doc = serde_json::json!({ "windows": wins });
+        let _ = fs::write(Self::session_path(), doc.to_string());
+    }
+
+    /// Reopen the previous session; true if at least one window came back.
+    fn load_session(&mut self) -> bool {
+        let Ok(data) = fs::read_to_string(Self::session_path()) else {
+            return false;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) else {
+            return false;
+        };
+        let Some(arr) = v.get("windows").and_then(|a| a.as_array()) else {
+            return false;
+        };
+        let mut restored = false;
+        for item in arr {
+            let Some(launch) = item.get("launch").and_then(launch_from_json) else {
+                continue;
+            };
+            self.spawn(launch);
+            restored = true;
+            if let Some(w) = self.windows.last_mut() {
+                let g = |k: &str| item.get(k).and_then(|n| n.as_u64());
+                if let (Some(x), Some(y), Some(ww), Some(hh)) =
+                    (g("x"), g("y"), g("w"), g("h"))
+                {
+                    w.rect = Rect::new(x as u16, y as u16, ww as u16, hh as u16);
+                }
+                w.minimized = item.get("min").and_then(|m| m.as_bool()).unwrap_or(false);
+            }
+        }
+        restored
+    }
+
     fn sanitize(&mut self) {
         let scr = self.screen;
         if scr.width < 30 || scr.height < 8 {
@@ -2429,8 +2734,8 @@ fn default_icons() -> Vec<DeskIcon> {
             emoji: (*emoji).to_string(),
             label: (*label).to_string(),
             kind: DeskKind::App(*action),
-            x: 2,
-            y: 1 + i as u16 * (ICON_H + ICON_GAP),
+            x: 2 + (i / ICONS_PER_COL) as u16 * (ICON_W + ICON_GAP),
+            y: 1 + (i % ICONS_PER_COL) as u16 * (ICON_H + ICON_GAP),
         })
         .collect()
 }
@@ -2452,6 +2757,90 @@ fn truncate_label(s: &str, max: usize) -> String {
     }
     out.push('…');
     out
+}
+
+/// Serialize a Launch for session restore. One-shot launchers (external
+/// programs) are intentionally skipped — re-running them on start would be
+/// surprising.
+fn launch_json(l: &Launch) -> Option<serde_json::Value> {
+    use serde_json::json;
+    let s = |p: &PathBuf| p.to_string_lossy().to_string();
+    let so = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().to_string());
+    Some(match l {
+        Launch::Files(p) => json!({"t": "files", "p": s(p)}),
+        Launch::Web(u) => json!({"t": "web", "u": u}),
+        Launch::Audio(p) => json!({"t": "audio", "p": s(p)}),
+        Launch::Image(p) => json!({"t": "image", "p": s(p)}),
+        Launch::Video(p) => json!({"t": "video", "p": s(p)}),
+        Launch::Editor(p) => json!({"t": "editor", "p": so(p)}),
+        Launch::Terminal { cwd, .. } => json!({"t": "terminal", "cwd": so(cwd)}),
+        Launch::About => json!({"t": "about"}),
+        Launch::Calculator => json!({"t": "calculator"}),
+        Launch::Clock => json!({"t": "clock"}),
+        Launch::Hex(p) => json!({"t": "hex", "p": so(p)}),
+        Launch::Calendar => json!({"t": "calendar"}),
+        Launch::SysInfo => json!({"t": "sysinfo"}),
+        Launch::Notes => json!({"t": "notes"}),
+        Launch::Git(p) => json!({"t": "git", "p": so(p)}),
+        Launch::Search(p) => json!({"t": "search", "p": so(p)}),
+        Launch::Processes => json!({"t": "processes"}),
+        Launch::Snapshots(p) => json!({"t": "snapshots", "p": s(p)}),
+        Launch::Compare(ps) => {
+            json!({"t": "compare", "ps": ps.iter().map(|p| s(p)).collect::<Vec<_>>()})
+        }
+        Launch::Snake => json!({"t": "snake"}),
+        Launch::Minesweeper => json!({"t": "mines"}),
+        Launch::Game2048 => json!({"t": "2048"}),
+        Launch::AppLauncher(_) => return None,
+    })
+}
+
+fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
+    let t = v.get("t")?.as_str()?;
+    let p = || v.get("p").and_then(|p| p.as_str()).map(PathBuf::from);
+    // file-backed windows only come back if the file still exists
+    let pf = || p().filter(|p| p.exists());
+    Some(match t {
+        "files" => Launch::Files(pf()?),
+        "web" => Launch::Web(v.get("u").and_then(|u| u.as_str()).map(String::from)),
+        "audio" => Launch::Audio(pf()?),
+        "image" => Launch::Image(pf()?),
+        "video" => Launch::Video(pf()?),
+        "editor" => Launch::Editor(p()),
+        "terminal" => Launch::Terminal {
+            program: None,
+            args: Vec::new(),
+            cwd: v
+                .get("cwd")
+                .and_then(|c| c.as_str())
+                .map(PathBuf::from)
+                .filter(|p| p.exists()),
+        },
+        "about" => Launch::About,
+        "calculator" => Launch::Calculator,
+        "clock" => Launch::Clock,
+        "hex" => Launch::Hex(p().filter(|p| p.exists())),
+        "calendar" => Launch::Calendar,
+        "sysinfo" => Launch::SysInfo,
+        "notes" => Launch::Notes,
+        "git" => Launch::Git(p().filter(|p| p.exists())),
+        "search" => Launch::Search(p().filter(|p| p.exists())),
+        "processes" => Launch::Processes,
+        "snapshots" => Launch::Snapshots(pf()?),
+        "compare" => Launch::Compare(
+            v.get("ps")?
+                .as_array()?
+                .iter()
+                .filter_map(|p| p.as_str())
+                .map(PathBuf::from)
+                .filter(|p| p.exists())
+                .collect(),
+        ),
+        "snake" => Launch::Snake,
+        "mines" => Launch::Minesweeper,
+        "2048" => Launch::Game2048,
+        _ => return None,
+    })
 }
 
 fn contains(r: Rect, col: u16, row: u16) -> bool {

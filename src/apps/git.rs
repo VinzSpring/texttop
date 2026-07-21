@@ -44,6 +44,7 @@ pub struct GitApp {
     detail_lines: Vec<String>,
     prompt: Option<(Prompt, String)>,
     stat: ShortStat,
+    show_help: bool,
 }
 
 impl GitApp {
@@ -63,6 +64,7 @@ impl GitApp {
             detail_lines: Vec::new(),
             prompt: None,
             stat: ShortStat::default(),
+            show_help: false,
         };
         let start = path
             .or_else(dirs::home_dir)
@@ -412,7 +414,7 @@ impl AppWindow for GitApp {
             format!(" {label}: {input}█  Esc cancel ")
         } else {
             format!(
-                " {} │ {} │ Tab panes · Space stage · Enter open · Ctrl+L path · F5 · q ",
+                " {} │ {} │ Tab panes · Space stage · Ctrl+L path · ? help · q ",
                 self.status, root_s
             )
         };
@@ -426,10 +428,35 @@ impl AppWindow for GitApp {
             .style(Style::default().bg(Color::Rgb(18, 22, 36))),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
         );
+
+        if self.show_help {
+            crate::gfx::key_overlay(
+                f,
+                area,
+                "⌨ Git · any key closes",
+                &[
+                    ("Tab / 1-5", "switch panes"),
+                    ("↑↓ / jk", "move selection"),
+                    ("Space", "stage / unstage file"),
+                    ("d", "diff selected (Status)"),
+                    ("Enter", "open file / details"),
+                    ("c", "commit staged"),
+                    ("n", "new branch (Branches)"),
+                    ("Ctrl+L", "change repo path"),
+                    ("F5", "refresh"),
+                    ("q / Esc", "close"),
+                ],
+            );
+        }
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+
+        if self.show_help {
+            self.show_help = false;
+            return Action::None;
+        }
 
         if let Some((prompt, ref mut input)) = self.prompt.as_mut() {
             let prompt = *prompt;
@@ -594,6 +621,7 @@ impl AppWindow for GitApp {
                     return Action::Close;
                 }
             }
+            KeyCode::Char('?') => self.show_help = true,
             KeyCode::Char('q') => return Action::Close,
             KeyCode::Char('d') if self.tab == Tab::Status => {
                 self.tab = Tab::Diff;

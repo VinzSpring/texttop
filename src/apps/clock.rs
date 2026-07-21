@@ -1,7 +1,9 @@
 use std::time::Instant;
 
 use chrono::{Datelike, Local};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{
+    KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -301,7 +303,21 @@ impl AppWindow for ClockApp {
         Action::None
     }
 
-    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+    fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        // clickable mode tabs on the first line ("  Clock  Stopwatch  Timer")
+        if matches!(m.kind, MouseEventKind::Down(MouseButton::Left))
+            && self.scroll.offset == 0
+            && m.row == area.y
+        {
+            let col = m.column.saturating_sub(area.x);
+            self.mode = match col {
+                2..=8 => Mode::Clock,
+                10..=20 => Mode::Stopwatch,
+                22..=28 => Mode::Timer,
+                _ => self.mode,
+            };
+            return Action::None;
+        }
         self.scroll.on_mouse(m, self.line_count, self.view_h);
         Action::None
     }

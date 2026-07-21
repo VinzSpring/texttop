@@ -25,6 +25,7 @@ enum Key {
 pub struct Calculator {
     expr: String,
     result: String,
+    history: Vec<String>,
     buttons: Vec<(Rect, Key)>,
 }
 
@@ -33,18 +34,25 @@ impl Calculator {
         Calculator {
             expr: String::new(),
             result: String::from("0"),
+            history: Vec::new(),
             buttons: Vec::new(),
         }
     }
 
     fn evaluate(&mut self) {
-        let raw = self.expr.trim();
+        let raw = self.expr.trim().to_string();
         if raw.is_empty() {
             return;
         }
-        match eval_expr(raw) {
+        match eval_expr(&raw) {
             Ok(v) => {
                 let formatted = format_num(v);
+                if raw != formatted {
+                    self.history.push(format!("{} = {}", pretty_ops(&raw), formatted));
+                    if self.history.len() > 32 {
+                        self.history.remove(0);
+                    }
+                }
                 self.result = formatted.clone();
                 self.expr = formatted;
             }
@@ -102,15 +110,19 @@ impl Calculator {
         } else {
             &self.expr
         };
-        src.chars()
-            .map(|c| match c {
-                '*' => '×',
-                '/' => '÷',
-                '-' => '−',
-                _ => c,
-            })
-            .collect()
+        pretty_ops(src)
     }
+}
+
+fn pretty_ops(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '*' => '×',
+            '/' => '÷',
+            '-' => '−',
+            _ => c,
+        })
+        .collect()
 }
 
 impl AppWindow for Calculator {
@@ -138,6 +150,24 @@ impl AppWindow for Calculator {
         let col_w = (area.width - 3 * hgap) / 4;
         let used = col_w * 4 + 3 * hgap;
         let left = area.x + (area.width - used) / 2;
+
+        // ------- history tape above the readout (when the window is tall)
+        if display_h > 3 {
+            let tape_rows = (display_h - 3) as usize;
+            let dim = Style::default().fg(Color::Rgb(140, 140, 150)).bg(BODY_BG);
+            for (row, entry) in self.history.iter().rev().take(tape_rows).enumerate() {
+                let y = area.y + display_h - 4 - row as u16;
+                let max = used.saturating_sub(2) as usize;
+                let shown: String = if entry.chars().count() > max {
+                    let chars: Vec<char> = entry.chars().collect();
+                    chars[chars.len() - max..].iter().collect()
+                } else {
+                    entry.clone()
+                };
+                let tw = shown.chars().count() as u16;
+                buf.set_string(left + used - tw - 1, y, &shown, dim);
+            }
+        }
 
         // ------- display: big right-aligned readout
         let text = self.display_text();

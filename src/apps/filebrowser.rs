@@ -103,6 +103,7 @@ pub struct FileBrowser {
     git_summary: String,
     /// Multi-select marks (canonical paths of files/dirs).
     marked: HashSet<PathBuf>,
+    show_help: bool,
 }
 
 impl FileBrowser {
@@ -127,6 +128,7 @@ impl FileBrowser {
             git_root: None,
             git_summary: String::new(),
             marked: HashSet::new(),
+            show_help: false,
         };
         fb.refresh();
         fb
@@ -1240,7 +1242,7 @@ impl AppWindow for FileBrowser {
                 format!(" · {} sel", self.marked.len())
             };
             format!(
-                " {}{}{}  │ Space mark · right-click snapshot/compare · / filter · Ctrl+C/X/V ",
+                " {}{}{}  │ Space mark · / filter · right-click menu · ? help ",
                 self.status, clip, marks
             )
         };
@@ -1258,9 +1260,38 @@ impl AppWindow for FileBrowser {
         if self.context.is_some() {
             self.render_context(f, area);
         }
+
+        if self.show_help {
+            gfx::key_overlay(
+                f,
+                area,
+                "⌨ File Manager · any key closes",
+                &[
+                    ("Enter", "open · Backspace up"),
+                    ("Space", "mark · Ctrl+A mark all"),
+                    ("/ or Ctrl+F", "filter names"),
+                    ("Ctrl+L", "go to path"),
+                    ("Ctrl+C/X/V", "copy / cut / paste"),
+                    ("Ctrl+P", "preview pane"),
+                    ("Ctrl+H", "hidden files"),
+                    ("Tab", "sort name/size/date"),
+                    ("F2", "rename · Del delete"),
+                    ("F3 / F4", "hex view / edit"),
+                    ("F7 / F8", "new folder / file"),
+                    ("Ctrl+T / Ctrl+G", "terminal / git here"),
+                    ("Alt+letter", "bookmarks"),
+                    ("right-click", "snapshots · compare · pin"),
+                    ("drag", "move/copy across windows"),
+                ],
+            );
+        }
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
+        if self.show_help {
+            self.show_help = false;
+            return Action::None;
+        }
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
 
@@ -1410,6 +1441,9 @@ impl AppWindow for FileBrowser {
                         self.status = format!("delete {name}?");
                     }
                 }
+            }
+            KeyCode::Char('?') => {
+                self.show_help = true;
             }
             KeyCode::Char(c) if !ctrl && !alt => {
                 let lc = c.to_ascii_lowercase();

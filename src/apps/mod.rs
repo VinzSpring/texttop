@@ -66,15 +66,18 @@ pub mod clock;
 pub mod compare;
 pub mod editor;
 pub mod filebrowser;
+pub mod game2048;
 pub mod git;
 pub mod gitutil;
 pub mod hexviewer;
 pub mod imageviewer;
 pub mod launcher;
+pub mod minesweeper;
 pub mod notes;
 pub mod processes;
 pub mod scroll;
 pub mod search;
+pub mod snake;
 pub mod snaputil;
 pub mod snapshots;
 pub mod syntax;
@@ -128,6 +131,9 @@ pub enum Launch {
     Snapshots(PathBuf),
     /// Visual diff of N files (pick any two).
     Compare(Vec<PathBuf>),
+    Snake,
+    Minesweeper,
+    Game2048,
 }
 
 pub trait AppWindow {

@@ -45,6 +45,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
                         if k.code == KeyCode::Char('q')
                             && k.modifiers.contains(KeyModifiers::CONTROL)
                         {
+                            desktop.save_session();
                             return Ok(());
                         }
                         desktop.on_key(k);

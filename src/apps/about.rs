@@ -49,7 +49,8 @@ impl About {
             )),
             Line::default(),
             Line::from(Span::styled("   Desktop", accent)),
-            kv("F1", "open the start menu"),
+            kv("F1", "start menu — just type to search apps"),
+            kv("F12", "shortcut key overlay"),
             kv("F6 / Alt+Tab", "window switcher"),
             kv("F11", "maximize / restore window"),
             kv("Ctrl+W", "close window"),
@@ -93,7 +94,7 @@ impl About {
                 "run apps: terminal, args form, or detached",
             ),
             kv("🎵 Audio", "mp3/wav/flac/ogg with visualizer"),
-            kv("🖼 Images", "quadrant-pixel color rendering"),
+            kv("🖼 Images", "zoom · pan · gallery · slideshow · ? help"),
             kv("🎬 Video", "built-in engine playback with sound"),
             kv(
                 "📝 Editor",
@@ -101,7 +102,7 @@ impl About {
             ),
             kv(
                 "🧮 Calculator",
-                "expressions with + − × ÷ ^ % and ( )",
+                "expressions with + − × ÷ ^ % ( ) · history tape",
             ),
             kv("⏱ Clock", "clock, stopwatch, and countdown timer"),
             kv(
@@ -122,6 +123,9 @@ impl About {
                 "↔ Compare",
                 "visual diff of 2+ marked files (pick A/B)",
             ),
+            kv("🐍 Snake", "arrows steer · gets faster as you eat"),
+            kv("💣 Minesweeper", "click/flag mines · 3 difficulties"),
+            kv("🎮 2048", "slide & merge tiles to 2048"),
             Line::default(),
             Line::from(Span::styled("   File Manager", accent)),
             kv("/ or Ctrl+F", "filter · F2 rename · Del delete"),
@@ -146,7 +150,15 @@ impl About {
                 dim,
             )),
             Line::from(Span::styled(
-                "   Layout is saved to ~/.texttop_desktop.json",
+                "   Icons & theme persist in ~/.texttop_desktop.json;",
+                dim,
+            )),
+            Line::from(Span::styled(
+                "   open windows are restored on next start (Exit via menu).",
+                dim,
+            )),
+            Line::from(Span::styled(
+                "   Press ? in Files · Git · Images for per-app keymaps.",
                 dim,
             )),
             Line::from(Span::styled(

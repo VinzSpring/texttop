@@ -25,12 +25,15 @@ pub struct SearchApp {
     root: PathBuf,
     query: String,
     editing: bool,
+    /// When set, the top line edits the search root instead of the query.
+    root_input: Option<String>,
     hits: Vec<Hit>,
     sel: usize,
     scroll: ScrollState,
     view_h: u16,
     status: String,
     use_rg: bool,
+    last_click: Option<(std::time::Instant, usize)>,
 }
 
 impl SearchApp {
@@ -50,6 +53,7 @@ impl SearchApp {
             root,
             query: String::new(),
             editing: true,
+            root_input: None,
             hits: Vec::new(),
             sel: 0,
             scroll: ScrollState::default(),
@@ -60,6 +64,23 @@ impl SearchApp {
                 "builtin walk · type query · Enter search".into()
             },
             use_rg,
+            last_click: None,
+        }
+    }
+
+    fn commit_root(&mut self) {
+        let Some(input) = self.root_input.take() else {
+            return;
+        };
+        let p = PathBuf::from(input.trim());
+        if p.is_dir() {
+            self.root = p;
+            self.status = format!("root: {}", self.root.display());
+            if !self.query.trim().is_empty() {
+                self.run_search();
+            }
+        } else {
+            self.status = format!("not a folder: {}", p.display());
         }
     }
 
@@ -195,7 +216,8 @@ impl AppWindow for SearchApp {
         if area.height < 3 {
             return;
         }
-        let q_style = if self.editing {
+        let active = self.editing || self.root_input.is_some();
+        let q_style = if active {
             Style::default()
                 .fg(Color::White)
                 .bg(Color::Rgb(40, 70, 110))
@@ -203,7 +225,9 @@ impl AppWindow for SearchApp {
         } else {
             Style::default().fg(Color::Rgb(200, 210, 230)).bg(Color::Rgb(28, 36, 62))
         };
-        let qline = if self.editing {
+        let qline = if let Some(input) = &self.root_input {
+            format!(" 📂 {input}█  Enter set root · Esc cancel ")
+        } else if self.editing {
             format!(" 🔍 {}█  in {} ", self.query, self.root.display())
         } else {
             format!(" 🔍 {}  in {} ", self.query, self.root.display())
@@ -264,7 +288,7 @@ impl AppWindow for SearchApp {
         f.render_widget(
             Paragraph::new(Span::styled(
                 format!(
-                    " {} │ / edit query · Enter search/open · Ctrl+L root · ↑↓ · q ",
+                    " {} │ / query · Enter search/open · dbl-click open · Ctrl+L root · q ",
                     self.status
                 ),
                 Style::default()
@@ -278,6 +302,28 @@ impl AppWindow for SearchApp {
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        // root path editing takes over the input line
+        if self.root_input.is_some() {
+            match k.code {
+                KeyCode::Esc => {
+                    self.root_input = None;
+                    self.status = "root edit cancelled".into();
+                }
+                KeyCode::Enter => self.commit_root(),
+                KeyCode::Backspace => {
+                    if let Some(s) = &mut self.root_input {
+                        s.pop();
+                    }
+                }
+                KeyCode::Char(c) if !ctrl => {
+                    if let Some(s) = &mut self.root_input {
+                        s.push(c);
+                    }
+                }
+                _ => {}
+            }
+            return Action::None;
+        }
         if self.editing {
             match k.code {
                 KeyCode::Esc => {
@@ -290,12 +336,11 @@ impl AppWindow for SearchApp {
                 KeyCode::Backspace => {
                     self.query.pop();
                 }
-                KeyCode::Char(c) if !ctrl => self.query.push(c),
                 KeyCode::Char('l') if ctrl => {
-                    self.query = self.root.to_string_lossy().to_string();
-                    // treat as path change on next enter? simpler: prompt via query
-                    self.status = "edit root path then Ctrl+L again… use Files".into();
+                    self.editing = false;
+                    self.root_input = Some(self.root.to_string_lossy().to_string());
                 }
+                KeyCode::Char(c) if !ctrl => self.query.push(c),
                 _ => {}
             }
             return Action::None;
@@ -308,8 +353,7 @@ impl AppWindow for SearchApp {
                 self.editing = true;
             }
             KeyCode::Char('l') if ctrl => {
-                self.editing = true;
-                self.status = format!("root: {}", self.root.display());
+                self.root_input = Some(self.root.to_string_lossy().to_string());
             }
             KeyCode::Up => self.sel = self.sel.saturating_sub(1),
             KeyCode::Down => {
@@ -346,6 +390,16 @@ impl AppWindow for SearchApp {
                 let idx = self.scroll.offset as usize + (m.row - body.y) as usize;
                 if idx < self.hits.len() {
                     self.sel = idx;
+                    let now = std::time::Instant::now();
+                    let dbl = matches!(self.last_click, Some((t, li))
+                        if li == idx && now.duration_since(t).as_millis() < 450);
+                    if dbl {
+                        self.last_click = None;
+                        if let Some(h) = self.hits.get(idx) {
+                            return Action::Launch(Launch::Editor(Some(h.path.clone())));
+                        }
+                    }
+                    self.last_click = Some((now, idx));
                 }
             }
             MouseEventKind::ScrollUp => self.sel = self.sel.saturating_sub(3),

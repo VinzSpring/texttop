@@ -1,6 +1,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::Frame;
 
 pub fn lerp(a: u8, b: u8, t: f32) -> u8 {
     (a as f32 + (b as f32 - a as f32) * t).round().clamp(0.0, 255.0) as u8
@@ -207,6 +208,51 @@ pub fn shadow(buf: &mut Buffer, rect: Rect, screen: Rect) {
                 }
             }
         }
+    }
+}
+
+/// Centered keymap overlay, shared by all apps ('?' convention).
+pub fn key_overlay(f: &mut Frame, area: Rect, title: &str, keys: &[(&str, &str)]) {
+    let key_w = keys.iter().map(|(k, _)| k.chars().count()).max().unwrap_or(8);
+    let desc_w = keys.iter().map(|(_, d)| d.chars().count()).max().unwrap_or(8);
+    let w = ((key_w + desc_w + 7) as u16).min(area.width);
+    let h = (keys.len() as u16 + 4).min(area.height);
+    let x = area.x + area.width.saturating_sub(w) / 2;
+    let y = area.y + area.height.saturating_sub(h) / 2;
+    let rect = Rect::new(x, y, w, h);
+    fill(f.buffer_mut(), rect, Color::Rgb(16, 19, 32));
+    let buf = f.buffer_mut();
+    buf.set_string(
+        rect.x + 2,
+        rect.y + 1,
+        title,
+        Style::default()
+            .fg(Color::Rgb(150, 200, 255))
+            .bg(Color::Rgb(16, 19, 32))
+            .add_modifier(Modifier::BOLD),
+    );
+    for (i, (k, d)) in keys.iter().enumerate() {
+        let iy = rect.y + 3 + i as u16;
+        if iy >= rect.y + rect.height.saturating_sub(1) {
+            break;
+        }
+        buf.set_string(
+            rect.x + 2,
+            iy,
+            format!("{k:>key_w$}"),
+            Style::default()
+                .fg(Color::Rgb(210, 215, 235))
+                .bg(Color::Rgb(16, 19, 32))
+                .add_modifier(Modifier::BOLD),
+        );
+        buf.set_string(
+            rect.x + 4 + key_w as u16,
+            iy,
+            *d,
+            Style::default()
+                .fg(Color::Rgb(120, 130, 160))
+                .bg(Color::Rgb(16, 19, 32)),
+        );
     }
 }
 
