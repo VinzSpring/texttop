@@ -16,10 +16,11 @@ use crate::apps::{
     about::About, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
     clock::ClockApp, compare::CompareApp, editor::Editor, filebrowser::FileBrowser,
     game2048::Game2048, git::GitApp, hexviewer::HexViewer, imageviewer::ImageViewer,
-    launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes, processes::Processes,
-    search::SearchApp, snake::Snake, snapshots::SnapshotsApp, sysinfo::SysInfo,
-    terminal::Terminal, videoplayer::VideoPlayer, webbrowser::WebBrowser, Action, AppWindow,
-    Launch,
+    launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
+    pin::{PinEdit, PinEditor, PinPrompt, PinTo, PinnedApp},
+    processes::Processes, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
+    sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer, webbrowser::WebBrowser,
+    Action, AppWindow, Launch,
 };
 use crate::apps::gitutil;
 use crate::gfx;
@@ -201,6 +202,8 @@ const ICONS_PER_COL: usize = 8;
 enum DeskKind {
     App(MenuAction),
     Shortcut(PathBuf),
+    /// Pinned application: runs in the built-in terminal with saved args.
+    Pin(PinnedApp),
 }
 
 #[derive(Clone)]
@@ -231,6 +234,15 @@ enum CtxAction {
     RestoreWindow(u64),
     RemoveShortcut(usize),
     ResetIcons,
+    /// Open the pin-settings editor for a desktop pin icon.
+    EditIconPin(usize),
+    /// Convert a plain executable shortcut into a pin (opens editor).
+    PinShortcut(usize),
+    /// Create a brand-new pin from scratch.
+    NewPin(PinTo),
+    RunTaskbarPin(usize),
+    EditTaskbarPin(usize),
+    UnpinTaskbar(usize),
 }
 
 struct ContextMenu {
@@ -268,6 +280,10 @@ pub struct Desktop {
     menu_rect: Rect,
     start_w: u16,
     taskbar_hits: Vec<(u16, u16, u64)>,
+    /// Applications pinned to the taskbar (left of the window buttons).
+    taskbar_pins: Vec<PinnedApp>,
+    /// Hit boxes of taskbar pin buttons: (x0, x1, pin index).
+    pin_hits: Vec<(u16, u16, usize)>,
     overflow_ids: Vec<u64>,
     overflow_btn: Option<(u16, u16)>,
     overflow_open: bool,
@@ -304,6 +320,8 @@ impl Desktop {
             menu_rect: Rect::default(),
             start_w: 9,
             taskbar_hits: Vec::new(),
+            taskbar_pins: Vec::new(),
+            pin_hits: Vec::new(),
             overflow_ids: Vec::new(),
             overflow_btn: None,
             overflow_open: false,
@@ -646,10 +664,39 @@ impl Desktop {
         };
         let git_x = clock_x.saturating_sub(git_w);
 
+        // pinned apps right after Start
+        self.pin_hits.clear();
+        let mut x = self.start_w + 1;
+        for (i, p) in self.taskbar_pins.iter().enumerate() {
+            let label = format!(" {} ", p.emoji);
+            let wdt = Span::raw(&label).width() as u16;
+            if x + wdt >= clock_x.saturating_sub(8) {
+                break;
+            }
+            buf.set_string(
+                x,
+                y,
+                &label,
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::Rgb(28, 34, 56)),
+            );
+            self.pin_hits.push((x, x + wdt, i));
+            x += wdt;
+        }
+        if !self.pin_hits.is_empty() {
+            buf.set_string(
+                x,
+                y,
+                "│",
+                Style::default().fg(Color::Rgb(70, 76, 104)).bg(TASKBAR_BG),
+            );
+            x += 2;
+        }
+
         self.taskbar_hits.clear();
         self.overflow_ids.clear();
         self.overflow_btn = None;
-        let mut x = self.start_w + 1;
         let top = self.top_idx();
         let reserve = 6u16 + git_w; // »N + git
         let limit = clock_x.saturating_sub(reserve + 1).min(git_x.saturating_sub(1));
@@ -1196,6 +1243,7 @@ impl Desktop {
                 self.icons.retain(|i| match &i.kind {
                     DeskKind::App(_) => true,
                     DeskKind::Shortcut(p) => p.exists(),
+                    DeskKind::Pin(pin) => pin.program.exists(),
                 });
                 let removed = before.saturating_sub(self.icons.len());
                 self.icon_sel = self.icon_sel.min(self.icons.len().saturating_sub(1));
@@ -1258,8 +1306,10 @@ impl Desktop {
                 return;
             }
             KeyCode::Delete if self.top_idx().is_none() => {
-                if let Some(DeskKind::Shortcut(_)) = self.icons.get(self.icon_sel).map(|i| &i.kind)
-                {
+                if matches!(
+                    self.icons.get(self.icon_sel).map(|i| &i.kind),
+                    Some(DeskKind::Shortcut(_) | DeskKind::Pin(_))
+                ) {
                     self.icons.remove(self.icon_sel);
                     self.icon_sel = self.icon_sel.min(self.icons.len().saturating_sub(1));
                     self.save_desktop();
@@ -1388,6 +1438,17 @@ impl Desktop {
                         self.context = None;
                         self.overflow_open = false;
                         return;
+                    }
+                    let pins = self.pin_hits.clone();
+                    for (x0, x1, idx) in pins {
+                        if col >= x0 && col < x1 {
+                            self.start_open = false;
+                            self.overflow_open = false;
+                            if let Some(pin) = self.taskbar_pins.get(idx).cloned() {
+                                self.activate_pin(&pin);
+                            }
+                            return;
+                        }
                     }
                     if let Some((x0, x1)) = self.overflow_btn {
                         if col >= x0 && col < x1 {
@@ -1694,6 +1755,26 @@ impl Desktop {
                 );
                 return;
             }
+            let pins = self.pin_hits.clone();
+            for (x0, x1, idx) in pins {
+                if col >= x0 && col < x1 {
+                    let name = self
+                        .taskbar_pins
+                        .get(idx)
+                        .map(|p| p.name.clone())
+                        .unwrap_or_default();
+                    self.open_context(
+                        col,
+                        row.saturating_sub(1),
+                        vec![
+                            (format!("Run {name}"), CtxAction::RunTaskbarPin(idx)),
+                            ("Pin settings…".into(), CtxAction::EditTaskbarPin(idx)),
+                            ("Unpin from taskbar".into(), CtxAction::UnpinTaskbar(idx)),
+                        ],
+                    );
+                    return;
+                }
+            }
             let hits = self.taskbar_hits.clone();
             for (x0, x1, id) in hits {
                 if col >= x0 && col < x1 {
@@ -1716,6 +1797,7 @@ impl Desktop {
                 col,
                 row.saturating_sub(1),
                 vec![
+                    ("Pin app to taskbar…".into(), CtxAction::NewPin(PinTo::Taskbar)),
                     ("Show desktop".into(), CtxAction::ShowDesktop),
                     ("Tile windows".into(), CtxAction::TileWindows),
                     ("Cascade windows".into(), CtxAction::CascadeWindows),
@@ -1786,6 +1868,7 @@ impl Desktop {
                 ("Open Files".into(), CtxAction::OpenFiles),
                 ("Open Terminal".into(), CtxAction::OpenTerminal),
                 ("Open Editor".into(), CtxAction::OpenEditor),
+                ("Pin app to desktop…".into(), CtxAction::NewPin(PinTo::Desktop)),
                 ("Show desktop".into(), CtxAction::ShowDesktop),
                 ("Tile windows".into(), CtxAction::TileWindows),
                 ("Cascade windows".into(), CtxAction::CascadeWindows),
@@ -1797,8 +1880,18 @@ impl Desktop {
 
     fn open_icon_context(&mut self, idx: usize, col: u16, row: u16) {
         let mut items = vec![("Open".into(), CtxAction::Open)];
-        if matches!(self.icons.get(idx).map(|i| &i.kind), Some(DeskKind::Shortcut(_))) {
-            items.push(("Remove shortcut".into(), CtxAction::RemoveShortcut(idx)));
+        match self.icons.get(idx).map(|i| &i.kind) {
+            Some(DeskKind::Shortcut(p)) => {
+                if crate::apps::pin::is_executable(p) {
+                    items.push(("Pin with args…".into(), CtxAction::PinShortcut(idx)));
+                }
+                items.push(("Remove shortcut".into(), CtxAction::RemoveShortcut(idx)));
+            }
+            Some(DeskKind::Pin(_)) => {
+                items.push(("Pin settings…".into(), CtxAction::EditIconPin(idx)));
+                items.push(("Remove pin".into(), CtxAction::RemoveShortcut(idx)));
+            }
+            _ => {}
         }
         items.push(("Reset icons".into(), CtxAction::ResetIcons));
         self.open_context(col, row, items);
@@ -1860,12 +1953,67 @@ impl Desktop {
             }
             CtxAction::RemoveShortcut(idx) => {
                 if idx < self.icons.len()
-                    && matches!(self.icons[idx].kind, DeskKind::Shortcut(_))
+                    && matches!(
+                        self.icons[idx].kind,
+                        DeskKind::Shortcut(_) | DeskKind::Pin(_)
+                    )
                 {
                     self.icons.remove(idx);
                     self.icon_sel = self.icon_sel.min(self.icons.len().saturating_sub(1));
                     self.save_desktop();
                     self.toast("shortcut removed");
+                }
+            }
+            CtxAction::EditIconPin(idx) => {
+                if let Some(DeskKind::Pin(pin)) = self.icons.get(idx).map(|i| i.kind.clone()) {
+                    self.spawn(Launch::PinEditor {
+                        pin,
+                        to: PinTo::Desktop,
+                        edit: Some(PinEdit::Desktop(idx)),
+                    });
+                }
+            }
+            CtxAction::PinShortcut(idx) => {
+                if let Some(DeskKind::Shortcut(p)) = self.icons.get(idx).map(|i| i.kind.clone()) {
+                    self.spawn(Launch::PinEditor {
+                        pin: PinnedApp::from_path(p),
+                        to: PinTo::Desktop,
+                        edit: Some(PinEdit::Desktop(idx)),
+                    });
+                }
+            }
+            CtxAction::NewPin(to) => {
+                self.spawn(Launch::PinEditor {
+                    pin: PinnedApp {
+                        name: String::new(),
+                        emoji: "🚀".into(),
+                        program: PathBuf::new(),
+                        args: String::new(),
+                        cwd: None,
+                    },
+                    to,
+                    edit: None,
+                });
+            }
+            CtxAction::RunTaskbarPin(idx) => {
+                if let Some(pin) = self.taskbar_pins.get(idx).cloned() {
+                    self.activate_pin(&pin);
+                }
+            }
+            CtxAction::EditTaskbarPin(idx) => {
+                if let Some(pin) = self.taskbar_pins.get(idx).cloned() {
+                    self.spawn(Launch::PinEditor {
+                        pin,
+                        to: PinTo::Taskbar,
+                        edit: Some(PinEdit::Taskbar(idx)),
+                    });
+                }
+            }
+            CtxAction::UnpinTaskbar(idx) => {
+                if idx < self.taskbar_pins.len() {
+                    self.taskbar_pins.remove(idx);
+                    self.save_desktop();
+                    self.toast("unpinned from taskbar");
                 }
             }
             CtxAction::ResetIcons => {
@@ -2033,6 +2181,20 @@ impl Desktop {
                 let p = p.clone();
                 self.open_path(p);
             }
+            DeskKind::Pin(pin) => {
+                let pin = pin.clone();
+                self.activate_pin(&pin);
+            }
+        }
+    }
+
+    /// Run a pinned app: straight into a terminal, or via the field prompt
+    /// when its argument template contains `{field}` placeholders.
+    fn activate_pin(&mut self, pin: &PinnedApp) {
+        if pin.fields().is_empty() {
+            self.spawn(pin.launch_with(&[]));
+        } else {
+            self.spawn(Launch::PinPrompt(pin.clone()));
         }
     }
 
@@ -2147,6 +2309,10 @@ impl Desktop {
                 (Box::new(Terminal::new(program, args, cwd)), "🖥", 86, 28, 48, 12)
             }
             Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 72, 22, 40, 12),
+            Launch::PinEditor { pin, to, edit } => {
+                (Box::new(PinEditor::new(pin, to, edit)), "📌", 66, 20, 44, 14)
+            }
+            Launch::PinPrompt(pin) => (Box::new(PinPrompt::new(pin)), "🚀", 64, 18, 40, 10),
             Launch::About => (Box::new(About::new()), "✨", 78, 34, 48, 14),
             Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 26, 24, 14),
             Launch::Clock => (Box::new(ClockApp::new()), "⏱", 58, 18, 36, 10),
@@ -2492,6 +2658,10 @@ impl Desktop {
             Action::None => {}
             Action::Close => self.close_id(id),
             Action::Launch(l) => self.spawn(l),
+            Action::LaunchAndClose(l) => {
+                self.close_id(id);
+                self.spawn(l);
+            }
             Action::BeginFileDrag { path, cut } => {
                 // seed ghost near the focused window rather than screen center
                 let (gx, gy) = self
@@ -2517,7 +2687,68 @@ impl Desktop {
                 let (x, y) = self.next_icon_slot();
                 self.add_shortcut(path, x + ICON_W / 2, y + 1);
             }
+            Action::SavePin { pin, to, edit } => {
+                self.close_id(id);
+                self.save_pin(pin, to, edit);
+            }
         }
+    }
+
+    /// Store a pin from the editor: replace the edited entry when its
+    /// location matches, otherwise remove the old entry and add a new one.
+    fn save_pin(&mut self, pin: PinnedApp, to: PinTo, edit: Option<PinEdit>) {
+        // drop the entry being edited (it may move between desktop/taskbar)
+        match edit {
+            Some(PinEdit::Desktop(idx)) if idx < self.icons.len() => {
+                let old = self.icons.remove(idx);
+                if to == PinTo::Desktop {
+                    // keep its position on the desktop
+                    self.icons.insert(
+                        idx,
+                        DeskIcon {
+                            emoji: pin.emoji.clone(),
+                            label: truncate_label(&pin.name, ICON_W as usize),
+                            kind: DeskKind::Pin(pin),
+                            x: old.x,
+                            y: old.y,
+                        },
+                    );
+                    self.icon_sel = idx;
+                    self.save_desktop();
+                    self.toast("pin saved");
+                    return;
+                }
+            }
+            Some(PinEdit::Taskbar(idx)) if idx < self.taskbar_pins.len() => {
+                if to == PinTo::Taskbar {
+                    self.taskbar_pins[idx] = pin;
+                    self.save_desktop();
+                    self.toast("pin saved");
+                    return;
+                }
+                self.taskbar_pins.remove(idx);
+            }
+            _ => {}
+        }
+        match to {
+            PinTo::Desktop => {
+                let (x, y) = self.next_icon_slot();
+                self.icons.push(DeskIcon {
+                    emoji: pin.emoji.clone(),
+                    label: truncate_label(&pin.name, ICON_W as usize),
+                    kind: DeskKind::Pin(pin),
+                    x,
+                    y,
+                });
+                self.icon_sel = self.icons.len() - 1;
+                self.toast("pinned to desktop");
+            }
+            PinTo::Taskbar => {
+                self.taskbar_pins.push(pin);
+                self.toast("pinned to taskbar");
+            }
+        }
+        self.save_desktop();
     }
 
     fn next_icon_slot(&self) -> (u16, u16) {
@@ -2573,11 +2804,24 @@ impl Desktop {
                     "x": i.x,
                     "y": i.y,
                 })),
+                DeskKind::Pin(pin) => Some(serde_json::json!({
+                    "kind": "pin",
+                    "pin": pin.to_json(),
+                    "emoji": i.emoji,
+                    "label": i.label,
+                    "x": i.x,
+                    "y": i.y,
+                })),
             })
             .collect();
         let doc = serde_json::json!({
             "theme": self.theme,
             "icons": icons,
+            "taskbar_pins": self
+                .taskbar_pins
+                .iter()
+                .map(|p| p.to_json())
+                .collect::<Vec<_>>(),
         });
         let _ = fs::write(Self::desktop_path(), doc.to_string());
     }
@@ -2591,6 +2835,9 @@ impl Desktop {
         };
         if let Some(t) = v.get("theme").and_then(|t| t.as_u64()) {
             self.theme = t as usize % THEMES.len();
+        }
+        if let Some(pins) = v.get("taskbar_pins").and_then(|a| a.as_array()) {
+            self.taskbar_pins = pins.iter().filter_map(PinnedApp::from_json).collect();
         }
         let Some(arr) = v.get("icons").and_then(|a| a.as_array()) else {
             return;
@@ -2632,6 +2879,17 @@ impl Desktop {
                             emoji,
                             label,
                             kind: DeskKind::Shortcut(PathBuf::from(p)),
+                            x,
+                            y,
+                        });
+                    }
+                }
+                "pin" => {
+                    if let Some(pin) = item.get("pin").and_then(PinnedApp::from_json) {
+                        icons.push(DeskIcon {
+                            emoji,
+                            label,
+                            kind: DeskKind::Pin(pin),
                             x,
                             y,
                         });
@@ -2792,6 +3050,8 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
         Launch::Minesweeper => json!({"t": "mines"}),
         Launch::Game2048 => json!({"t": "2048"}),
         Launch::AppLauncher(_) => return None,
+        // one-shot pin dialogs are not restored
+        Launch::PinEditor { .. } | Launch::PinPrompt(_) => return None,
     })
 }
 

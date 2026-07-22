@@ -10,6 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 use super::gitutil::{self, GitLetter};
 use super::snaputil;
@@ -38,11 +39,24 @@ enum ClipOp {
     Cut,
 }
 
+/// Buttons on the toolbar row.
+#[derive(Clone, Copy, PartialEq)]
+enum ToolBtn {
+    Back,
+    Fwd,
+    Up,
+    Home,
+    Refresh,
+    Hidden,
+    Preview,
+}
+
 struct Entry {
     name: String,
     path: PathBuf,
     is_dir: bool,
     is_up: bool,
+    hidden: bool,
     size: u64,
     modified: Option<SystemTime>,
     git: Option<GitLetter>,
@@ -63,6 +77,8 @@ enum FileMenuAction {
     TerminalHere,
     Refresh,
     TogglePreview,
+    ToggleHidden,
+    GotoPath,
     DragCopy,
     DragCut,
     PinToDesktop,
@@ -89,7 +105,20 @@ pub struct FileBrowser {
     sel: usize,
     scroll: usize,
     show_hidden: bool,
+    /// How many entries the hidden-files filter removed on last refresh.
+    hidden_skipped: usize,
     sort: SortBy,
+    sort_asc: bool,
+    /// Navigation history for back / forward (None = drive list).
+    back: Vec<Option<PathBuf>>,
+    fwd: Vec<Option<PathBuf>>,
+    /// Hit boxes rebuilt every render: toolbar buttons, breadcrumb
+    /// segments, sortable column headers, and the list scrollbar.
+    toolbar_hits: Vec<(u16, u16, ToolBtn)>,
+    crumb_hits: Vec<(u16, u16, Option<PathBuf>)>,
+    header_hits: Vec<(u16, u16, SortBy)>,
+    scroll_rect: Option<Rect>,
+    scroll_drag: bool,
     preview: bool,
     status: String,
     last_click: Option<(Instant, usize)>,
@@ -115,7 +144,16 @@ impl FileBrowser {
             sel: 0,
             scroll: 0,
             show_hidden: false,
+            hidden_skipped: 0,
             sort: SortBy::Name,
+            sort_asc: true,
+            back: Vec::new(),
+            fwd: Vec::new(),
+            toolbar_hits: Vec::new(),
+            crumb_hits: Vec::new(),
+            header_hits: Vec::new(),
+            scroll_rect: None,
+            scroll_drag: false,
             preview: false,
             status: String::new(),
             last_click: None,
@@ -139,6 +177,7 @@ impl FileBrowser {
             .current()
             .map(|e| e.name.clone());
         self.entries.clear();
+        self.hidden_skipped = 0;
         match &self.cwd {
             None => {
                 self.git_root = None;
@@ -153,6 +192,7 @@ impl FileBrowser {
                                 path: PathBuf::from(root),
                                 is_dir: true,
                                 is_up: false,
+                                hidden: false,
                                 size: 0,
                                 modified: None,
                                 git: None,
@@ -173,6 +213,7 @@ impl FileBrowser {
                     path: dir.clone(),
                     is_dir: true,
                     is_up: true,
+                    hidden: false,
                     size: 0,
                     modified: None,
                     git: None,
@@ -182,16 +223,19 @@ impl FileBrowser {
                         let mut items: Vec<Entry> = Vec::new();
                         for e in rd.flatten() {
                             let name = e.file_name().to_string_lossy().to_string();
-                            if !self.show_hidden && name.starts_with('.') {
+                            let md = e.metadata().ok();
+                            let hidden = is_hidden(&name, md.as_ref());
+                            if !self.show_hidden && hidden {
+                                self.hidden_skipped += 1;
                                 continue;
                             }
-                            let md = e.metadata().ok();
                             let is_dir = md.as_ref().map(|m| m.is_dir()).unwrap_or(false);
                             items.push(Entry {
                                 name,
                                 path: e.path(),
                                 is_dir,
                                 is_up: false,
+                                hidden,
                                 size: md.as_ref().map(|m| m.len()).unwrap_or(0),
                                 modified: md.and_then(|m| m.modified().ok()),
                                 git: None,
@@ -200,7 +244,13 @@ impl FileBrowser {
                         self.sort_items(&mut items);
                         let n = items.len();
                         self.entries.extend(items);
-                        self.status = format!("{n} items · sort:{}", self.sort_label());
+                        self.status = if self.hidden_skipped > 0 {
+                            format!("{n} items · {} hidden (Ctrl+H)", self.hidden_skipped)
+                        } else if self.show_hidden {
+                            format!("{n} items · hidden shown")
+                        } else {
+                            format!("{n} items")
+                        };
                     }
                     Err(e) => self.status = format!("error: {e}"),
                 }
@@ -241,25 +291,42 @@ impl FileBrowser {
         self.update_preview();
     }
 
-    fn sort_label(&self) -> &'static str {
-        match self.sort {
+    fn sort_label(&self) -> String {
+        let name = match self.sort {
             SortBy::Name => "name",
             SortBy::Size => "size",
             SortBy::Modified => "date",
-        }
+        };
+        format!("{name}{}", if self.sort_asc { "↑" } else { "↓" })
     }
 
     fn sort_items(&self, items: &mut [Entry]) {
         items.sort_by(|a, b| {
-            b.is_dir.cmp(&a.is_dir).then_with(|| match self.sort {
+            let ord = match self.sort {
                 SortBy::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
                 SortBy::Size => a.size.cmp(&b.size).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())),
                 SortBy::Modified => a
                     .modified
                     .cmp(&b.modified)
                     .then(a.name.to_lowercase().cmp(&b.name.to_lowercase())),
-            })
+            };
+            let ord = if self.sort_asc { ord } else { ord.reverse() };
+            b.is_dir.cmp(&a.is_dir).then(ord)
         });
+    }
+
+    /// Click on a column header: same column flips direction, new column
+    /// sorts ascending (except date/size which start descending — biggest
+    /// and newest first is what you usually want).
+    fn sort_by(&mut self, by: SortBy) {
+        if self.sort == by {
+            self.sort_asc = !self.sort_asc;
+        } else {
+            self.sort = by;
+            self.sort_asc = matches!(by, SortBy::Name);
+        }
+        self.status = format!("sort: {}", self.sort_label());
+        self.refresh();
     }
 
     fn apply_filter(&mut self) {
@@ -338,19 +405,62 @@ impl FileBrowser {
         self.status = "selection cleared".into();
     }
 
+    /// Navigate to a new location, recording the old one for Back.
+    fn set_cwd(&mut self, new: Option<PathBuf>) {
+        if new == self.cwd {
+            return;
+        }
+        self.back.push(self.cwd.clone());
+        if self.back.len() > 64 {
+            self.back.remove(0);
+        }
+        self.fwd.clear();
+        self.cwd = new;
+        self.filter.clear();
+        self.marked.clear();
+        self.refresh();
+    }
+
+    fn nav_back(&mut self) {
+        let Some(prev) = self.back.pop() else {
+            self.status = "no history".into();
+            return;
+        };
+        self.fwd.push(self.cwd.clone());
+        self.cwd = prev;
+        self.filter.clear();
+        self.marked.clear();
+        self.refresh();
+    }
+
+    fn nav_fwd(&mut self) {
+        let Some(next) = self.fwd.pop() else {
+            self.status = "no forward history".into();
+            return;
+        };
+        self.back.push(self.cwd.clone());
+        self.cwd = next;
+        self.filter.clear();
+        self.marked.clear();
+        self.refresh();
+    }
+
     fn go_up(&mut self) {
         let parent = self.cwd.as_ref().and_then(|d| d.parent().map(|p| p.to_path_buf()));
         #[cfg(windows)]
         {
-            self.cwd = parent;
+            self.set_cwd(parent);
         }
         #[cfg(not(windows))]
         {
-            self.cwd = Some(parent.unwrap_or_else(|| PathBuf::from("/")));
+            self.set_cwd(Some(parent.unwrap_or_else(|| PathBuf::from("/"))));
         }
-        self.filter.clear();
-        self.marked.clear();
-        self.refresh();
+    }
+
+    fn go_home(&mut self) {
+        if let Some(home) = dirs::home_dir() {
+            self.set_cwd(Some(home));
+        }
     }
 
     fn open_sel(&mut self) -> Action {
@@ -362,10 +472,8 @@ impl FileBrowser {
             return Action::None;
         }
         if e.is_dir {
-            self.cwd = Some(e.path.clone());
-            self.filter.clear();
-            self.marked.clear();
-            self.refresh();
+            let p = e.path.clone();
+            self.set_cwd(Some(p));
             return Action::None;
         }
         Action::Launch(launch_for_path(&e.path))
@@ -380,6 +488,7 @@ impl FileBrowser {
         self.update_preview();
     }
 
+    /// Rows: 0 toolbar+breadcrumbs · 1 column headers · list · last status.
     fn list_area(area: Rect, preview: bool) -> Rect {
         let w = if preview {
             area.width.saturating_sub(area.width / 3).max(20)
@@ -388,9 +497,9 @@ impl FileBrowser {
         };
         Rect::new(
             area.x,
-            area.y + 1,
+            area.y + 2,
             w,
-            area.height.saturating_sub(2),
+            area.height.saturating_sub(3),
         )
     }
 
@@ -398,9 +507,9 @@ impl FileBrowser {
         let lw = area.width.saturating_sub(area.width / 3).max(20);
         Rect::new(
             area.x + lw,
-            area.y + 1,
+            area.y + 2,
             area.width.saturating_sub(lw),
-            area.height.saturating_sub(2),
+            area.height.saturating_sub(3),
         )
     }
 
@@ -555,14 +664,10 @@ impl FileBrowser {
                 }
                 let path = expand_path(&input);
                 if path.is_dir() {
-                    self.cwd = Some(path);
-                    self.filter.clear();
-                    self.refresh();
+                    self.set_cwd(Some(path));
                 } else if path.is_file() {
                     if let Some(parent) = path.parent() {
-                        self.cwd = Some(parent.to_path_buf());
-                        self.filter.clear();
-                        self.refresh();
+                        self.set_cwd(Some(parent.to_path_buf()));
                         if let Some(i) = self.filtered.iter().position(|&ei| self.entries[ei].path == path)
                         {
                             self.sel = i;
@@ -738,6 +843,22 @@ impl FileBrowser {
         if self.git_root.is_some() || self.cwd.is_some() {
             items.push(("Open Git here".into(), FileMenuAction::GitOpen));
         }
+        items.push((
+            if self.show_hidden {
+                "Hide hidden files".into()
+            } else {
+                format!(
+                    "Show hidden files{}",
+                    if self.hidden_skipped > 0 {
+                        format!(" ({})", self.hidden_skipped)
+                    } else {
+                        String::new()
+                    }
+                )
+            },
+            FileMenuAction::ToggleHidden,
+        ));
+        items.push(("Go to path…".into(), FileMenuAction::GotoPath));
         items.push(("Toggle preview".into(), FileMenuAction::TogglePreview));
         items.push(("Refresh".into(), FileMenuAction::Refresh));
         self.context = Some(FileContext {
@@ -802,6 +923,18 @@ impl FileBrowser {
             FileMenuAction::TogglePreview => {
                 self.preview = !self.preview;
                 self.update_preview();
+            }
+            FileMenuAction::ToggleHidden => {
+                self.show_hidden = !self.show_hidden;
+                self.refresh();
+            }
+            FileMenuAction::GotoPath => {
+                let initial = self
+                    .cwd
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                self.start_prompt(Prompt::Goto, initial);
             }
             FileMenuAction::DragCopy | FileMenuAction::DragCut => {
                 if let Some(e) = self.current().filter(|e| !e.is_up) {
@@ -964,13 +1097,254 @@ impl FileBrowser {
         };
         if let Some(p) = path {
             if p.is_dir() {
-                self.cwd = Some(p);
-                self.filter.clear();
-                self.refresh();
+                self.set_cwd(Some(p));
             } else {
                 self.status = "bookmark path missing".into();
             }
         }
+    }
+
+    /// Toolbar: nav buttons, clickable breadcrumb path, hidden/preview toggles.
+    fn render_toolbar(&mut self, f: &mut Frame, area: Rect) {
+        const BAR_BG: Color = Color::Rgb(28, 36, 62);
+        let y = area.y;
+        let buf = f.buffer_mut();
+        for x in area.x..area.x + area.width {
+            if let Some(c) = buf.cell_mut((x, y)) {
+                c.set_symbol(" ");
+                c.set_bg(BAR_BG);
+            }
+        }
+        self.toolbar_hits.clear();
+        self.crumb_hits.clear();
+
+        let on = Style::default()
+            .fg(Color::White)
+            .bg(Color::Rgb(0, 110, 170))
+            .add_modifier(Modifier::BOLD);
+        let live = Style::default().fg(Color::Rgb(210, 218, 240)).bg(BAR_BG);
+        let dead = Style::default().fg(Color::Rgb(90, 100, 130)).bg(BAR_BG);
+        let dim = Style::default().fg(Color::Rgb(90, 100, 130)).bg(BAR_BG);
+
+        // right-aligned toggles first so we know how much room crumbs get
+        let hid_label = " 👁.* ";
+        let pre_label = " ▤ ";
+        let hid_w = hid_label.width() as u16;
+        let pre_w = pre_label.width() as u16;
+        let pre_x = area.x + area.width.saturating_sub(pre_w);
+        let hid_x = pre_x.saturating_sub(hid_w);
+        buf.set_string(hid_x, y, hid_label, if self.show_hidden { on } else { live });
+        buf.set_string(pre_x, y, pre_label, if self.preview { on } else { live });
+        self.toolbar_hits.push((hid_x, hid_x + hid_w, ToolBtn::Hidden));
+        self.toolbar_hits.push((pre_x, pre_x + pre_w, ToolBtn::Preview));
+
+        let mut x = area.x;
+        let buttons: [(&str, ToolBtn, bool); 5] = [
+            (" ◂ ", ToolBtn::Back, !self.back.is_empty()),
+            (" ▸ ", ToolBtn::Fwd, !self.fwd.is_empty()),
+            (" ▴ ", ToolBtn::Up, self.cwd.is_some()),
+            (" ⌂ ", ToolBtn::Home, true),
+            (" ⟳ ", ToolBtn::Refresh, true),
+        ];
+        for (label, b, enabled) in buttons {
+            let w = label.width() as u16;
+            if x + w >= hid_x {
+                break;
+            }
+            buf.set_string(x, y, label, if enabled { live } else { dead });
+            self.toolbar_hits.push((x, x + w, b));
+            x += w;
+        }
+        buf.set_string(x, y, "│", dim);
+        x += 1;
+
+        // breadcrumbs: (label, target); target None = drive list ("This PC")
+        let mut crumbs: Vec<(String, Option<PathBuf>)> = Vec::new();
+        #[cfg(windows)]
+        crumbs.push(("💻".into(), None));
+        match &self.cwd {
+            None => {}
+            Some(p) => {
+                let mut acc = PathBuf::new();
+                for comp in p.components() {
+                    use std::path::Component;
+                    acc.push(comp.as_os_str());
+                    let label = match comp {
+                        Component::Prefix(pr) => pr.as_os_str().to_string_lossy().to_string(),
+                        Component::RootDir => {
+                            if cfg!(windows) {
+                                continue; // "C:" crumb already targets C:\
+                            }
+                            "/".to_string()
+                        }
+                        c => c.as_os_str().to_string_lossy().to_string(),
+                    };
+                    // make bare "C:" open "C:\" (bare prefix means cwd-relative)
+                    let mut target = acc.clone();
+                    if matches!(comp, Component::Prefix(_)) {
+                        target.push("\\");
+                    }
+                    crumbs.push((label, Some(target)));
+                }
+            }
+        }
+        // drop leading crumbs (except the last) until the trail fits
+        let avail = hid_x.saturating_sub(x + 1) as usize;
+        let width_of = |c: &[(String, Option<PathBuf>)]| -> usize {
+            c.iter().map(|(l, _)| l.width() + 3).sum::<usize>()
+        };
+        let mut start = 0usize;
+        while crumbs.len() - start > 1 && width_of(&crumbs[start..]) + 2 > avail {
+            start += 1;
+        }
+        if start > 0 {
+            buf.set_string(x, y, " …", dim);
+            x += 2;
+        }
+        for (i, (label, target)) in crumbs.iter().enumerate().skip(start) {
+            let sep_w: u16 = if i > start { 3 } else { 1 };
+            let w = label.width() as u16;
+            if x + sep_w + w >= hid_x {
+                break;
+            }
+            if i > start {
+                buf.set_string(x, y, " ▸ ", dim);
+            }
+            x += sep_w;
+            let is_last = i + 1 == crumbs.len();
+            buf.set_string(
+                x,
+                y,
+                label,
+                if is_last {
+                    Style::default()
+                        .fg(Color::White)
+                        .bg(BAR_BG)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Rgb(160, 190, 235)).bg(BAR_BG)
+                },
+            );
+            self.crumb_hits.push((x, x + w, target.clone()));
+            x += w;
+        }
+        if !self.filter.is_empty() {
+            let chip = format!("  🔍{}", self.filter);
+            if x + (chip.width() as u16) < hid_x {
+                buf.set_string(
+                    x,
+                    y,
+                    &chip,
+                    Style::default().fg(Color::Rgb(255, 220, 120)).bg(BAR_BG),
+                );
+            }
+        }
+    }
+
+    /// Clickable column headers with the active sort marked ▲ / ▼.
+    fn render_header(&mut self, f: &mut Frame, area: Rect) {
+        const HDR_BG: Color = Color::Rgb(20, 26, 44);
+        let list = Self::list_area(area, self.preview);
+        let y = area.y + 1;
+        let buf = f.buffer_mut();
+        for x in area.x..area.x + area.width {
+            if let Some(c) = buf.cell_mut((x, y)) {
+                c.set_symbol(" ");
+                c.set_bg(HDR_BG);
+            }
+        }
+        self.header_hits.clear();
+        let arrow = if self.sort_asc { "▲" } else { "▼" };
+        let base = Style::default().fg(Color::Rgb(130, 145, 180)).bg(HDR_BG);
+        let active = Style::default()
+            .fg(Color::Rgb(120, 200, 255))
+            .bg(HDR_BG)
+            .add_modifier(Modifier::BOLD);
+        let style_for = |b: SortBy, cur: SortBy| if b == cur { active } else { base };
+        let label_for = |name: &str, b: SortBy, cur: SortBy| {
+            if b == cur {
+                format!("{name} {arrow}")
+            } else {
+                name.to_string()
+            }
+        };
+
+        let meta_w = 24usize;
+        let name_w = list.width.saturating_sub(4 + meta_w as u16) as usize;
+        let name_x = list.x + 6;
+        let date_x = list.x + 6 + name_w.saturating_sub(1) as u16;
+        let size_x = date_x + 11;
+        let max_x = area.x + area.width;
+
+        let nl = label_for("Name", SortBy::Name, self.sort);
+        if name_x + nl.width() as u16 <= max_x {
+            buf.set_string(name_x, y, &nl, style_for(SortBy::Name, self.sort));
+            self.header_hits
+                .push((name_x, date_x.saturating_sub(1).max(name_x), SortBy::Name));
+        }
+        // meta columns only when the name column has real room
+        if name_w < 10 {
+            return;
+        }
+        if date_x + 11 <= max_x {
+            let dl = label_for("Modified", SortBy::Modified, self.sort);
+            buf.set_string(date_x, y, &dl, style_for(SortBy::Modified, self.sort));
+            self.header_hits.push((date_x, size_x, SortBy::Modified));
+        }
+        if size_x + 8 <= max_x {
+            let sl = label_for("Size", SortBy::Size, self.sort);
+            let sx = size_x + 8u16.saturating_sub(sl.width() as u16);
+            buf.set_string(sx, y, &sl, style_for(SortBy::Size, self.sort));
+            self.header_hits.push((size_x, size_x + 9, SortBy::Size));
+        }
+    }
+
+    /// Right-edge scrollbar; clicking / dragging it jumps proportionally.
+    fn render_scrollbar(&mut self, f: &mut Frame, list: Rect) {
+        self.scroll_rect = None;
+        let total = self.filtered.len();
+        let vis = list.height as usize;
+        if total <= vis || vis == 0 || list.width < 8 {
+            return;
+        }
+        let sx = list.x + list.width - 1;
+        let track = Rect::new(sx, list.y, 1, list.height);
+        self.scroll_rect = Some(track);
+        let h = list.height as usize;
+        let thumb_h = ((vis * h + total - 1) / total).clamp(1, h);
+        let max_scroll = total - vis;
+        let thumb_y = if max_scroll == 0 {
+            0
+        } else {
+            (self.scroll * (h - thumb_h)) / max_scroll
+        };
+        let buf = f.buffer_mut();
+        for i in 0..h {
+            let cy = list.y + i as u16;
+            let (sym, fg) = if i >= thumb_y && i < thumb_y + thumb_h {
+                ("┃", Color::Rgb(120, 160, 220))
+            } else {
+                ("│", Color::Rgb(50, 58, 84))
+            };
+            if let Some(c) = buf.cell_mut((sx, cy)) {
+                c.set_symbol(sym);
+                c.set_fg(fg);
+            }
+        }
+    }
+
+    /// Jump the selection to the spot on the scrollbar track that was hit.
+    fn scrollbar_jump(&mut self, row: u16) {
+        let Some(track) = self.scroll_rect else {
+            return;
+        };
+        let n = self.filtered.len();
+        if n == 0 || track.height < 2 {
+            return;
+        }
+        let frac = row.saturating_sub(track.y) as f32 / (track.height - 1) as f32;
+        self.sel = ((frac * (n - 1) as f32).round() as usize).min(n - 1);
+        self.update_preview();
     }
 
     fn fmt_mtime(t: Option<SystemTime>) -> String {
@@ -980,6 +1354,26 @@ impl FileBrowser {
         let dt: chrono::DateTime<chrono::Local> = t.into();
         dt.format("%Y-%m-%d").to_string()
     }
+}
+
+/// Dotfiles everywhere; on Windows also the filesystem hidden attribute.
+fn is_hidden(name: &str, md: Option<&fs::Metadata>) -> bool {
+    if name.starts_with('.') {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+        if let Some(md) = md {
+            if md.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0 {
+                return true;
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = md;
+    false
 }
 
 fn expand_path(s: &str) -> PathBuf {
@@ -1064,30 +1458,11 @@ impl AppWindow for FileBrowser {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height < 3 {
+        if area.height < 4 {
             return;
         }
-        let path_str = match &self.cwd {
-            None => " 💻 This PC ".to_string(),
-            Some(p) => {
-                let mut s = format!(" 📂 {} ", p.to_string_lossy());
-                if !self.filter.is_empty() {
-                    s.push_str(&format!("🔍 {} ", self.filter));
-                }
-                s
-            }
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                path_str,
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(28, 36, 62))
-                    .add_modifier(Modifier::BOLD),
-            )))
-            .style(Style::default().bg(Color::Rgb(28, 36, 62))),
-            Rect::new(area.x, area.y, area.width, 1),
-        );
+        self.render_toolbar(f, area);
+        self.render_header(f, area);
 
         let list = Self::list_area(area, self.preview);
         let vis = list.height as usize;
@@ -1108,11 +1483,15 @@ impl AppWindow for FileBrowser {
             .take(vis)
         {
             let e = &self.entries[ei];
-            let (icon, color) = if e.is_up {
+            let (icon, mut color) = if e.is_up {
                 ("↩", Color::Rgb(140, 150, 180))
             } else {
                 file_icon(&e.name, e.is_dir)
             };
+            if e.hidden {
+                // wash hidden entries out so they read as secondary
+                color = Color::Rgb(110, 120, 145);
+            }
             let size = if e.is_dir {
                 "<DIR>".to_string()
             } else {
@@ -1187,6 +1566,7 @@ impl AppWindow for FileBrowser {
             ]));
         }
         f.render_widget(Paragraph::new(lines), list);
+        self.render_scrollbar(f, list);
 
         if self.preview {
             let pre = Self::preview_area(area);
@@ -1242,7 +1622,7 @@ impl AppWindow for FileBrowser {
                 format!(" · {} sel", self.marked.len())
             };
             format!(
-                " {}{}{}  │ Space mark · / filter · right-click menu · ? help ",
+                " {}{}{}  │ / filter · Space mark · Ctrl+H hidden · right-click · ? help ",
                 self.status, clip, marks
             )
         };
@@ -1267,20 +1647,21 @@ impl AppWindow for FileBrowser {
                 area,
                 "⌨ File Manager · any key closes",
                 &[
-                    ("Enter", "open · Backspace up"),
+                    ("Enter / →", "open · ← or Backspace up"),
+                    ("Alt+← / Alt+→", "history back / forward"),
                     ("Space", "mark · Ctrl+A mark all"),
                     ("/ or Ctrl+F", "filter names"),
                     ("Ctrl+L", "go to path"),
                     ("Ctrl+C/X/V", "copy / cut / paste"),
                     ("Ctrl+P", "preview pane"),
                     ("Ctrl+H", "hidden files"),
-                    ("Tab", "sort name/size/date"),
+                    ("Tab / click header", "sort columns"),
                     ("F2", "rename · Del delete"),
                     ("F3 / F4", "hex view / edit"),
                     ("F7 / F8", "new folder / file"),
                     ("Ctrl+T / Ctrl+G", "terminal / git here"),
-                    ("Alt+letter", "bookmarks"),
-                    ("right-click", "snapshots · compare · pin"),
+                    ("Alt+H/D/O/L", "home · desktop · docs · downloads"),
+                    ("click crumbs", "jump along the path"),
                     ("drag", "move/copy across windows"),
                 ],
             );
@@ -1350,18 +1731,30 @@ impl AppWindow for FileBrowser {
                 self.sel = self.filtered.len().saturating_sub(1);
                 self.update_preview();
             }
+            KeyCode::Left if alt => self.nav_back(),
+            KeyCode::Right if alt => self.nav_fwd(),
+            KeyCode::Left => self.go_up(),
+            KeyCode::Right => {
+                // only descend into folders; files need Enter/double-click
+                if self.current().map(|e| e.is_dir && !e.is_up).unwrap_or(false) {
+                    return self.open_sel();
+                }
+            }
             KeyCode::Enter => return self.open_sel(),
             KeyCode::Backspace => self.go_up(),
             KeyCode::Esc if !self.marked.is_empty() => self.clear_marks(),
             KeyCode::Char(' ') if !ctrl && !alt => self.toggle_mark_current(),
             KeyCode::Char('a') if ctrl => self.mark_all_filtered(),
             KeyCode::Tab => {
-                self.sort = match self.sort {
+                let next = match self.sort {
                     SortBy::Name => SortBy::Size,
                     SortBy::Size => SortBy::Modified,
                     SortBy::Modified => SortBy::Name,
                 };
+                self.sort = next;
+                self.sort_asc = matches!(next, SortBy::Name);
                 self.refresh();
+                self.status = format!("sort: {}", self.sort_label());
             }
             KeyCode::Char('p') if ctrl => {
                 self.preview = !self.preview;
@@ -1516,6 +1909,57 @@ impl AppWindow for FileBrowser {
                 self.open_file_context(m.column, m.row);
             }
             MouseEventKind::Down(MouseButton::Left) => {
+                // toolbar buttons + breadcrumbs
+                if m.row == area.y {
+                    for (x0, x1, b) in self.toolbar_hits.clone() {
+                        if m.column >= x0 && m.column < x1 {
+                            match b {
+                                ToolBtn::Back => self.nav_back(),
+                                ToolBtn::Fwd => self.nav_fwd(),
+                                ToolBtn::Up => self.go_up(),
+                                ToolBtn::Home => self.go_home(),
+                                ToolBtn::Refresh => self.refresh(),
+                                ToolBtn::Hidden => {
+                                    self.show_hidden = !self.show_hidden;
+                                    self.refresh();
+                                }
+                                ToolBtn::Preview => {
+                                    self.preview = !self.preview;
+                                    self.update_preview();
+                                }
+                            }
+                            return Action::None;
+                        }
+                    }
+                    for (x0, x1, target) in self.crumb_hits.clone() {
+                        if m.column >= x0 && m.column < x1 {
+                            self.set_cwd(target);
+                            return Action::None;
+                        }
+                    }
+                    return Action::None;
+                }
+                // sortable column headers
+                if m.row == area.y + 1 {
+                    for (x0, x1, by) in self.header_hits.clone() {
+                        if m.column >= x0 && m.column < x1 {
+                            self.sort_by(by);
+                            return Action::None;
+                        }
+                    }
+                    return Action::None;
+                }
+                // scrollbar track
+                if let Some(track) = self.scroll_rect {
+                    if m.column == track.x
+                        && m.row >= track.y
+                        && m.row < track.y + track.height
+                    {
+                        self.scroll_drag = true;
+                        self.scrollbar_jump(m.row);
+                        return Action::None;
+                    }
+                }
                 if m.row >= list.y && m.row < list.y + list.height {
                     let idx = self.scroll + (m.row - list.y) as usize;
                     if idx < self.filtered.len() {
@@ -1545,6 +1989,10 @@ impl AppWindow for FileBrowser {
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
+                if self.scroll_drag {
+                    self.scrollbar_jump(m.row);
+                    return Action::None;
+                }
                 if let Some((idx, started)) = self.drag_from {
                     // require a short hold/move before committing to drag
                     if started.elapsed().as_millis() > 120 && idx == self.sel {
@@ -1561,6 +2009,7 @@ impl AppWindow for FileBrowser {
             }
             MouseEventKind::Up(_) => {
                 self.drag_from = None;
+                self.scroll_drag = false;
             }
             MouseEventKind::ScrollUp => self.move_sel(-3),
             MouseEventKind::ScrollDown => self.move_sel(3),

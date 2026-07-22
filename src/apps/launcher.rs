@@ -15,6 +15,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::pin::{PinTo, PinnedApp};
 use super::{Action, AppWindow, Launch};
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -48,6 +49,7 @@ enum FormRow {
     Extra,
     RunTerminal,
     RunDetached,
+    PinWithArgs,
 }
 
 pub struct AppLauncher {
@@ -196,7 +198,26 @@ impl AppLauncher {
         rows.push(FormRow::Extra);
         rows.push(FormRow::RunTerminal);
         rows.push(FormRow::RunDetached);
+        rows.push(FormRow::PinWithArgs);
         rows
+    }
+
+    /// Pre-filled pin for this program; args tokens with spaces get quoted.
+    fn pin_with_args(&self) -> PinnedApp {
+        let mut pin = PinnedApp::from_path(self.path.clone());
+        pin.args = self
+            .collected_args()
+            .iter()
+            .map(|a| {
+                if a.chars().any(char::is_whitespace) {
+                    format!("\"{a}\"")
+                } else {
+                    a.clone()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        pin
     }
 
     fn name(&self) -> String {
@@ -363,6 +384,7 @@ impl AppWindow for AppLauncher {
                     "🖥  Run in terminal window",
                     "🧩  Configure arguments (--help form)",
                     "🚀  Launch detached (own OS window)",
+                    "📌  Pin to desktop / taskbar…",
                 ];
                 for (i, c) in choices.iter().enumerate() {
                     let style = if i == self.sel { sel_style } else { txt };
@@ -436,6 +458,9 @@ impl AppWindow for AppLauncher {
                         FormRow::RunDetached => {
                             Line::from(Span::styled("   🚀 Run detached", style))
                         }
+                        FormRow::PinWithArgs => {
+                            Line::from(Span::styled("   📌 Pin with these args…", style))
+                        }
                     };
                     lines.push(line);
                 }
@@ -465,8 +490,8 @@ impl AppWindow for AppLauncher {
         self.status.clear();
         match &mut self.stage {
             Stage::Choose => match k.code {
-                KeyCode::Up => self.sel = self.sel.checked_sub(1).unwrap_or(2),
-                KeyCode::Down => self.sel = (self.sel + 1) % 3,
+                KeyCode::Up => self.sel = self.sel.checked_sub(1).unwrap_or(3),
+                KeyCode::Down => self.sel = (self.sel + 1) % 4,
                 KeyCode::Enter => match self.sel {
                     0 => {
                         return Action::Launch(Launch::Terminal {
@@ -476,11 +501,18 @@ impl AppWindow for AppLauncher {
                         })
                     }
                     1 => self.parse_help(),
-                    _ => {
+                    2 => {
                         self.launch_detached();
                         if self.status.starts_with('🚀') {
                             return Action::Close;
                         }
+                    }
+                    _ => {
+                        return Action::LaunchAndClose(Launch::PinEditor {
+                            pin: PinnedApp::from_path(self.path.clone()),
+                            to: PinTo::Desktop,
+                            edit: None,
+                        })
                     }
                 },
                 KeyCode::Esc => return Action::Close,
@@ -545,6 +577,13 @@ impl AppWindow for AppLauncher {
                         Some(FormRow::RunDetached) => {
                             self.launch_detached();
                         }
+                        Some(FormRow::PinWithArgs) => {
+                            return Action::LaunchAndClose(Launch::PinEditor {
+                                pin: self.pin_with_args(),
+                                to: PinTo::Desktop,
+                                edit: None,
+                            });
+                        }
                         None => {}
                     },
                     KeyCode::Backspace => {
@@ -567,9 +606,9 @@ impl AppWindow for AppLauncher {
         if let MouseEventKind::Down(MouseButton::Left) = m.kind {
             match &self.stage {
                 Stage::Choose => {
-                    // choice rows are at offsets 4, 6, 8 from area top
+                    // choice rows are at offsets 4, 6, 8, 10 from area top
                     let rel = m.row.saturating_sub(area.y);
-                    for (i, y) in [4u16, 6, 8].iter().enumerate() {
+                    for (i, y) in [4u16, 6, 8, 10].iter().enumerate() {
                         if rel == *y {
                             self.sel = i;
                             return self.on_key(KeyEvent::from(KeyCode::Enter));

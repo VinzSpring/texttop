@@ -74,6 +74,7 @@ pub mod imageviewer;
 pub mod launcher;
 pub mod minesweeper;
 pub mod notes;
+pub mod pin;
 pub mod processes;
 pub mod scroll;
 pub mod search;
@@ -97,10 +98,18 @@ pub enum Action {
     None,
     Close,
     Launch(Launch),
+    /// Launch something and close the requesting window (one-shot dialogs).
+    LaunchAndClose(Launch),
     /// Start dragging a file; desktop shows a ghost and handles drop targets.
     BeginFileDrag { path: PathBuf, cut: bool },
     /// Add a desktop shortcut for this path.
     PinToDesktop(PathBuf),
+    /// Save (create or replace) a pinned application and close the editor.
+    SavePin {
+        pin: pin::PinnedApp,
+        to: pin::PinTo,
+        edit: Option<pin::PinEdit>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +126,14 @@ pub enum Launch {
         cwd: Option<PathBuf>,
     },
     AppLauncher(PathBuf),
+    /// Settings dialog for a new or existing pinned application.
+    PinEditor {
+        pin: pin::PinnedApp,
+        to: pin::PinTo,
+        edit: Option<pin::PinEdit>,
+    },
+    /// Launch-time dialog querying `{field}` values of a pinned application.
+    PinPrompt(pin::PinnedApp),
     About,
     Calculator,
     Clock,
