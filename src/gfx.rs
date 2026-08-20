@@ -56,13 +56,29 @@ fn dist2(a: (u8, u8, u8), b: (u8, u8, u8)) -> i32 {
     d(a.0, b.0) + d(a.1, b.1) + d(a.2, b.2)
 }
 
+/// Largest channel spread a color may have and still be treated as neutral.
+/// The gray ramp is spaced 10 apart, so anything under this loses at most
+/// half a step of hue by being desaturated onto it.
+const NEUTRAL_CHROMA: u8 = 20;
+
 fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
     let (ri, gi, bi) = (nearest_cube(r), nearest_cube(g), nearest_cube(b));
     let cube = (CUBE[ri], CUBE[gi], CUBE[bi]);
     let cube_idx = (16 + 36 * ri + 6 * gi + bi) as u8;
 
-    // Indices 232..=255 are a finer gray ramp at levels 8, 18, ... 238. For
-    // desaturated colors it beats the cube, so take whichever is closer.
+    // Indices 232..=255 are a finer gray ramp at levels 8, 18, ... 238. It is
+    // denser than the cube in the darks, so for neutral colors it wins — but
+    // only for neutral ones. Plain RGB distance would also pull saturated
+    // darks onto it (a dark purple is numerically nearer mid-gray than it is
+    // to any cube entry), which strips the hue and then snaps back to a
+    // saturated cube entry once the color is bright enough. That turned the
+    // desktop's dark-purple gradient into flat gray with one hard magenta
+    // edge, so only consider the ramp when the color really is near-neutral.
+    let chroma = r.max(g).max(b) - r.min(g).min(b);
+    if chroma > NEUTRAL_CHROMA {
+        return cube_idx;
+    }
+
     let avg = (r as i32 + g as i32 + b as i32) / 3;
     let step = ((avg - 8 + 5) / 10).clamp(0, 23);
     let level = (8 + step * 10) as u8;
@@ -383,11 +399,18 @@ mod tests {
         }
     }
 
-    /// No index in the palette may be closer to the input than the one chosen.
-    fn assert_nearest(c: (u8, u8, u8)) {
+    fn chroma(c: (u8, u8, u8)) -> u8 {
+        c.0.max(c.1).max(c.2) - c.0.min(c.1).min(c.2)
+    }
+
+    /// Nearest entry among the candidates the mapping is allowed to pick:
+    /// the whole palette for neutral colors, the cube alone for saturated
+    /// ones (the gray ramp is off-limits there — it would erase the hue).
+    fn assert_nearest_allowed(c: (u8, u8, u8)) {
         let got = to_ansi256(c.0, c.1, c.2);
         let got_err = dist2(c, level_of(got));
-        for idx in 16..=255u8 {
+        let last = if chroma(c) > NEUTRAL_CHROMA { 231 } else { 255 };
+        for idx in 16..=last {
             let err = dist2(c, level_of(idx));
             assert!(
                 err >= got_err,
@@ -397,8 +420,9 @@ mod tests {
     }
 
     #[test]
-    fn picks_the_nearest_palette_entry() {
-        // The window chrome, shadows and text colors this app actually uses.
+    fn picks_the_nearest_allowed_entry() {
+        // The window chrome, shadows and text colors this app actually uses,
+        // plus the endpoints of every desktop theme gradient.
         for c in [
             (16, 19, 32),
             (4, 4, 10),
@@ -409,8 +433,35 @@ mod tests {
             (210, 215, 235),
             (0, 0, 0),
             (255, 255, 255),
+            (10, 14, 44),
+            (66, 14, 78),
+            (3, 30, 52),
+            (0, 96, 116),
+            (34, 8, 10),
+            (140, 66, 12),
         ] {
-            assert_nearest(c);
+            assert_nearest_allowed(c);
+        }
+    }
+
+    #[test]
+    fn saturated_colors_keep_their_hue() {
+        // Regression: preferring the gray ramp on pure RGB distance flattened
+        // the dark half of the "midnight" desktop gradient (10,14,44) ->
+        // (66,14,78) to gray, then jumped straight to a saturated magenta.
+        for step in 0..32u32 {
+            let t = step as f32 / 31.0;
+            let c = (
+                lerp(10, 66, t),
+                lerp(14, 14, t),
+                lerp(44, 78, t),
+            );
+            let idx = to_ansi256(c.0, c.1, c.2);
+            assert!(
+                idx < 232,
+                "{c:?} (chroma {}) landed on gray ramp index {idx}",
+                chroma(c),
+            );
         }
     }
 
