@@ -27,8 +27,17 @@ fn js(view: &WebView, src: &str) -> String {
 
 fn settle(view: &WebView, secs: f64) {
     let t = Instant::now();
+    // The app captures a frame every 33ms, and snapshotting forces a render
+    // pass. DIAG_CAPTURE reproduces that loop, since it can be the difference
+    // between a page that finishes rendering and one that stalls.
+    let capture = std::env::var("DIAG_CAPTURE").is_ok();
+    let mut last = Instant::now() - Duration::from_secs(1);
     while t.elapsed() < Duration::from_secs_f64(secs) {
-        webkit::pump_run_loop(0.05);
+        webkit::pump_run_loop(0.02);
+        if capture && last.elapsed() >= Duration::from_millis(33) {
+            last = Instant::now();
+            let _ = view.take_snapshot_rgba(Some(600));
+        }
     }
 }
 
@@ -45,6 +54,10 @@ fn main() {
     webkit::init_app();
     let config = WebViewConfiguration::new();
     if std::env::var("DIAG_VISIBLE").is_ok() {
+        config.add_user_script(
+            &UserScript::new("window.__diagErrs=[];addEventListener('error',function(e){window.__diagErrs.push((e.message||'')+'@'+(e.filename||'').slice(-40));});addEventListener('unhandledrejection',function(e){window.__diagErrs.push('rej:'+e.reason);});")
+                .with_injection_time(InjectionTime::AtDocumentStart),
+        );
         config.add_user_script(
             &UserScript::new(VISIBILITY_SHIM)
                 .with_injection_time(InjectionTime::AtDocumentStart),
@@ -116,6 +129,32 @@ fn main() {
         );
     }
 
+    println!("cookieEnabled  = {}", js(&view, "navigator.cookieEnabled"));
+    println!("cookie len     = {}", js(&view, "document.cookie.length"));
+    println!("localStorage   = {}", js(&view, "(function(){try{localStorage.setItem('t','1');return 'ok';}catch(e){return 'BLOCKED '+e.name;}})()"));
+    println!("consent markers= {}", js(&view, "/consent|Before you continue|Bevor du fortf/i.test(document.documentElement.outerHTML)?'yes':'no'"));
+    println!("ytd-app        = {}", js(&view, "document.querySelectorAll('ytd-app').length"));
+    println!("shadow hosts   = {}", js(&view, "[...document.querySelectorAll('*')].filter(e=>e.shadowRoot).length"));
+    // Does IntersectionObserver actually fire for an on-screen element?
+    let _ = view.evaluate_javascript(
+        "window.__io='pending';(function(){var d=document.createElement('div');\
+         d.style.cssText='position:fixed;top:10px;left:10px;width:50px;height:50px';\
+         document.documentElement.appendChild(d);\
+         new IntersectionObserver(function(es){window.__io=es[0].isIntersecting?'INTERSECTING':'not-intersecting';\
+         window.__ratio=es[0].intersectionRatio;}).observe(d);})()",
+    );
+    settle(&view, 2.0);
+    println!("IntersectionObs  = {}", js(&view, "window.__io"));
+    println!("  ratio          = {}", js(&view, "String(window.__ratio)"));
+    println!("rAF fires        = {}", js(&view, "(function(){window.__raf=0;requestAnimationFrame(function(){window.__raf=1;});return 'armed';})()"));
+    println!("ytInitialData    = {}", js(&view, "typeof ytInitialData"));
+    println!("ytInitialData sz = {}", js(&view, "(function(){try{return JSON.stringify(ytInitialData).length;}catch(e){return -1;}})()"));
+    println!("feed tabs        = {}", js(&view, "(function(){try{return ytInitialData.contents.twoColumnBrowseResultsRenderer.tabs.length;}catch(e){return 'n/a: '+e.message.slice(0,60);}})()"));
+    println!("ytcfg present    = {}", js(&view, "typeof ytcfg"));
+    println!("scripts          = {}", js(&view, "document.scripts.length"));
+    println!("errors captured  = {}", js(&view, "window.__diagErrs?window.__diagErrs.join(' | ').slice(0,300):'none'"));
+    settle(&view, 1.0);
+    println!("rAF ran          = {}", js(&view, "String(window.__raf)"));
     println!("\nfinal url = {}", view.url());
     println!("title     = {}", view.title());
     println!("h1/h2     = {}", js(&view, "[...document.querySelectorAll('h1,h2')].map(e=>e.textContent.trim()).slice(0,5).join(' | ')"));

@@ -79,10 +79,11 @@ cargo run --release --example 98_texttop_verify --manifest-path vendor/webkit/Ca
 
 `examples/96_page_diag.rs` loads a real URL at a given viewport and dumps the
 metrics that explain a blank or unscrollable page — visibility state, body
-height, scroll height, image and text counts, and how much of the snapshot is
-actually painted. It takes `DIAG_VISIBLE=1` to install the same visibility
-shim the app injects (see `VISIBILITY_JS` in `src/engine/mod.rs`), which is how
-that fix was verified:
+height, scroll height, image and text counts, whether `IntersectionObserver`
+and `requestAnimationFrame` fire, and how much of the snapshot is actually
+painted. `DIAG_VISIBLE=1` installs the same visibility shim the app injects
+(see `VISIBILITY_JS` in `src/engine/mod.rs`), and `DIAG_CAPTURE=1` reproduces
+the app's 30fps snapshot loop. This is how that fix was verified:
 
 ```sh
 cargo run --release --example 96_page_diag --manifest-path vendor/webkit/Cargo.toml \

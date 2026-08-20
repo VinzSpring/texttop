@@ -147,6 +147,22 @@ pub const REMOVE_STYLE_JS: &str =
 /// page *and* leaves nothing to scroll, since the document is then exactly
 /// one viewport tall. Overriding the getters takes youtube.com's body from
 /// 0px to ~3000px and restores scrolling.
+///
+/// Known limit, and two things that do *not* fix it: on macOS an off-screen
+/// WKWebView never services `requestAnimationFrame`, because it has no
+/// display link. Frameworks that commit rendering in a rAF callback — YouTube's
+/// Polymer among them — therefore lay out their skeleton and stop, which is
+/// why its video grid stays a set of empty cards even though the feed JSON
+/// arrived (`ytInitialData` is ~110KB and no script errors are raised).
+/// Windows does not have this problem because WebView2 renders into a real
+/// visible HWND parked off-screen, so it keeps a live compositor.
+///
+/// Tried and rejected: hosting the WKWebView in a real NSWindow parked at
+/// -30000,-30000 changes nothing, since macOS occlusion detection reports a
+/// window outside every screen as not visible. Replacing `requestAnimationFrame`
+/// with a `setTimeout` shim makes things distinctly *worse* — YouTube then
+/// takes a frame-timed path that collapses the layout again, dropping the
+/// painted area from 59% back to 2%. See `vendor/webkit/examples/96_page_diag.rs`.
 pub const VISIBILITY_JS: &str = r#"(function(){
  try{
   var d=Document.prototype;
