@@ -71,56 +71,63 @@ fn gradient_256() {
     assert_snapshot("gradient_256", &buf, 1.0, 1.0);
 }
 
-/// The wallpaper must stay dark on a 256-color terminal, and must track the
-/// intended color closely.
+/// On a 256-color terminal the wallpaper gives up hue for smoothness, so this
+/// checks the properties that make it look right rather than color accuracy:
 ///
-/// Rounding each step to its nearest palette entry used to land on the cube's
-/// 95 level — more than twice the intended brightness — which is what made the
-/// desktop look garish. What matters is the color the cell optically resolves
-/// to, not the entries used to build it: a blended cell deliberately pairs a
-/// brighter foreground with a dark background at low coverage.
+/// - every cell is a plain space, never a shading glyph. Dithering two entries
+///   together tracked the intended color well but left the desktop visibly
+///   striped, which is worse than losing the hue.
+/// - luminance is monotonic and never steps by more than one ramp entry, so
+///   there are no hard bands. Rounding to the nearest cube entry used to jump
+///   straight from black to the 95 level.
+/// - brightness tracks the intended gradient.
 #[test]
-fn gradient_256_tracks_the_intended_color() {
+fn gradient_256_is_a_smooth_dark_wash() {
     let (w, h) = (40u16, 24u16);
     let buf = render_mode(false, w, h, |f| {
         let area = f.area();
         gfx::gradient(f.buffer_mut(), area, MIDNIGHT.0, MIDNIGHT.1);
     });
     const STEPS: u16 = 32;
+    let mut prev: Option<u8> = None;
+
     for y in 0..h {
-        let step = y * (STEPS - 1) / (h - 1);
-        let t = step as f32 / (STEPS - 1) as f32;
-        let want = (
+        let cell = &buf[(0, y)];
+        assert_eq!(
+            cell.symbol(),
+            " ",
+            "row {y}: wallpaper must be solid, got glyph {:?}",
+            cell.symbol(),
+        );
+        let Color::Indexed(idx) = cell.bg else {
+            panic!("row {y}: 256 mode emitted a non-indexed color: {:?}", cell.bg);
+        };
+        assert!(
+            (232..=255).contains(&idx),
+            "row {y}: expected a grey-ramp entry, got index {idx}",
+        );
+
+        if let Some(p) = prev {
+            let d = idx as i32 - p as i32;
+            assert!(
+                (0..=1).contains(&d),
+                "row {y}: ramp jumped {d} entries ({p} -> {idx}); \
+                 the wash must rise smoothly",
+            );
+        }
+        prev = Some(idx);
+
+        // ...and stay near the brightness the theme asked for.
+        let t = (y * (STEPS - 1) / (h - 1)) as f32 / (STEPS - 1) as f32;
+        let want = gfx::luminance(
             gfx::lerp(MIDNIGHT.0 .0, MIDNIGHT.1 .0, t),
             gfx::lerp(MIDNIGHT.0 .1, MIDNIGHT.1 .1, t),
             gfx::lerp(MIDNIGHT.0 .2, MIDNIGHT.1 .2, t),
         );
-        let cell = &buf[(0, y)];
-        let (Color::Indexed(fi), Color::Indexed(bi)) = (cell.fg, cell.bg) else {
-            panic!("row {y}: 256 mode emitted non-indexed colors");
-        };
-        let cover = gfx::shade_coverage(cell.symbol())
-            .unwrap_or_else(|| panic!("row {y}: unexpected glyph {:?}", cell.symbol()));
-        let got = gfx::mix(gfx::palette_level(fi), gfx::palette_level(bi), cover);
-
-        let err: i32 = [0, 1, 2]
-            .iter()
-            .map(|&i| {
-                let (g, w) = match i {
-                    0 => (got.0, want.0),
-                    1 => (got.1, want.1),
-                    _ => (got.2, want.2),
-                };
-                (g as i32 - w as i32).pow(2)
-            })
-            .sum();
-        // Squared error across all three channels. Rounding to one palette
-        // entry scored 1500-3000 here; blending keeps it under a few hundred.
+        let got = gfx::palette_level(idx).0;
         assert!(
-            err < 600,
-            "row {y}: wanted {want:?}, got {got:?} (err {err}) from \
-             {:?} fg={fi} bg={bi}",
-            cell.symbol(),
+            (got as i32 - want as i32).abs() <= 6,
+            "row {y}: wanted luminance {want}, got {got} (index {idx})",
         );
     }
 }

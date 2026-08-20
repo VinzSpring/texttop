@@ -166,67 +166,17 @@ pub fn palette_level(idx: u8) -> (u8, u8, u8) {
     }
 }
 
-/// Shading glyphs, with how much of the foreground color each one covers
-/// (out of 255). A cell painted with these mixes fg and bg optically.
-const SHADES: [(&str, u16); 3] = [("░", 64), ("▒", 128), ("▓", 191)];
-
-/// Blend `fg` over `bg` where the glyph covers `num`/255 of the cell.
-pub fn mix(fg: (u8, u8, u8), bg: (u8, u8, u8), num: u16) -> (u8, u8, u8) {
-    let m = |f: u8, b: u8| {
-        ((f as u16 * num + b as u16 * (255 - num)) / 255).min(255) as u8
-    };
-    (m(fg.0, bg.0), m(fg.1, bg.1), m(fg.2, bg.2))
+/// Relative luminance, 0-255 (ITU-R BT.601 weights).
+pub fn luminance(r: u8, g: u8, b: u8) -> u8 {
+    ((299 * r as u32 + 587 * g as u32 + 114 * b as u32) / 1000).min(255) as u8
 }
 
-/// How much of the foreground color a glyph covers, out of 255. `None` for
-/// glyphs that are not solid or one of the shading blocks.
-pub fn shade_coverage(sym: &str) -> Option<u16> {
-    match sym {
-        " " => Some(0),
-        "█" => Some(255),
-        _ => SHADES.iter().find(|(s, _)| *s == sym).map(|(_, n)| *n),
-    }
-}
-
-/// Approximate an exact color with two xterm-256 entries blended by a shading
-/// glyph, falling back to a solid cell when that is already the best fit.
-///
-/// The 6x6x6 cube's darkest non-black level is 95, far brighter than the dark
-/// desktop themes (whose channels sit around 10-80). A solid nearest-entry
-/// fill therefore either crushes to black or jumps to something twice as
-/// bright as intended, which is what turned the desktop gradient into a few
-/// garish bands. Mixing two entries lands much closer.
-pub fn blend256(r: u8, g: u8, b: u8) -> (&'static str, Color, Color) {
-    let target = (r, g, b);
-
-    // Start from the best solid cell so blending only ever improves things.
-    let solid_idx = to_ansi256(r, g, b);
-    let mut best = (" ", solid_idx, solid_idx);
-    let mut best_err = dist2(target, palette_level(solid_idx));
-
-    // Only the entries nearest the target are worth pairing; a full 240x240
-    // sweep would cost far more and never wins.
-    let mut near: Vec<(i32, u8)> = (16..=255u8)
-        .map(|i| (dist2(target, palette_level(i)), i))
-        .collect();
-    near.sort_unstable();
-    near.truncate(8);
-
-    for &(_, fi) in &near {
-        for &(_, bi) in &near {
-            if fi == bi {
-                continue;
-            }
-            for (sym, num) in SHADES {
-                let err = dist2(target, mix(palette_level(fi), palette_level(bi), num));
-                if err < best_err {
-                    best_err = err;
-                    best = (sym, fi, bi);
-                }
-            }
-        }
-    }
-    (best.0, Color::Indexed(best.1), Color::Indexed(best.2))
+/// The xterm-256 grey-ramp index (232..=255) closest to a given luminance.
+/// The ramp runs 8, 18, ... 238 — the only densely-spaced region the palette
+/// has in the darks.
+pub fn grey_ramp(luma: u8) -> u8 {
+    let step = ((luma as i32 - 8 + 5) / 10).clamp(0, 23);
+    232 + step as u8
 }
 
 // ── drawing helpers ──────────────────────────────────────────────────────────
@@ -263,19 +213,24 @@ pub fn gradient_for(
             lerp(top.1, bot.1, t),
             lerp(top.2, bot.2, t),
         );
-        // Without 24-bit color the palette has almost nothing in the darks
-        // these themes live in, so blend two entries instead of rounding to
-        // one. Computed once per row and reused across the row.
-        let (sym, fg, bg) = if truecolor {
-            (" ", Color::Rgb(r, g, b), Color::Rgb(r, g, b))
+        // Without 24-bit color there is no honest way to draw these themes.
+        // The cube's darkest non-black level is 95 — brighter than most of the
+        // ramp — so rounding to the nearest entry gives a few garish bands,
+        // and dithering two entries together makes the wallpaper visibly
+        // striped. The 24-step grey ramp is the one densely-spaced region down
+        // here, so track luminance and let the hue go: a smooth dark wash
+        // reads far better than banding or texture. Windows and icons keep
+        // their color, since those sit at brightnesses the cube covers.
+        let c = if truecolor {
+            Color::Rgb(r, g, b)
         } else {
-            blend256(r, g, b)
+            Color::Indexed(grey_ramp(luminance(r, g, b)))
         };
         for x in 0..area.width {
             if let Some(cell) = buf.cell_mut((area.x + x, area.y + y)) {
-                cell.set_symbol(sym);
-                cell.set_fg(fg);
-                cell.set_bg(bg);
+                cell.set_symbol(" ");
+                cell.set_fg(c);
+                cell.set_bg(c);
             }
         }
     }
