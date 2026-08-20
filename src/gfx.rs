@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -7,7 +7,11 @@ use ratatui::Frame;
 
 // ── truecolor detection ──────────────────────────────────────────────────────
 
-static TRUECOLOR: OnceLock<bool> = OnceLock::new();
+/// 0 = not probed yet, 1 = 24-bit, 2 = 256-color. Probed once and cached; an
+/// atomic rather than a `OnceLock` so tests can render both paths (see
+/// [`force_truecolor`]) instead of being stuck with whatever terminal happened
+/// to launch `cargo test`.
+static TRUECOLOR: AtomicU8 = AtomicU8::new(0);
 
 fn detect_truecolor() -> bool {
     if let Ok(v) = std::env::var("TERM_PROGRAM") {
@@ -34,7 +38,21 @@ fn detect_truecolor() -> bool {
 }
 
 pub fn truecolor() -> bool {
-    *TRUECOLOR.get_or_init(detect_truecolor)
+    match TRUECOLOR.load(Ordering::Relaxed) {
+        1 => true,
+        2 => false,
+        _ => {
+            let v = detect_truecolor();
+            TRUECOLOR.store(1 + !v as u8, Ordering::Relaxed);
+            v
+        }
+    }
+}
+
+/// Pin the color mode. Tests only — the app probes the terminal instead.
+#[cfg(test)]
+pub fn force_truecolor(v: bool) {
+    TRUECOLOR.store(1 + !v as u8, Ordering::Relaxed);
 }
 
 /// The six levels of the xterm 6×6×6 color cube. Note they are not evenly
@@ -94,19 +112,121 @@ fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 /// Create a Color, falling back to the nearest xterm-256 index on terminals
 /// that do not support 24-bit RGB.
 pub fn rgb(r: u8, g: u8, b: u8) -> Color {
-    if truecolor() {
+    rgb_for(r, g, b, truecolor())
+}
+
+/// `rgb` with the terminal capability passed in, so tests can exercise both
+/// modes (the ambient one is cached process-wide in a `OnceLock`).
+pub fn rgb_for(r: u8, g: u8, b: u8, truecolor: bool) -> Color {
+    if truecolor {
         Color::Rgb(r, g, b)
     } else {
         Color::Indexed(to_ansi256(r, g, b))
     }
 }
 
-/// Adapt an existing `Color::Rgb` value for the current terminal.
-pub fn adapt(c: Color) -> Color {
+/// `adapt` with the terminal capability passed in. See [`rgb_for`].
+pub fn adapt_for(c: Color, truecolor: bool) -> Color {
     match c {
-        Color::Rgb(r, g, b) if !truecolor() => Color::Indexed(to_ansi256(r, g, b)),
+        Color::Rgb(r, g, b) if !truecolor => Color::Indexed(to_ansi256(r, g, b)),
         other => other,
     }
+}
+
+/// Remap every `Color::Rgb` cell in `area` to the nearest xterm-256 index.
+///
+/// Run once over the finished frame, this covers every app in the codebase
+/// without each one having to know what the terminal supports. A no-op when
+/// `truecolor` is true.
+pub fn adapt_buffer(buf: &mut Buffer, area: Rect, truecolor: bool) {
+    if truecolor {
+        return;
+    }
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.set_fg(adapt_for(cell.fg, false));
+                cell.set_bg(adapt_for(cell.bg, false));
+            }
+        }
+    }
+}
+
+/// The color the terminal actually paints for an xterm-256 index.
+pub fn palette_level(idx: u8) -> (u8, u8, u8) {
+    if idx >= 232 {
+        let v = 8 + (idx as u16 - 232) * 10;
+        (v as u8, v as u8, v as u8)
+    } else if idx >= 16 {
+        let i = idx as usize - 16;
+        (CUBE[i / 36], CUBE[(i / 6) % 6], CUBE[i % 6])
+    } else {
+        // The low 16 are theme-dependent; never emitted by to_ansi256.
+        (0, 0, 0)
+    }
+}
+
+/// Shading glyphs, with how much of the foreground color each one covers
+/// (out of 255). A cell painted with these mixes fg and bg optically.
+const SHADES: [(&str, u16); 3] = [("░", 64), ("▒", 128), ("▓", 191)];
+
+/// Blend `fg` over `bg` where the glyph covers `num`/255 of the cell.
+pub fn mix(fg: (u8, u8, u8), bg: (u8, u8, u8), num: u16) -> (u8, u8, u8) {
+    let m = |f: u8, b: u8| {
+        ((f as u16 * num + b as u16 * (255 - num)) / 255).min(255) as u8
+    };
+    (m(fg.0, bg.0), m(fg.1, bg.1), m(fg.2, bg.2))
+}
+
+/// How much of the foreground color a glyph covers, out of 255. `None` for
+/// glyphs that are not solid or one of the shading blocks.
+pub fn shade_coverage(sym: &str) -> Option<u16> {
+    match sym {
+        " " => Some(0),
+        "█" => Some(255),
+        _ => SHADES.iter().find(|(s, _)| *s == sym).map(|(_, n)| *n),
+    }
+}
+
+/// Approximate an exact color with two xterm-256 entries blended by a shading
+/// glyph, falling back to a solid cell when that is already the best fit.
+///
+/// The 6x6x6 cube's darkest non-black level is 95, far brighter than the dark
+/// desktop themes (whose channels sit around 10-80). A solid nearest-entry
+/// fill therefore either crushes to black or jumps to something twice as
+/// bright as intended, which is what turned the desktop gradient into a few
+/// garish bands. Mixing two entries lands much closer.
+pub fn blend256(r: u8, g: u8, b: u8) -> (&'static str, Color, Color) {
+    let target = (r, g, b);
+
+    // Start from the best solid cell so blending only ever improves things.
+    let solid_idx = to_ansi256(r, g, b);
+    let mut best = (" ", solid_idx, solid_idx);
+    let mut best_err = dist2(target, palette_level(solid_idx));
+
+    // Only the entries nearest the target are worth pairing; a full 240x240
+    // sweep would cost far more and never wins.
+    let mut near: Vec<(i32, u8)> = (16..=255u8)
+        .map(|i| (dist2(target, palette_level(i)), i))
+        .collect();
+    near.sort_unstable();
+    near.truncate(8);
+
+    for &(_, fi) in &near {
+        for &(_, bi) in &near {
+            if fi == bi {
+                continue;
+            }
+            for (sym, num) in SHADES {
+                let err = dist2(target, mix(palette_level(fi), palette_level(bi), num));
+                if err < best_err {
+                    best_err = err;
+                    best = (sym, fi, bi);
+                }
+            }
+        }
+    }
+    (best.0, Color::Indexed(best.1), Color::Indexed(best.2))
 }
 
 // ── drawing helpers ──────────────────────────────────────────────────────────
@@ -119,6 +239,17 @@ pub fn lerp(a: u8, b: u8, t: f32) -> u8 {
 /// distinct colour steps so that terminals that struggle with many unique
 /// background-colour sequences produce clean bands rather than visual noise.
 pub fn gradient(buf: &mut Buffer, area: Rect, top: (u8, u8, u8), bot: (u8, u8, u8)) {
+    gradient_for(buf, area, top, bot, truecolor())
+}
+
+/// `gradient` with the terminal capability passed in. See [`rgb_for`].
+pub fn gradient_for(
+    buf: &mut Buffer,
+    area: Rect,
+    top: (u8, u8, u8),
+    bot: (u8, u8, u8),
+    truecolor: bool,
+) {
     const STEPS: u16 = 32;
     for y in 0..area.height {
         let step = if area.height <= 1 {
@@ -127,11 +258,24 @@ pub fn gradient(buf: &mut Buffer, area: Rect, top: (u8, u8, u8), bot: (u8, u8, u
             y * (STEPS - 1) / (area.height - 1)
         };
         let t = step as f32 / (STEPS - 1) as f32;
-        let c = rgb(lerp(top.0, bot.0, t), lerp(top.1, bot.1, t), lerp(top.2, bot.2, t));
+        let (r, g, b) = (
+            lerp(top.0, bot.0, t),
+            lerp(top.1, bot.1, t),
+            lerp(top.2, bot.2, t),
+        );
+        // Without 24-bit color the palette has almost nothing in the darks
+        // these themes live in, so blend two entries instead of rounding to
+        // one. Computed once per row and reused across the row.
+        let (sym, fg, bg) = if truecolor {
+            (" ", Color::Rgb(r, g, b), Color::Rgb(r, g, b))
+        } else {
+            blend256(r, g, b)
+        };
         for x in 0..area.width {
             if let Some(cell) = buf.cell_mut((area.x + x, area.y + y)) {
-                cell.set_symbol(" ");
-                cell.set_bg(c);
+                cell.set_symbol(sym);
+                cell.set_fg(fg);
+                cell.set_bg(bg);
             }
         }
     }

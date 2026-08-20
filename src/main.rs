@@ -2,6 +2,10 @@ mod app;
 mod apps;
 mod engine;
 mod gfx;
+#[cfg(test)]
+mod render_tests;
+#[cfg(test)]
+mod snapshot;
 
 use std::io::stdout;
 use std::time::{Duration, Instant};
@@ -63,22 +67,11 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
     loop {
         terminal.draw(|f| {
             desktop.render(f);
-            // On terminals that don't handle 24-bit colour (e.g. Apple_Terminal
-            // mangles \e[48;2;R;G;Bm — it reads the B byte as a bare SGR code),
-            // remap every Color::Rgb cell in the buffer to the nearest xterm-256
-            // index.  This single pass covers every app in the codebase.
-            if !gfx::truecolor() {
-                let area = f.area();
-                let buf = f.buffer_mut();
-                for y in area.top()..area.bottom() {
-                    for x in area.left()..area.right() {
-                        if let Some(cell) = buf.cell_mut((x, y)) {
-                            cell.set_fg(gfx::adapt(cell.fg));
-                            cell.set_bg(gfx::adapt(cell.bg));
-                        }
-                    }
-                }
-            }
+            // Apple_Terminal mangles \e[48;2;R;G;Bm — it reads the B byte as a
+            // bare SGR code — so fold 24-bit colors down to the 256 palette
+            // once the frame is complete.
+            let area = f.area();
+            gfx::adapt_buffer(f.buffer_mut(), area, gfx::truecolor());
         })?;
 
         let timeout = tick.saturating_sub(last_tick.elapsed());

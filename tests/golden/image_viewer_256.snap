@@ -1,0 +1,153 @@
+size: 100x30
+--- chars ---
+      ▐▙▖▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖▄▄▄▄▄▄▄▄▄▄           ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▌      
+      ▐  ▙▞▝▜    ▌          ▌                                          ▌          ▌          ▌      
+      ▐      ▟▜▜ ▌          ▌                                          ▌          ▌          ▌      
+      ▐        ▟▄▛          ▌                                          ▌          ▌          ▌      
+      ▐          ▌▙▙▛       ▌                                          ▌          ▌          ▌      
+      ▐          ▌   ▙▖▀▜   ▌                                          ▌          ▌          ▌      
+      ▐          ▌       ▟▜▜▌                                          ▌          ▌          ▌      
+      ▐          ▌         ▟▖▀                                         ▌          ▌          ▌      
+      ▐          ▌          ▌ ▄▙▛                                      ▌          ▌          ▌      
+      ▐          ▌          ▌    ▙▌▀▜                                  ▌          ▌          ▌      
+      ▐          ▌          ▌        ▟▜▜                               ▌          ▌          ▌      
+      ▐          ▌          ▌          ▖▄▜▀                            ▌          ▌          ▌      
+      ▐          ▌          ▌             ▙▙▛                          ▌          ▌          ▌      
+      ▐          ▌          ▌                ▙▌▛▜                      ▌          ▌          ▌      
+      ▐▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▘▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▌      
+      ▐                                             ▟▜                                       ▌      
+      ▐                                               ▄▄▛                                    ▌      
+      ▐                                                  ▙▙▛                                 ▌      
+      ▐                                                     ▙▟▜▜                             ▌      
+      ▐                                                         ▟▜                           ▌      
+      ▐                                                           ▄▄▛                        ▌      
+      ▐                                                              ▙▙▛                     ▌      
+      ▐                                                                 ▙▟▜▜                 ▌      
+      ▐                                                                     ▟▜               ▌      
+      ▐                                                                       ▄▄▛            ▌      
+      ▐                                                                          ▙▙▛▜        ▌      
+      ▐                                                                             ▙ ▐▜     ▌      
+      ▐                                                                                 ▟▜   ▌      
+      ▐▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▖▌      
+ pattern256.png · 2/2 · 240×160 · fit · ? help                                                      
+--- colors ---
+888888JQ111111111XUUUUUUUUUUd!!!!!!!!!!+++++++++++IIIIIIIIIIHFFFFFFFFFFo?????????????????????q888888
+888888P2247642222ZVVVVVVVVVVc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222223462ZVVVVVVVVVVc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222275YVVVVVVVVVVc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZRSRVVVVVVVc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVSSSSVVVc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVSSSc))))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVSb()))))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc)(}}))))))[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc))))}()())[[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc))))))))(}>[[[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc))))))))))]<<[[[[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc))))))))))[[[<==[[[[[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888P2222222222ZVVVVVVVVVVc))))))))))[[[[[[=[<<[CCCCCCCCCCzttttttttttwOOOOOOOOOOLkkkkkkkkkki888888
+888888s0000000000WTTTTTTTTTT?{{{{{{{{{{//////////9BBDDDDDDDDAvvvvvvvvvvuOOOOOOOOOOMKKKKKKKKKKi888888
+888888jOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOyNxyOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOj888888
+888888ryyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyxxyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyr888888
+888888r??????????????????????????????????????????????????***?????????????????????????????????r888888
+888888q&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&%%%&&&&&&&&&&&&&&&&&&&&&&&&&&&&&q888888
+888888q&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&%%&&&&&&&&&&&&&&&&&&&&&&&&&&&q888888
+888888q$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$q888888
+888888q??????????????????????????????????????????????????????????????????????????????????????q888888
+888888q??????????????????????????????????????????????????????????????????????????????????????q888888
+888888qeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeef??eeeeeeeeeeeeeeq888888
+888888qeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeehhheeeeeeeeeeeeq888888
+888888GeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeegheeeeeeeeeeG888888
+888888GmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmlmlnmmmmmG888888
+888888GmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmllmmmG888888
+888888GFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEEpG888888
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?????????????????????????????????????????????????????
+--- legend ---
+a fg=@103 bg=@234
+b fg=@120 bg=@43
+c fg=@120 bg=@51
+d fg=@120 bg=@79
+e fg=@125 bg=@125
+f fg=@125 bg=@53
+g fg=@125 bg=@88
+h fg=@125 bg=@89
+i fg=@130 bg=@232
+j fg=@131 bg=@232
+k fg=@16 bg=@16
+l fg=@160 bg=@124
+m fg=@160 bg=@160
+n fg=@160 bg=@88
+o fg=@166 bg=@125
+p fg=@166 bg=@166
+q fg=@166 bg=@232
+r fg=@167 bg=@232
+s fg=@173 bg=@232
+t fg=@196 bg=@196
+u fg=@196 bg=@20
+v fg=@196 bg=@21
+w fg=@196 bg=@90
+x fg=@20 bg=@19
+y fg=@20 bg=@20
+z fg=@200 bg=@200
+A fg=@200 bg=@21
+B fg=@201 bg=@20
+C fg=@201 bg=@201
+D fg=@201 bg=@21
+E fg=@202 bg=@160
+F fg=@202 bg=@196
+G fg=@202 bg=@232
+H fg=@204 bg=@200
+I fg=@205 bg=@201
+J fg=@209 bg=@232
+K fg=@21 bg=@16
+L fg=@21 bg=@17
+M fg=@21 bg=@19
+N fg=@21 bg=@20
+O fg=@21 bg=@21
+P fg=@215 bg=@232
+Q fg=@224 bg=@179
+R fg=@226 bg=@142
+S fg=@226 bg=@184
+T fg=@226 bg=@21
+U fg=@226 bg=@220
+V fg=@226 bg=@226
+W fg=@227 bg=@21
+X fg=@227 bg=@221
+Y fg=@228 bg=@184
+Z fg=@229 bg=@226
+0 fg=@231 bg=@21
+1 fg=@231 bg=@223
+2 fg=@231 bg=@231
+3 fg=@231 bg=@250
+4 fg=@231 bg=@252
+5 fg=@231 bg=@253
+6 fg=@231 bg=@254
+7 fg=@231 bg=@255
+8 fg=@232 bg=@232
+9 fg=@40 bg=@21
++ fg=@40 bg=@40
+/ fg=@46 bg=@21
+= fg=@46 bg=@34
+< fg=@46 bg=@40
+> fg=@46 bg=@41
+[ fg=@46 bg=@46
+] fg=@47 bg=@46
+{ fg=@51 bg=@21
+} fg=@51 bg=@37
+( fg=@51 bg=@44
+) fg=@51 bg=@51
+! fg=@51 bg=@79
+$ fg=@54 bg=@54
+% fg=@55 bg=@54
+& fg=@55 bg=@55
+* fg=@56 bg=@19
+? fg=@56 bg=@56
+? fg=@58 bg=@16
+? fg=@59 bg=@19
+? fg=@61 bg=@21
+? fg=@85 bg=@21
+? fg=@89 bg=@53
+? fg=@89 bg=@89
+? fg=@90 bg=@53
+? fg=@90 bg=@89
+? fg=@90 bg=@90
+? fg=Reset bg=@234

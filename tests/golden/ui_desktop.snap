@@ -1,0 +1,158 @@
+size: 150x45
+--- chars ---
+                ╭ ✨  Welcome ─────────────────────────────────────────────────────────── □ ✕ ╮                                                        
+       🗂        │                                                                           █│                                                        
+                │   ▀█▀ █▀▀ ▀▄▀ ▀█▀ ▀█▀ █▀█ █▀█                                             █│                                                        
+     Files      │    █  ██▄ █ █  █   █  █▄█ █▀                                              █│                                                        
+                │   a desktop environment for your terminal                                 █│                                                        
+       🌐        │                                                                           █│                                                        
+                │   Desktop                                                                 █│                                                        
+      Web       │   F1                start menu — just type to search apps                 █│                                                        
+                │   F12               shortcut key overlay                                  █│                                                        
+       🖥        │   F6 / Alt+Tab      window switcher                                       █│                                                        
+                │   F11               maximize / restore window                             █│                                                        
+    Terminal    │   Ctrl+W            close window                                          █│                                                        
+                │   Ctrl+D            show / restore desktop                                █│                                                        
+       📝        │   Ctrl+Shift+←/→    snap window left / right                              █│                                                        
+                │   Ctrl+Shift+↑      maximize window                                       ││                                                        
+     Editor     │   Ctrl+arrows       nudge window                                          ││                                                        
+                │   Ctrl+Q            quit texttop                                          ││                                                        
+       🌿        │   F5                prune dead desktop shortcuts                          ││                                                        
+                │   Delete            remove selected desktop shortcut                      ││                                                        
+      Git       │   Esc               cancel drag / close menus                             ││                                                        
+                │                                                                           ││                                                        
+       🔎        │   Mouse                                                                   ││                                                        
+                │   right-click       context menus (desktop · icons · windows · files)     ││                                                        
+     Search     │   drag title bar    move · edge snap · top = maximize                     ││                                                        
+                │   double-click titlemaximize / restore                                    ││                                                        
+       ⚙        │   drag ◢ corner     resize window                                         ││                                                        
+                │   ─ □ ✕             minimize · maximize · close                           ││                                                        
+     Procs      │   drag icons        rearrange desktop icons                               ││                                                        
+                │   drag files        drop on desktop / apps · Shift=cut                    ││                                                        
+       📌        │   taskbar »N        overflow window list                                  ││                                                        
+                │   middle-click taskbarclose window                                        ││                                                        
+     Notes      │   double-click      open desktop icons & files                            ││                                                        
+                │   mouse wheel       scroll overflow content in apps                       ││                                                        
+                ╰────────────────────────────────────────────────────────────────────────────◢                                                        
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+                                                                                                                                                      
+ ⊞ Start   ✨  Welcome                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--- colors ---
+ccccccccccccccccbVVSVVVVVVVVVbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbObKbNbbcccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+cccccccUccccccccbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboocccccccccccccccccccccccccccccccccccccccccccccccccccccc
+ddddddddddddddddbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboodddddddddddddddddddddddddddddddddddddddddddddddddddddd
+eeeeeWWWWWeeeeeebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+eeeeeeeeeeeeeeeebLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+fffffffXSfffffffbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooffffffffffffffffffffffffffffffffffffffffffffffffffffff
+ggggggggggggggggbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboogggggggggggggggggggggggggggggggggggggggggggggggggggggg
+hhhhhhYYYhhhhhhhbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+hhhhhhhhhhhhhhhhbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+iiiiiiiZiiiiiiiibPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+jjjjjjjjjjjjjjjjbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+jjjj00000000jjjjbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+kkkkkkkkkkkkkkkkbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabookkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+lllllll1SlllllllbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboollllllllllllllllllllllllllllllllllllllllllllllllllllll
+mmmmmmmmmmmmmmmmbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboommmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+mmmmm222222mmmmmbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboommmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+nnnnnnnnnnnnnnnnbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboonnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+ppppppp3SpppppppbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQuboopppppppppppppppppppppppppppppppppppppppppppppppppppppp
+ppppppppppppppppbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQuboopppppppppppppppppppppppppppppppppppppppppppppppppppppp
+qqqqqq444qqqqqqqbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+rrrrrrrrrrrrrrrrbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboorrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+sssssss5SsssssssbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboossssssssssssssssssssssssssssssssssssssssssssssssssssss
+ssssssssssssssssbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQuboossssssssssssssssssssssssssssssssssssssssssssssssssssss
+ttttt666666tttttbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQubootttttttttttttttttttttttttttttttttttttttttttttttttttttt
+vvvvvvvvvvvvvvvvbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboovvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+wwwwwww8wwwwwwwwbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwwwbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+xxxxx99999xxxxxxbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+yyyyyyyyyyyyyyyybPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+yyyyyyy+SyyyyyyybPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+zzzzzzzzzzzzzzzzbPPPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboozzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+AAAAA/////AAAAAAbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+BBBBBBBBBBBBBBBBbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQubooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+BBBBBBBBBBBBBBBBbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+CCCCCCCCCCCCCCCCCCooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+TTTTTTTTTR77S777777777RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--- legend ---
+a fg=#00aadc bg=#0c0e16
+b fg=#00beff bg=#0c0e16
+c fg=#0a0e2c bg=#0a0e2c
+d fg=#0c0e2d bg=#0c0e2d
+e fg=#0e0e2e bg=#0e0e2e
+f fg=#0f0e2f bg=#0f0e2f
+g fg=#110e30 bg=#110e30
+h fg=#130e31 bg=#130e31
+i fg=#150e33 bg=#150e33
+j fg=#170e34 bg=#170e34
+k fg=#180e35 bg=#180e35
+l fg=#1a0e36 bg=#1a0e36
+m fg=#1c0e37 bg=#1c0e37
+n fg=#1e0e38 bg=#1e0e38
+o fg=#1e1e2e bg=#04040a
+p fg=#200e39 bg=#200e39
+q fg=#210e3a bg=#210e3a
+r fg=#230e3b bg=#230e3b
+s fg=#250e3c bg=#250e3c
+t fg=#270e3e bg=#270e3e
+u fg=#283046 bg=#0c0e16
+v fg=#290e3f bg=#290e3f
+w fg=#2b0e40 bg=#2b0e40
+x fg=#2c0e41 bg=#2c0e41
+y fg=#2e0e42 bg=#2e0e42
+z fg=#300e43 bg=#300e43
+A fg=#320e44 bg=#320e44
+B fg=#340e45 bg=#340e45
+C fg=#350e46 bg=#350e46
+D fg=#370e47 bg=#370e47
+E fg=#390e49 bg=#390e49
+F fg=#3b0e4a bg=#3b0e4a
+G fg=#3d0e4b bg=#3d0e4b
+H fg=#3e0e4c bg=#3e0e4c
+I fg=#400e4d bg=#400e4d
+J fg=#420e4e bg=#420e4e
+K fg=#78dc82 bg=#0c0e16
+L fg=#969baf bg=#0c0e16
+M fg=#d7dae6 bg=#0c0e16
+N fg=#ff5f5f bg=#0c0e16
+O fg=#ffc850 bg=#0c0e16
+P fg=#ffd264 bg=#0c0e16
+Q fg=Reset bg=#0c0e16
+R fg=Reset bg=#0e101c
+S fg=Reset bg=Reset
+T fg=White bg=#0060a0
+U fg=White bg=#0a0e2c
+V fg=White bg=#0c0e16
+W fg=White bg=#0e0e2e
+X fg=White bg=#0f0e2f
+Y fg=White bg=#130e31
+Z fg=White bg=#150e33
+0 fg=White bg=#170e34
+1 fg=White bg=#1a0e36
+2 fg=White bg=#1c0e37
+3 fg=White bg=#200e39
+4 fg=White bg=#210e3a
+5 fg=White bg=#250e3c
+6 fg=White bg=#270e3e
+7 fg=White bg=#2a4670
+8 fg=White bg=#2b0e40
+9 fg=White bg=#2c0e41
++ fg=White bg=#2e0e42
+/ fg=White bg=#320e44

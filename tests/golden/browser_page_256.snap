@@ -1,0 +1,99 @@
+size: 96x28
+--- chars ---
+                                                                                                
+▗▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄            ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▜
+▐                                                                                              ▐
+▐                                                                                              ▐
+▐           ▜                                                                                  ▐
+▐                                                                                              ▐
+▐                                                                                              ▐
+▐                       ▜                                                                      ▐
+▐                                                                                              ▐
+▐                                                                                              ▐
+▐                                                                                              ▐
+▐                                   ▟                                                          ▐
+▐                                                                                              ▐
+▐                                                                                              ▐
+▌                                               ▟                                              ▐
+▌                                                                                              ▐
+▌                                                                                              ▐
+▌                                                           ▜                                  ▐
+▌                                                                                              ▐
+▌                                                                                              ▐
+▌                                                                       ▜                      ▐
+▌                                                                                              ▐
+▌                                                                                              ▐
+▌                                                                                              ▐
+▌                                                                                   ▟          ▐
+▌                                                                                              ▐
+▙▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▟
+                                                                                                
+--- colors ---
+MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+zzzzzzzzzzzzxxxxxxxxxxxxEEEEEEEEEEEEaaaaaaaaaaaaoooooooooooommmmmmmmmmmmppppppppppppkkkkkkkkkkkk
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAwyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyDFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFBCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+zAAAAAAAAAAAyyyyyyyyyyyyFFFFFFFFFFFFCCCCCCCCCCCChhhhhhhhhhhhffffffffffffvvvvvvvvvvvvccccccccccck
+pvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvuvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvp
+nggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggn
+nggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggn
+rIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIHIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIr
+qGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGq
+qGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGq
+tLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLKLLLLLLLLLLLLLLLLLLLLLLt
+sJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJs
+jbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbj
+jbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbj
+jbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbebbbbbbbbbbj
+lddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddl
+iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM
+--- legend ---
+a fg=@106 bg=@106
+b fg=@125 bg=@125
+c fg=@16 bg=@16
+d fg=@160 bg=@160
+e fg=@161 bg=@16
+f fg=@196 bg=@196
+g fg=@20 bg=@20
+h fg=@201 bg=@201
+i fg=@202 bg=@160
+j fg=@208 bg=@125
+k fg=@208 bg=@16
+l fg=@208 bg=@160
+m fg=@208 bg=@196
+n fg=@208 bg=@20
+o fg=@208 bg=@201
+p fg=@208 bg=@21
+q fg=@208 bg=@55
+r fg=@208 bg=@56
+s fg=@208 bg=@89
+t fg=@208 bg=@90
+u fg=@21 bg=@16
+v fg=@21 bg=@21
+w fg=@226 bg=@16
+x fg=@226 bg=@208
+y fg=@226 bg=@226
+z fg=@231 bg=@208
+A fg=@231 bg=@231
+B fg=@46 bg=@16
+C fg=@46 bg=@46
+D fg=@51 bg=@16
+E fg=@51 bg=@208
+F fg=@51 bg=@51
+G fg=@55 bg=@55
+H fg=@56 bg=@16
+I fg=@56 bg=@56
+J fg=@89 bg=@89
+K fg=@90 bg=@16
+L fg=@90 bg=@90
+M fg=Reset bg=Reset
