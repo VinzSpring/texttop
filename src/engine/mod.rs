@@ -137,6 +137,31 @@ pub const EXTRACT_JS: &str = r##"(function(){
 pub const REMOVE_STYLE_JS: &str =
     "(function(){var st=document.getElementById('__ttp_style');if(st)st.remove();})()";
 
+/// Convince a page that it is on screen. Must run *before* the page's own
+/// scripts, so it is installed as a document-start user script.
+///
+/// Every engine here renders off-screen, so the view is never in a visible
+/// window and the Page Visibility API reports `hidden`. Single-page apps
+/// treat that as "user switched tabs" and skip layout and data fetching:
+/// youtube.com collapses `body` to zero height, which renders as a blank
+/// page *and* leaves nothing to scroll, since the document is then exactly
+/// one viewport tall. Overriding the getters takes youtube.com's body from
+/// 0px to ~3000px and restores scrolling.
+pub const VISIBILITY_JS: &str = r#"(function(){
+ try{
+  var d=Document.prototype;
+  Object.defineProperty(d,'visibilityState',{get:function(){return 'visible';},configurable:true});
+  Object.defineProperty(d,'webkitVisibilityState',{get:function(){return 'visible';},configurable:true});
+  Object.defineProperty(d,'hidden',{get:function(){return false;},configurable:true});
+  Object.defineProperty(d,'webkitHidden',{get:function(){return false;},configurable:true});
+  d.hasFocus=function(){return true;};
+  // Some apps only re-check on the event, not on first paint.
+  addEventListener('DOMContentLoaded',function(){
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+ }catch(e){}
+})()"#;
+
 /// Simulated pointer events for engines without a native input path
 /// (WebKitGTK, or WebView2 when its input window can't be found). Tracks
 /// the hovered element so JS-driven hover UIs (menus, tooltips) fire

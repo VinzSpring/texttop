@@ -162,6 +162,14 @@ path = "examples/22_async_data_store.rs"
 required-features = ["async"]
 
 [[example]]
+name = "96_page_diag"
+path = "examples/96_page_diag.rs"
+
+[[example]]
+name = "97_scroll_check"
+path = "examples/97_scroll_check.rs"
+
+[[example]]
 name = "98_texttop_verify"
 path = "examples/98_texttop_verify.rs"
 

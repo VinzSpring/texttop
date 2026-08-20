@@ -14,7 +14,7 @@ use webkit::prelude::*;
 
 use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
-    EXTRACT_JS, REMOVE_STYLE_JS,
+    EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
 pub struct Engine {
@@ -87,6 +87,11 @@ fn run(
     let config = WebViewConfiguration::new();
     // Allow video/audio autoplay without a prior gesture (video player).
     config.set_media_types_requiring_user_action_for_playback(AudiovisualMediaTypes::NONE);
+    // The view is off-screen, so pages would otherwise see themselves as a
+    // hidden tab and skip laying out. See VISIBILITY_JS.
+    config.add_user_script(
+        &UserScript::new(VISIBILITY_JS).with_injection_time(InjectionTime::AtDocumentStart),
+    );
 
     let view = match WebView::with_config(&config) {
         Ok(v) => v,

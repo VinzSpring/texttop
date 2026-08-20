@@ -72,3 +72,21 @@ cargo run --release --example 98_texttop_verify --manifest-path vendor/webkit/Ca
 ```
 
 `examples/99_resize_check.rs` is a smaller timing/lay-out sanity check.
+
+`examples/97_scroll_check.rs` checks that `window.scrollBy` moves the page
+*and* that the snapshot follows, and compares the alternative scroll targets
+(`documentElement` vs `scrollingElement`).
+
+`examples/96_page_diag.rs` loads a real URL at a given viewport and dumps the
+metrics that explain a blank or unscrollable page — visibility state, body
+height, scroll height, image and text counts, and how much of the snapshot is
+actually painted. It takes `DIAG_VISIBLE=1` to install the same visibility
+shim the app injects (see `VISIBILITY_JS` in `src/engine/mod.rs`), which is how
+that fix was verified:
+
+```sh
+cargo run --release --example 96_page_diag --manifest-path vendor/webkit/Cargo.toml \
+  -- https://www.youtube.com/
+DIAG_VISIBLE=1 cargo run --release --example 96_page_diag \
+  --manifest-path vendor/webkit/Cargo.toml -- https://www.youtube.com/
+```
