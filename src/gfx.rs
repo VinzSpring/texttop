@@ -13,20 +13,36 @@ use ratatui::Frame;
 /// to launch `cargo test`.
 static TRUECOLOR: AtomicU8 = AtomicU8::new(0);
 
+/// First Terminal.app bundle version with 24-bit color, which arrived in
+/// macOS 26. Older builds print `\e[48;2;R;G;Bm` as garbage — they read the
+/// blue byte as a bare SGR code. macOS 14 ships 453 and macOS 15 ships 455,
+/// both without support, so the cut sits above those. Terminal.app does not
+/// reliably set COLORTERM even now, hence the version check; if this guess is
+/// wrong on your build, set TEXTTOP_TRUECOLOR to override it.
+const APPLE_TERMINAL_TRUECOLOR: u32 = 460;
+
 fn detect_truecolor() -> bool {
-    if let Ok(v) = std::env::var("TERM_PROGRAM") {
-        // Apple Terminal may advertise truecolor but does not reliably render
-        // 24-bit background color sequences in this app.
-        if v == "Apple_Terminal" {
-            return false;
-        }
-        if matches!(v.as_str(), "iTerm.app" | "WezTerm" | "ghostty" | "Hyper") {
-            return true;
-        }
+    // An explicit override always wins — no heuristic is worth fighting.
+    if let Ok(v) = std::env::var("TEXTTOP_TRUECOLOR") {
+        return !matches!(v.as_str(), "" | "0" | "false" | "no");
     }
+    // The de-facto standard, set by VTE, Konsole, iTerm2, WezTerm and others.
+    // Checked before TERM_PROGRAM so a terminal that advertises support is
+    // believed regardless of which app it claims to be.
     if let Ok(v) = std::env::var("COLORTERM") {
         if v == "truecolor" || v == "24bit" {
             return true;
+        }
+    }
+    if let Ok(v) = std::env::var("TERM_PROGRAM") {
+        if matches!(v.as_str(), "iTerm.app" | "WezTerm" | "ghostty" | "Hyper") {
+            return true;
+        }
+        if v == "Apple_Terminal" {
+            return std::env::var("TERM_PROGRAM_VERSION")
+                .ok()
+                .and_then(|s| s.split('.').next()?.parse::<u32>().ok())
+                .is_some_and(|n| n >= APPLE_TERMINAL_TRUECOLOR);
         }
     }
     if let Ok(v) = std::env::var("TERM") {
@@ -575,6 +591,106 @@ mod tests {
                 dist2(c, got) < 400,
                 "{c:?} -> index {idx} = {got:?}, too far off",
             );
+        }
+    }
+
+    /// `detect_truecolor` reads the environment directly, so these run under a
+    /// lock and restore what they change. Env is process-global.
+    fn with_env(vars: &[(&str, Option<&str>)], f: impl FnOnce()) {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let keys = [
+            "TEXTTOP_TRUECOLOR",
+            "COLORTERM",
+            "TERM_PROGRAM",
+            "TERM_PROGRAM_VERSION",
+            "TERM",
+        ];
+        let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
+        for k in keys {
+            std::env::remove_var(k);
+        }
+        for (k, v) in vars {
+            match v {
+                Some(v) => std::env::set_var(k, v),
+                None => std::env::remove_var(k),
+            }
+        }
+        f();
+        for (k, v) in saved {
+            match v {
+                Some(v) => std::env::set_var(k, v),
+                None => std::env::remove_var(k),
+            }
+        }
+    }
+
+    #[test]
+    fn truecolor_detection() {
+        let cases: &[(&str, &[(&str, Option<&str>)], bool)] = &[
+            ("bare terminal", &[], false),
+            (
+                "COLORTERM=truecolor",
+                &[("COLORTERM", Some("truecolor"))],
+                true,
+            ),
+            ("COLORTERM=24bit", &[("COLORTERM", Some("24bit"))], true),
+            (
+                "iTerm",
+                &[("TERM_PROGRAM", Some("iTerm.app"))],
+                true,
+            ),
+            // macOS 14 ships Terminal 453, macOS 15 ships 455; neither can do
+            // 24-bit, and both used to be caught by a blanket Apple_Terminal
+            // rule that would also have disabled it on macOS 26.
+            (
+                "Terminal.app on macOS 14",
+                &[
+                    ("TERM_PROGRAM", Some("Apple_Terminal")),
+                    ("TERM_PROGRAM_VERSION", Some("453")),
+                    ("TERM", Some("xterm-256color")),
+                ],
+                false,
+            ),
+            (
+                "Terminal.app on macOS 26",
+                &[
+                    ("TERM_PROGRAM", Some("Apple_Terminal")),
+                    ("TERM_PROGRAM_VERSION", Some("470")),
+                ],
+                true,
+            ),
+            // A terminal that advertises support is believed even if it also
+            // claims to be Terminal.app.
+            (
+                "Terminal.app advertising COLORTERM",
+                &[
+                    ("TERM_PROGRAM", Some("Apple_Terminal")),
+                    ("TERM_PROGRAM_VERSION", Some("453")),
+                    ("COLORTERM", Some("truecolor")),
+                ],
+                true,
+            ),
+            (
+                "override on",
+                &[("TEXTTOP_TRUECOLOR", Some("1"))],
+                true,
+            ),
+            (
+                "override off beats COLORTERM",
+                &[
+                    ("TEXTTOP_TRUECOLOR", Some("0")),
+                    ("COLORTERM", Some("truecolor")),
+                ],
+                false,
+            ),
+        ];
+        for (name, vars, want) in cases {
+            with_env(vars, || {
+                assert_eq!(detect_truecolor(), *want, "{name}");
+            });
         }
     }
 
