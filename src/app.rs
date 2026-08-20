@@ -2777,10 +2777,22 @@ impl Desktop {
         self.status_until = Some(Instant::now());
     }
 
+    /// Where the desktop layout and session live.
+    ///
+    /// `TEXTTOP_HOME` overrides it, which gives an isolated profile for tests
+    /// and for trying things without disturbing a real desktop. Note this
+    /// cannot go through `$HOME`: `dirs::home_dir` resolves the account's
+    /// home directly on macOS and ignores the variable, so tests that set
+    /// `HOME` would silently read the real desktop file.
+    fn state_home() -> PathBuf {
+        if let Some(p) = std::env::var_os("TEXTTOP_HOME") {
+            return PathBuf::from(p);
+        }
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+    }
+
     fn desktop_path() -> PathBuf {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".texttop_desktop.json")
+        Self::state_home().join(".texttop_desktop.json")
     }
 
     fn save_desktop(&self) {
@@ -2904,9 +2916,7 @@ impl Desktop {
     }
 
     fn session_path() -> PathBuf {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".texttop_session.json")
+        Self::state_home().join(".texttop_session.json")
     }
 
     /// Persist open windows (what they are + where) so the next start

@@ -39,15 +39,22 @@ static HOME: OnceLock<PathBuf> = OnceLock::new();
 
 /// Pin everything ambient that rendering depends on.
 ///
-/// `gfx::truecolor()` caches its answer in a `OnceLock`, so the color mode has
-/// to be settled before the first render or the goldens would depend on which
-/// terminal happened to run `cargo test`. `HOME` is redirected so the desktop
-/// finds no saved session or icon layout and comes up in its default state.
-fn init_env() -> PathBuf {
+/// `gfx::truecolor()` caches its answer, so the color mode has to be settled
+/// before the first render or the goldens would depend on which terminal
+/// happened to run `cargo test`. `TEXTTOP_HOME` points the desktop at an empty
+/// profile so it finds no saved session or icon layout and comes up in its
+/// default state.
+///
+/// Setting `HOME` is *not* enough: `dirs::home_dir` resolves the account's
+/// home directly on macOS and ignores the variable, so these tests read the
+/// developer's real `~/.texttop_desktop.json` — and started failing the moment
+/// someone changed their wallpaper theme in the running app.
+pub fn init_env() -> PathBuf {
     HOME.get_or_init(|| {
         let home = std::env::temp_dir().join("texttop-snapshot-home");
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(&home).expect("create fake HOME");
+        std::env::set_var("TEXTTOP_HOME", &home);
         std::env::set_var("HOME", &home);
         // Force the 24-bit path; the 256-color path is exercised explicitly by
         // passing `false` to the `*_for` helpers rather than by ambient state.

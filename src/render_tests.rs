@@ -11,7 +11,7 @@ use crate::apps::imageviewer::ImageViewer;
 use crate::apps::AppWindow;
 use crate::gfx;
 use crate::snapshot::{
-    assert_snapshot, assert_snapshot_masked, render_mode, test_image_file, test_pattern,
+    assert_snapshot, assert_snapshot_masked, init_env, render_mode, test_image_file, test_pattern,
 };
 
 const DESK_W: u16 = 150;
@@ -33,6 +33,9 @@ fn volatile_taskbar() -> [Rect; 1] {
 /// icons, the window that opens on a fresh profile, and the taskbar.
 #[test]
 fn ui_desktop() {
+    // Redirect the profile *before* constructing: Desktop::new() reads the
+    // saved desktop and session from disk in its constructor.
+    init_env();
     let mut desktop = Desktop::new();
     let buf = render_mode(true, DESK_W, DESK_H, |f| desktop.render(f));
     assert_snapshot_masked("ui_desktop", &buf, &volatile_taskbar(), 0.999, 0.999);
@@ -42,6 +45,7 @@ fn ui_desktop() {
 /// that looked wrong in Apple Terminal, so it gets its own golden.
 #[test]
 fn ui_desktop_256() {
+    init_env();
     let mut desktop = Desktop::new();
     let buf = render_mode(false, DESK_W, DESK_H, |f| desktop.render(f));
     assert_snapshot_masked("ui_desktop_256", &buf, &volatile_taskbar(), 0.999, 0.999);
