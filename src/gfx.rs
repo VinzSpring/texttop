@@ -1,25 +1,117 @@
+use std::sync::OnceLock;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::Frame;
 
+// ── truecolor detection ──────────────────────────────────────────────────────
+
+static TRUECOLOR: OnceLock<bool> = OnceLock::new();
+
+fn detect_truecolor() -> bool {
+    if let Ok(v) = std::env::var("TERM_PROGRAM") {
+        // Apple Terminal may advertise truecolor but does not reliably render
+        // 24-bit background color sequences in this app.
+        if v == "Apple_Terminal" {
+            return false;
+        }
+        if matches!(v.as_str(), "iTerm.app" | "WezTerm" | "ghostty" | "Hyper") {
+            return true;
+        }
+    }
+    if let Ok(v) = std::env::var("COLORTERM") {
+        if v == "truecolor" || v == "24bit" {
+            return true;
+        }
+    }
+    if let Ok(v) = std::env::var("TERM") {
+        if v.contains("truecolor") || v == "xterm-kitty" {
+            return true;
+        }
+    }
+    false
+}
+
+pub fn truecolor() -> bool {
+    *TRUECOLOR.get_or_init(detect_truecolor)
+}
+
+/// The six levels of the xterm 6×6×6 color cube. Note they are not evenly
+/// spaced — the gap from 0 to 95 is wider than the rest — so a linear
+/// `v * 5 / 255` mapping is badly wrong for dark colors (it pushes the
+/// near-black window chrome this app uses up to a saturated 95).
+const CUBE: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+fn nearest_cube(v: u8) -> usize {
+    CUBE.iter()
+        .enumerate()
+        .min_by_key(|(_, &l)| (v as i32 - l as i32).abs())
+        .map(|(i, _)| i)
+        .unwrap_or(0)
+}
+
+fn dist2(a: (u8, u8, u8), b: (u8, u8, u8)) -> i32 {
+    let d = |x: u8, y: u8| (x as i32 - y as i32).pow(2);
+    d(a.0, b.0) + d(a.1, b.1) + d(a.2, b.2)
+}
+
+fn to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+    let (ri, gi, bi) = (nearest_cube(r), nearest_cube(g), nearest_cube(b));
+    let cube = (CUBE[ri], CUBE[gi], CUBE[bi]);
+    let cube_idx = (16 + 36 * ri + 6 * gi + bi) as u8;
+
+    // Indices 232..=255 are a finer gray ramp at levels 8, 18, ... 238. For
+    // desaturated colors it beats the cube, so take whichever is closer.
+    let avg = (r as i32 + g as i32 + b as i32) / 3;
+    let step = ((avg - 8 + 5) / 10).clamp(0, 23);
+    let level = (8 + step * 10) as u8;
+    let gray = (level, level, level);
+
+    if dist2((r, g, b), gray) < dist2((r, g, b), cube) {
+        232 + step as u8
+    } else {
+        cube_idx
+    }
+}
+
+/// Create a Color, falling back to the nearest xterm-256 index on terminals
+/// that do not support 24-bit RGB.
+pub fn rgb(r: u8, g: u8, b: u8) -> Color {
+    if truecolor() {
+        Color::Rgb(r, g, b)
+    } else {
+        Color::Indexed(to_ansi256(r, g, b))
+    }
+}
+
+/// Adapt an existing `Color::Rgb` value for the current terminal.
+pub fn adapt(c: Color) -> Color {
+    match c {
+        Color::Rgb(r, g, b) if !truecolor() => Color::Indexed(to_ansi256(r, g, b)),
+        other => other,
+    }
+}
+
+// ── drawing helpers ──────────────────────────────────────────────────────────
+
 pub fn lerp(a: u8, b: u8, t: f32) -> u8 {
     (a as f32 + (b as f32 - a as f32) * t).round().clamp(0.0, 255.0) as u8
 }
 
-/// Vertical color gradient fill.
+/// Vertical color gradient fill.  The gradient is quantised to at most 32
+/// distinct colour steps so that terminals that struggle with many unique
+/// background-colour sequences produce clean bands rather than visual noise.
 pub fn gradient(buf: &mut Buffer, area: Rect, top: (u8, u8, u8), bot: (u8, u8, u8)) {
+    const STEPS: u16 = 32;
     for y in 0..area.height {
-        let t = if area.height <= 1 {
-            0.0
+        let step = if area.height <= 1 {
+            0
         } else {
-            y as f32 / (area.height - 1) as f32
+            y * (STEPS - 1) / (area.height - 1)
         };
-        let c = Color::Rgb(
-            lerp(top.0, bot.0, t),
-            lerp(top.1, bot.1, t),
-            lerp(top.2, bot.2, t),
-        );
+        let t = step as f32 / (STEPS - 1) as f32;
+        let c = rgb(lerp(top.0, bot.0, t), lerp(top.1, bot.1, t), lerp(top.2, bot.2, t));
         for x in 0..area.width {
             if let Some(cell) = buf.cell_mut((area.x + x, area.y + y)) {
                 cell.set_symbol(" ");
@@ -68,7 +160,7 @@ fn avg(cols: &[(u16, u16, u16)]) -> Color {
     let r = cols.iter().map(|c| c.0 as u32).sum::<u32>() / n;
     let g = cols.iter().map(|c| c.1 as u32).sum::<u32>() / n;
     let b = cols.iter().map(|c| c.2 as u32).sum::<u32>() / n;
-    Color::Rgb(r as u8, g as u8, b as u8)
+    rgb(r as u8, g as u8, b as u8)
 }
 
 /// Quadrant-fit an RGB24 buffer into (symbol, fg, bg) cells — each cell
@@ -186,8 +278,8 @@ pub fn fill(buf: &mut Buffer, area: Rect, bg: Color) {
 
 /// Translucent-looking drop shadow to the right and below a window rect.
 pub fn shadow(buf: &mut Buffer, rect: Rect, screen: Rect) {
-    let bg = Color::Rgb(4, 4, 10);
-    let fg = Color::Rgb(30, 30, 46);
+    let bg = rgb(4, 4, 10);
+    let fg = rgb(30, 30, 46);
     let bottom = rect.y + rect.height;
     if bottom < screen.y + screen.height {
         let x_end = (rect.x + rect.width + 2).min(screen.x + screen.width);
@@ -274,4 +366,83 @@ pub fn fmt_size(bytes: u64) -> String {
 pub fn fmt_dur(d: std::time::Duration) -> String {
     let s = d.as_secs();
     format!("{:02}:{:02}", s / 60, s % 60)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Level rendered by the terminal for a given xterm-256 index.
+    fn level_of(idx: u8) -> (u8, u8, u8) {
+        if idx >= 232 {
+            let v = 8 + (idx as u16 - 232) * 10;
+            (v as u8, v as u8, v as u8)
+        } else {
+            let i = idx as usize - 16;
+            (CUBE[i / 36], CUBE[(i / 6) % 6], CUBE[i % 6])
+        }
+    }
+
+    /// No index in the palette may be closer to the input than the one chosen.
+    fn assert_nearest(c: (u8, u8, u8)) {
+        let got = to_ansi256(c.0, c.1, c.2);
+        let got_err = dist2(c, level_of(got));
+        for idx in 16..=255u8 {
+            let err = dist2(c, level_of(idx));
+            assert!(
+                err >= got_err,
+                "{c:?}: picked {got} (err {got_err}) but {idx} is closer (err {err})",
+            );
+        }
+    }
+
+    #[test]
+    fn picks_the_nearest_palette_entry() {
+        // The window chrome, shadows and text colors this app actually uses.
+        for c in [
+            (16, 19, 32),
+            (4, 4, 10),
+            (30, 30, 46),
+            (24, 26, 38),
+            (150, 200, 255),
+            (120, 130, 160),
+            (210, 215, 235),
+            (0, 0, 0),
+            (255, 255, 255),
+        ] {
+            assert_nearest(c);
+        }
+    }
+
+    #[test]
+    fn dark_chrome_stays_dark_and_neutral() {
+        // Regression: a linear cube mapping sent the near-black window chrome
+        // to (0,0,95) and (95,95,95) — saturated blue and mid gray.
+        for c in [(16, 19, 32), (4, 4, 10), (30, 30, 46), (24, 26, 38)] {
+            let idx = to_ansi256(c.0, c.1, c.2);
+            let got = level_of(idx);
+            assert!(
+                dist2(c, got) < 400,
+                "{c:?} -> index {idx} = {got:?}, too far off",
+            );
+        }
+    }
+
+    #[test]
+    fn grays_use_the_fine_ramp() {
+        // 128 is 8 + 12*10, exactly on the gray ramp; the cube's nearest is 135.
+        assert_eq!(to_ansi256(128, 128, 128), 244);
+    }
+
+    #[test]
+    fn every_index_is_in_range() {
+        for r in (0..=255u8).step_by(17) {
+            for g in (0..=255u8).step_by(17) {
+                for b in (0..=255u8).step_by(17) {
+                    let i = to_ansi256(r, g, b);
+                    assert!(i >= 16, "({r},{g},{b}) -> {i}");
+                }
+            }
+        }
+    }
 }

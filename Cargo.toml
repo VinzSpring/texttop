@@ -58,3 +58,18 @@ webkit = { version = "0.3", optional = true }
 [profile.release]
 lto = true
 opt-level = 3
+
+# The renderer samples millions of pixels per frame; unoptimized debug builds
+# are unusably slow. Light optimization keeps dev builds interactive.
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 2
+
+# The macOS engine needs API that published webkit-0.3.11 does not have
+# (WebView::set_frame_size, WebView::take_snapshot_rgba) and a fix for a crash
+# on loadHTMLString navigations, plus stubs for call sites that reference
+# macOS 15.2/26 symbols missing from the Xcode 15 SDK. The patched crate is
+# vendored so a fresh clone builds; see vendor/webkit/PATCHES.md.
+[patch.crates-io]
+webkit = { path = "vendor/webkit" }

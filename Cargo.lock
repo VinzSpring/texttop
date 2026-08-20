@@ -3154,8 +3154,6 @@ dependencies = [
 [[package]]
 name = "webkit"
 version = "0.3.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "223385f902ff578537f1d951045b5159c5a3a9b60d12f46212d5c3ee76efbfee"
 dependencies = [
  "apple-cf",
  "doom-fish-utils",

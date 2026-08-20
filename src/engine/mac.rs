@@ -1,10 +1,10 @@
 //! Off-screen WKWebView engine for macOS. Uses the `webkit` crate's headless
-//! WebKit bindings on a dedicated thread; PNG snapshots are decoded into RGB
-//! frames for the TUI.
+//! WebKit bindings on a dedicated thread; raw RGBA snapshots (scaled to the
+//! logical viewport width) are converted into RGB frames for the TUI.
 //!
-//! Note: the bridge creates WKWebView at a fixed 800×600. Logical ResizePx
-//! sizes from the TUI are retained for mouse mapping; frames are scaled by
-//! the renderer to the window.
+//! The WKWebView frame tracks the TUI window size (Cmd::ResizePx), matching
+//! the Windows/Linux engines: pages lay out at the real viewport size and
+//! mouse coordinates map 1:1 (divided by page zoom).
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -16,10 +16,6 @@ use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
     EXTRACT_JS, REMOVE_STYLE_JS,
 };
-
-/// Native off-screen WKWebView size used by the `webkit` bridge (fixed).
-const NATIVE_W: f64 = 800.0;
-const NATIVE_H: f64 = 600.0;
 
 pub struct Engine {
     tx: Sender<Cmd>,
@@ -105,7 +101,11 @@ fn run(
 
     let mut page_zoom = zoom.max(0.01);
     view.set_page_zoom(page_zoom);
-    let mut logical = (size0.0.max(1) as f64, size0.1.max(1) as f64);
+    // Snapshots are scaled to the logical width: keeps frames cheap and —
+    // crucially — matches the Windows/Linux engines, where 1 frame pixel ==
+    // 1 viewport point (the text overlay's mapping assumes this).
+    let mut snap_w = size0.0.max(1) as u32;
+    view.set_frame_size(size0.0.max(1) as f64, size0.1.max(1) as f64);
     let mut overlay = false;
 
     if let Err(e) = apply_nav(&view, &initial) {
@@ -116,6 +116,7 @@ fn run(
 
     let mut last_cap = Instant::now() - Duration::from_secs(1);
     let mut last_extract = Instant::now() - Duration::from_secs(1);
+    let mut last_info = Instant::now() - Duration::from_secs(1);
 
     loop {
         loop {
@@ -126,7 +127,7 @@ fn run(
                         &view,
                         &mut overlay,
                         &mut page_zoom,
-                        &mut logical,
+                        &mut snap_w,
                         &frame,
                         &texts,
                     );
@@ -137,7 +138,9 @@ fn run(
         }
 
         // In-page navigations (link clicks) don't go through Cmd::Navigate.
-        {
+        // Throttled: url()/title() are main-thread round-trips.
+        if last_info.elapsed() >= Duration::from_millis(200) {
+            last_info = Instant::now();
             let url = view.url();
             let title = view.title();
             let mut i = info.lock().unwrap();
@@ -164,10 +167,9 @@ fn run(
         if last_cap.elapsed() >= Duration::from_millis(33) {
             last_cap = Instant::now();
             let gen = super::page_gen();
-            match view.take_snapshot_png() {
-                Ok(png) if super::page_gen() == gen => {
-                    if let Some(f) = png_to_frame(&png) {
-                        log(&format!("snap ok {}x{}", f.w, f.h));
+            match view.take_snapshot_rgba(Some(snap_w)) {
+                Ok((rgba, w, h)) if super::page_gen() == gen => {
+                    if let Some(f) = rgba_to_frame(&rgba, w, h) {
                         *frame.lock().unwrap() = Some(Arc::new(f));
                     }
                 }
@@ -176,16 +178,19 @@ fn run(
             }
         }
 
-        webkit::pump_run_loop(0.015);
+        // The process main thread pumps the CFRunLoop (see main.rs), so this
+        // thread only needs to pace itself between polls.
+        std::thread::sleep(Duration::from_millis(4));
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_cmd(
     cmd: Cmd,
     view: &WebView,
     overlay: &mut bool,
     page_zoom: &mut f64,
-    logical: &mut (f64, f64),
+    snap_w: &mut u32,
     frame: &Arc<Mutex<Option<Arc<Frame>>>>,
     texts: &Arc<Mutex<Vec<TextRun>>>,
 ) {
@@ -222,8 +227,8 @@ fn handle_cmd(
             let _ = view.reload();
         }
         Cmd::ResizePx(w, h) => {
-            logical.0 = w.max(1) as f64;
-            logical.1 = h.max(1) as f64;
+            *snap_w = w.max(1) as u32;
+            view.set_frame_size(w.max(1) as f64, h.max(1) as f64);
         }
         Cmd::Zoom(z) => {
             *page_zoom = z.max(0.01);
@@ -233,11 +238,11 @@ fn handle_cmd(
             let _ = view.evaluate_javascript(&s);
         }
         Cmd::Mouse { kind, x, y } => {
-            // Map TUI logical pixels → native WKWebView CSS pixels.
-            let sx = (x as f64) * (NATIVE_W / logical.0) / *page_zoom;
-            let sy = (y as f64) * (NATIVE_H / logical.1) / *page_zoom;
-            let js = mouse_sim_js(kind, sx.round() as i32, sy.round() as i32);
-            let _ = view.evaluate_javascript(&js);
+            // Viewport px → CSS px: the frame matches the TUI window, so only
+            // page zoom needs undoing (same convention as the Linux engine).
+            let cx = (x as f64 / *page_zoom).round() as i32;
+            let cy = (y as f64 / *page_zoom).round() as i32;
+            let _ = view.evaluate_javascript(&mouse_sim_js(kind, cx, cy));
         }
     }
 }
@@ -261,12 +266,17 @@ fn js_string_payload(s: &str) -> String {
     t.to_string()
 }
 
-fn png_to_frame(png: &[u8]) -> Option<Frame> {
-    let img = image::load_from_memory(png).ok()?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut rgb = Vec::with_capacity((w * h * 3) as usize);
-    for px in rgba.pixels() {
+/// RGBA (premultiplied over an effectively opaque page) → tightly packed RGB,
+/// compositing any transparency over white.
+fn rgba_to_frame(rgba: &[u8], w: u32, h: u32) -> Option<Frame> {
+    let px_count = (w as usize).checked_mul(h as usize)?;
+    if px_count == 0 || rgba.len() < px_count * 4 {
+        return None;
+    }
+    let mut rgb = Vec::with_capacity(px_count * 3);
+    // Bound the walk to w*h: the frame must be exactly w*h*3 bytes even if the
+    // snapshot buffer carries trailing slack.
+    for px in rgba[..px_count * 4].chunks_exact(4) {
         let a = px[3] as u32;
         for c in 0..3 {
             rgb.push(((px[c] as u32 * a + 255 * (255 - a)) / 255) as u8);
