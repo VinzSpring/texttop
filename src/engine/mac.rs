@@ -8,13 +8,13 @@
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use webkit::prelude::*;
 
 use super::{
-    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
-    EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
+    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, CookieInfo, DataKind, Frame, PageInfo,
+    Status, TextRun, EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
 /// Safety bound on the layout viewport, well above any real terminal.
@@ -60,22 +60,29 @@ pub struct Engine {
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
 }
 
 impl Engine {
-    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32) -> Engine {
+    /// `private` gives the view a non-persistent data store: cookies, caches
+    /// and local storage live in memory and die with the window.
+    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, private: bool) -> Engine {
         let (tx, rx) = mpsc::channel();
         let frame: Arc<Mutex<Option<Arc<Frame>>>> = Arc::new(Mutex::new(None));
         let info = Arc::new(Mutex::new(PageInfo::default()));
         let status = Arc::new(Mutex::new(Status::Starting));
         let texts: Arc<Mutex<Vec<TextRun>>> = Arc::new(Mutex::new(Vec::new()));
+        let cookies: Arc<Mutex<Vec<CookieInfo>>> = Arc::new(Mutex::new(Vec::new()));
         {
             let frame = frame.clone();
             let info = info.clone();
             let status = status.clone();
             let texts = texts.clone();
+            let cookies = cookies.clone();
             std::thread::spawn(move || {
-                run(rx, frame, info, status, texts, initial, zoom, (w, h))
+                run(
+                    rx, frame, info, status, texts, cookies, initial, zoom, (w, h), private,
+                )
             });
         }
         Engine {
@@ -84,6 +91,7 @@ impl Engine {
             info,
             status,
             texts,
+            cookies,
         }
     }
 
@@ -106,6 +114,12 @@ impl Engine {
     pub fn texts(&self) -> Vec<TextRun> {
         self.texts.lock().unwrap().clone()
     }
+
+    /// Cookies as of the last [`Cmd::RefreshCookies`] — reading the store is a
+    /// main-thread round-trip, so it happens on request, not every frame.
+    pub fn cookies(&self) -> Vec<CookieInfo> {
+        self.cookies.lock().unwrap().clone()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -115,13 +129,27 @@ fn run(
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
     initial: Cmd,
     zoom: f64,
     size0: (i32, i32),
+    private: bool,
 ) {
     webkit::init_app();
 
     let config = WebViewConfiguration::new();
+    // Private browsing is a property of the data store, and the store can only
+    // be chosen before the view exists — which is why the setting applies to
+    // newly opened windows rather than toggling the current one. A private
+    // store keeps cookies, caches and local storage in memory so they die with
+    // the window. The store is held for the engine's lifetime so the cookie and
+    // site-data commands can reach the same store the view uses.
+    let store = if private {
+        WebsiteDataStore::non_persistent()
+    } else {
+        WebsiteDataStore::default_data_store()
+    };
+    config.set_website_data_store(&store);
     // Allow video/audio autoplay without a prior gesture (video player).
     config.set_media_types_requiring_user_action_for_playback(AudiovisualMediaTypes::NONE);
     // The view is off-screen, so pages would otherwise see themselves as a
@@ -165,7 +193,7 @@ fn run(
         loop {
             match rx.try_recv() {
                 Ok(cmd) => {
-                    handle_cmd(cmd, &view, &mut st, &frame, &texts);
+                    handle_cmd(cmd, &view, &mut st, &frame, &texts, &cookies, &store);
                 }
                 Err(TryRecvError::Empty) => break,
                 // The app window closed and dropped the sender.
@@ -260,6 +288,8 @@ fn handle_cmd(
     st: &mut ViewState,
     frame: &Arc<Mutex<Option<Arc<Frame>>>>,
     texts: &Arc<Mutex<Vec<TextRun>>>,
+    cookies: &Arc<Mutex<Vec<CookieInfo>>>,
+    store: &WebsiteDataStore,
 ) {
     match cmd {
         Cmd::TextOverlay(on) => {
@@ -307,7 +337,62 @@ fn handle_cmd(
             let cy = (y as f64 * st.scale / st.page_zoom).round() as i32;
             let _ = view.evaluate_javascript(&mouse_sim_js(kind, cx, cy));
         }
+        Cmd::ClearData(kind) => {
+            // Removing everything modified since the epoch clears the lot.
+            if let Err(e) =
+                store.remove_data_modified_since(&data_types(kind), SystemTime::UNIX_EPOCH)
+            {
+                log(&format!("clear data err: {e}"));
+            }
+        }
+        Cmd::SetCookiePolicy(accept) => {
+            let policy = if accept {
+                CookiePolicy::Allow
+            } else {
+                CookiePolicy::Disallow
+            };
+            match store.http_cookie_store() {
+                Ok(cs) => {
+                    if let Err(e) = cs.set_cookie_policy(policy) {
+                        log(&format!("cookie policy err: {e}"));
+                    }
+                }
+                Err(e) => log(&format!("cookie store err: {e}")),
+            }
+        }
+        Cmd::RefreshCookies => read_cookies(store, cookies),
     }
+}
+
+fn data_types(kind: DataKind) -> Vec<WebsiteDataType> {
+    match kind {
+        DataKind::Cookies => vec![WebsiteDataType::cookies()],
+        DataKind::Cache => vec![
+            WebsiteDataType::disk_cache(),
+            WebsiteDataType::memory_cache(),
+            WebsiteDataType::fetch_cache(),
+        ],
+        DataKind::All => WebsiteDataStore::all_website_data_types(),
+    }
+}
+
+fn read_cookies(store: &WebsiteDataStore, out: &Arc<Mutex<Vec<CookieInfo>>>) {
+    let list = store
+        .http_cookie_store()
+        .and_then(|c| c.all_cookies())
+        .unwrap_or_default();
+    let mut v: Vec<CookieInfo> = list
+        .into_iter()
+        .map(|c| CookieInfo {
+            domain: c.domain,
+            name: c.name,
+            secure: c.secure,
+            http_only: c.http_only,
+            session_only: c.session_only,
+        })
+        .collect();
+    v.sort_by(|a, b| a.domain.cmp(&b.domain).then(a.name.cmp(&b.name)));
+    *out.lock().unwrap() = v;
 }
 
 fn apply_nav(view: &WebView, cmd: &Cmd) -> Result<(), WebKitError> {

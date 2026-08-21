@@ -86,6 +86,7 @@ pub mod sysinfo;
 pub mod terminal;
 pub mod videoplayer;
 pub mod webbrowser;
+pub mod webdata;
 
 use std::path::{Path, PathBuf};
 

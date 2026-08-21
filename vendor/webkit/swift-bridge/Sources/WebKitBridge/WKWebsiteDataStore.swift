@@ -24,12 +24,19 @@ final class WKWebsiteDataStoreBox: NSObject {
 
 @_cdecl("wk_website_data_store_default")
 public func wk_website_data_store_default() -> UnsafeMutableRawPointer {
-    wkRetain(WKWebsiteDataStoreBox(dataStore: WKWebsiteDataStore.default()))
+    // WKWebsiteDataStore.default() spins up WebKit's networking machinery and
+    // asserts it is on the main thread, so hop there like the rest of the bridge.
+    wkOnMain {
+        wkRetain(WKWebsiteDataStoreBox(dataStore: WKWebsiteDataStore.default()))
+    }
 }
 
 @_cdecl("wk_website_data_store_nonpersistent")
 public func wk_website_data_store_nonpersistent() -> UnsafeMutableRawPointer {
-    wkRetain(WKWebsiteDataStoreBox(dataStore: WKWebsiteDataStore.nonPersistent()))
+    // WKWebsiteDataStore.nonPersistent() is likewise main-thread-only.
+    wkOnMain {
+        wkRetain(WKWebsiteDataStoreBox(dataStore: WKWebsiteDataStore.nonPersistent()))
+    }
 }
 
 @_cdecl("wk_website_data_store_for_identifier")
@@ -64,22 +71,26 @@ public func wk_website_data_store_release(_ ptr: UnsafeMutableRawPointer?) {
 public func wk_website_data_store_is_persistent(_ ptr: UnsafeMutableRawPointer?) -> Bool {
     guard let ptr else { return false }
     let box: WKWebsiteDataStoreBox = wkBorrow(ptr)
-    return box.dataStore.isPersistent
+    return wkOnMain { box.dataStore.isPersistent }
 }
 
 @_cdecl("wk_website_data_store_copy_identifier")
 public func wk_website_data_store_copy_identifier(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<CChar>? {
     guard let ptr else { return nil }
     let box: WKWebsiteDataStoreBox = wkBorrow(ptr)
-    if #available(macOS 14.0, *), let identifier = box.dataStore.identifier {
-        return wkCString(identifier.uuidString)
+    return wkOnMain {
+        if #available(macOS 14.0, *), let identifier = box.dataStore.identifier {
+            return wkCString(identifier.uuidString)
+        }
+        return nil
     }
-    return nil
 }
 
 @_cdecl("wk_website_data_store_copy_all_data_types_json")
 public func wk_website_data_store_copy_all_data_types_json() -> UnsafeMutablePointer<CChar>? {
-    wkCString(wkJSONString(Array(WKWebsiteDataStore.allWebsiteDataTypes()).sorted()))
+    wkOnMain {
+        wkCString(wkJSONString(Array(WKWebsiteDataStore.allWebsiteDataTypes()).sorted()))
+    }
 }
 
 @_cdecl("wk_website_data_store_fetch_all_identifiers_json")
@@ -140,7 +151,9 @@ public func wk_website_data_store_remove_data_store_for_identifier(
 public func wk_website_data_store_copy_http_cookie_store(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
     guard let ptr else { return nil }
     let box: WKWebsiteDataStoreBox = wkBorrow(ptr)
-    return wkRetain(WKHTTPCookieStoreBox(cookieStore: box.dataStore.httpCookieStore))
+    return wkOnMain {
+        wkRetain(WKHTTPCookieStoreBox(cookieStore: box.dataStore.httpCookieStore))
+    }
 }
 
 @_cdecl("wk_website_data_store_fetch_data_records_json")

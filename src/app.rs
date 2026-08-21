@@ -999,9 +999,11 @@ impl Desktop {
             ("middle-click taskbar", "close that window"),
             ("right-click", "context menus everywhere"),
             ("F5", "clean dead desktop shortcuts"),
+            ("drag in terminal", "select · copies on release"),
+            ("Ctrl+Shift+C/V", "copy / paste in the terminal"),
             ("F12", "this overlay"),
         ];
-        let w = 54u16.min(self.screen.width.saturating_sub(2));
+        let w = 58u16.min(self.screen.width.saturating_sub(2));
         let h = (KEYS.len() as u16 + 4).min(self.screen.height.saturating_sub(2));
         let x = self.screen.width.saturating_sub(w) / 2;
         let y = self.screen.height.saturating_sub(h) / 3;

@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use super::{Cmd, Frame, PageInfo, Status, TextRun};
+use super::{Cmd, CookieInfo, Frame, PageInfo, Status, TextRun};
 
 pub struct Engine;
 
 impl Engine {
-    pub fn start(_initial: Cmd, _zoom: f64, _w: i32, _h: i32) -> Engine {
+    pub fn start(_initial: Cmd, _zoom: f64, _w: i32, _h: i32, _private: bool) -> Engine {
         Engine
     }
 
@@ -22,6 +22,10 @@ impl Engine {
     }
 
     pub fn texts(&self) -> Vec<TextRun> {
+        Vec::new()
+    }
+
+    pub fn cookies(&self) -> Vec<CookieInfo> {
         Vec::new()
     }
 
