@@ -322,6 +322,15 @@ impl AppWindow for Terminal {
         Action::None
     }
 
+    fn on_paste(&mut self, text: &str) -> Action {
+        // Forward the bracketing too, so a shell with paste protection on still
+        // treats a multi-line paste as one unit rather than running each line.
+        self.send(b"\x1b[200~");
+        self.send(text.as_bytes());
+        self.send(b"\x1b[201~");
+        Action::None
+    }
+
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
         match m.kind {
             MouseEventKind::ScrollUp => self.send(b"\x1b[A"),

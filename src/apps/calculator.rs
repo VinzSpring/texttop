@@ -8,6 +8,9 @@ use ratatui::Frame;
 use super::{Action, AppWindow};
 
 // macOS calculator palette
+/// Characters the expression evaluator understands.
+const EXPR_CHARS: &str = "0123456789+-*/()^.% eE";
+
 const BODY_BG: Color = Color::Rgb(38, 37, 42);
 const BTN_DIGIT: Color = Color::Rgb(89, 88, 94);
 const BTN_FUNC: Color = Color::Rgb(63, 62, 68);
@@ -269,12 +272,20 @@ impl AppWindow for Calculator {
             }
             KeyCode::Char('=') if !ctrl => self.evaluate(),
             KeyCode::Char(c) if !ctrl => {
-                if "0123456789+-*/()^.% eE".contains(c) {
+                if EXPR_CHARS.contains(c) {
                     self.expr.push(c);
                 }
             }
             _ => {}
         }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        // Same filter the keyboard uses, so a pasted expression cannot smuggle
+        // in characters the evaluator does not understand.
+        self.expr
+            .extend(text.chars().filter(|c| EXPR_CHARS.contains(*c)));
         Action::None
     }
 

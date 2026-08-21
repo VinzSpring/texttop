@@ -380,11 +380,9 @@ impl AppWindow for WebBrowser {
                     self.engine.send(Cmd::Navigate(url));
                     self.editing = false;
                 }
-                KeyCode::Backspace => {
-                    self.url_input.pop();
+                _ => {
+                    super::text_edit(&mut self.url_input, k);
                 }
-                KeyCode::Char(c) if !ctrl => self.url_input.push(c),
-                _ => {}
             }
             return Action::None;
         }
@@ -468,6 +466,14 @@ impl AppWindow for WebBrowser {
                 ));
             }
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        // Only meaningful while the URL bar has focus; Ctrl+L opens it.
+        if self.editing {
+            super::paste_line(&mut self.url_input, text);
         }
         Action::None
     }

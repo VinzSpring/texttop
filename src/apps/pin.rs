@@ -404,11 +404,9 @@ impl AppWindow for PinEditor {
                         self.editing = false;
                         self.sel = (self.sel + 1).min(ED_ROWS - 1);
                     }
-                    KeyCode::Backspace => {
-                        buf.pop();
+                    _ => {
+                        super::text_edit(buf, k);
                     }
-                    KeyCode::Char(c) => buf.push(c),
-                    _ => {}
                 }
                 return Action::None;
             }
@@ -437,6 +435,16 @@ impl AppWindow for PinEditor {
             },
             KeyCode::Esc => return Action::Close,
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if self.editing {
+            let sel = self.sel;
+            if let Some(buf) = self.buf_mut(sel) {
+                super::paste_line(buf, text);
+            }
         }
         Action::None
     }
@@ -563,11 +571,9 @@ impl AppWindow for PinPrompt {
                         self.sel += 1;
                         self.editing = self.sel < self.values.len();
                     }
-                    KeyCode::Backspace => {
-                        val.pop();
+                    _ => {
+                        super::text_edit(val, k);
                     }
-                    KeyCode::Char(c) => val.push(c),
-                    _ => {}
                 }
                 return Action::None;
             }
@@ -587,6 +593,15 @@ impl AppWindow for PinPrompt {
             }
             KeyCode::Esc => return Action::Close,
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if self.editing {
+            if let Some((_, val)) = self.values.get_mut(self.sel) {
+                super::paste_line(val, text);
+            }
         }
         Action::None
     }

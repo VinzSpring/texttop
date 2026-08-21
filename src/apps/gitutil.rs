@@ -17,7 +17,6 @@ pub enum GitLetter {
     Untracked,
     Unmerged,
     Ignored,
-    Clean,
 }
 
 impl GitLetter {
@@ -30,7 +29,6 @@ impl GitLetter {
             GitLetter::Untracked => '?',
             GitLetter::Unmerged => 'U',
             GitLetter::Ignored => '!',
-            GitLetter::Clean => ' ',
         }
     }
 
@@ -44,7 +42,6 @@ impl GitLetter {
             GitLetter::Untracked => Color::Rgb(140, 150, 170),
             GitLetter::Unmerged => Color::Rgb(255, 120, 200),
             GitLetter::Ignored => Color::Rgb(90, 95, 110),
-            GitLetter::Clean => Color::Rgb(80, 90, 110),
         }
     }
 
@@ -433,10 +430,6 @@ pub fn diff(root: &Path, path: Option<&Path>) -> String {
         args.push(&path_s);
     }
     run_git(root, &args).unwrap_or_else(|| "no diff".into())
-}
-
-pub fn diff_staged(root: &Path) -> String {
-    run_git(root, &["diff", "--cached", "--no-color"]).unwrap_or_else(|| "no staged diff".into())
 }
 
 pub fn stage(root: &Path, path: &Path) -> Result<(), String> {

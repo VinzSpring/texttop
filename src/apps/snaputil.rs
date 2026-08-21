@@ -20,11 +20,8 @@ const BLOBS_DIR: &str = "blobs";
 #[derive(Clone, Debug)]
 pub struct SnapMeta {
     pub id: String,
-    pub path: PathBuf,
-    pub name: String,
     pub ts_unix: i64,
     pub size: u64,
-    pub hash: String,
     pub note: String,
 }
 
@@ -97,22 +94,11 @@ fn save_index(root: &Path, index: &Value) -> Result<(), String> {
     f.write_all(s.as_bytes()).map_err(|e| e.to_string())
 }
 
-fn meta_from_value(path: &Path, v: &Value) -> Option<SnapMeta> {
+fn meta_from_value(v: &Value) -> Option<SnapMeta> {
     Some(SnapMeta {
         id: v.get("id")?.as_str()?.to_string(),
-        path: path.to_path_buf(),
-        name: v
-            .get("name")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string(),
         ts_unix: v.get("ts")?.as_i64()?,
         size: v.get("size")?.as_u64()?,
-        hash: v
-            .get("hash")
-            .and_then(|x| x.as_str())
-            .unwrap_or("")
-            .to_string(),
         note: v
             .get("note")
             .and_then(|x| x.as_str())
@@ -142,11 +128,8 @@ pub fn create_snapshot(path: &Path, note: &str) -> Result<SnapMeta, String> {
     let key = canonical_key(path);
     let meta = SnapMeta {
         id: id.clone(),
-        path: PathBuf::from(&key),
-        name: name.clone(),
         ts_unix: ts,
         size: bytes.len() as u64,
-        hash: hash.clone(),
         note: note.trim().to_string(),
     };
 
@@ -218,7 +201,7 @@ pub fn history(path: &Path) -> Vec<SnapMeta> {
     };
     let mut out: Vec<SnapMeta> = arr
         .iter()
-        .filter_map(|v| meta_from_value(Path::new(&key), v))
+        .filter_map(meta_from_value)
         .collect();
     out.sort_by(|a, b| b.ts_unix.cmp(&a.ts_unix));
     out
@@ -320,7 +303,7 @@ pub fn diff_texts(a_label: &str, a: &str, b_label: &str, b: &str) -> Vec<DiffLin
     let mut trail_eq = 0usize;
     let mut ctx_pending: Vec<DiffLine> = Vec::new();
 
-    let mut flush = |hunk_buf: &mut Vec<DiffLine>,
+    let flush = |hunk_buf: &mut Vec<DiffLine>,
                      out: &mut Vec<DiffLine>,
                      hunk_a0: usize,
                      a_count: usize,

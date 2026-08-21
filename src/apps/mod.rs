@@ -89,7 +89,7 @@ pub mod webbrowser;
 
 use std::path::{Path, PathBuf};
 
-use ratatui::crossterm::event::{KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -161,6 +161,10 @@ pub trait AppWindow {
         Action::None
     }
     fn on_tick(&mut self) {}
+    /// Text pasted into this window as a single clipboard event.
+    fn on_paste(&mut self, _text: &str) -> Action {
+        Action::None
+    }
     /// Whether this window can accept a file drop.
     fn accepts_drop(&self) -> bool {
         false
@@ -173,6 +177,43 @@ pub trait AppWindow {
     fn workspace_path(&self) -> Option<PathBuf> {
         None
     }
+}
+
+/// Apply a keypress to a single-line text field, returning true when the key
+/// was consumed so callers can fall through to their own bindings otherwise.
+/// Characters typed with Ctrl or Alt held are shortcuts, not text, and are
+/// left for the caller.
+pub fn text_edit(buf: &mut String, k: KeyEvent) -> bool {
+    match k.code {
+        KeyCode::Backspace => {
+            buf.pop();
+            true
+        }
+        KeyCode::Char(c)
+            if !k
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
+            buf.push(c);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Insert clipboard text into a single-line field. A newline would break the
+/// field, so only the first pasted line is taken.
+pub fn paste_line(buf: &mut String, text: &str) {
+    buf.push_str(text.lines().next().unwrap_or("").trim_end());
+}
+
+/// Xorshift64 PRNG step. The games only need cheap, non-cryptographic
+/// randomness, which is not worth a dependency.
+pub fn xorshift(s: &mut u64) -> u32 {
+    *s ^= *s << 13;
+    *s ^= *s >> 7;
+    *s ^= *s << 17;
+    (*s >> 32) as u32
 }
 
 /// Pick the right app for a file based on its extension.

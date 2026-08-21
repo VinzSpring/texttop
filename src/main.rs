@@ -1,5 +1,6 @@
 mod app;
 mod apps;
+mod clipboard;
 mod engine;
 mod gfx;
 #[cfg(test)]
@@ -12,7 +13,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use ratatui::crossterm::event::{
-    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    Event, KeyCode, KeyEventKind, KeyModifiers,
 };
 use ratatui::crossterm::execute;
 
@@ -44,7 +46,13 @@ fn main() -> Result<()> {
 fn tui_main() -> Result<()> {
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableMouseCapture)?;
+    // Without bracketed paste the terminal replays pasted text as ordinary key
+    // events, so a pasted path fires whatever single-key shortcuts its letters
+    // happen to be bound to. Ask for it as one event instead; terminals that do
+    // not support it simply ignore the sequence.
+    let _ = execute!(stdout(), EnableBracketedPaste);
     let res = run(&mut terminal);
+    let _ = execute!(stdout(), DisableBracketedPaste);
     let _ = execute!(stdout(), DisableMouseCapture);
     ratatui::restore();
     res
@@ -90,6 +98,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
                         desktop.on_key(k);
                     }
                     Event::Mouse(m) => desktop.on_mouse(m),
+                    Event::Paste(text) => desktop.on_paste(&text),
                     _ => {}
                 }
                 if !event::poll(Duration::ZERO)? {

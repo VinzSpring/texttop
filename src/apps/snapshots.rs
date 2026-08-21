@@ -331,11 +331,9 @@ impl AppWindow for SnapshotsApp {
                         Prompt::Note => self.create_now(&input),
                     }
                 }
-                KeyCode::Backspace => {
-                    input.pop();
+                _ => {
+                    super::text_edit(input, k);
                 }
-                KeyCode::Char(c) if !ctrl => input.push(c),
-                _ => {}
             }
             return Action::None;
         }
@@ -429,6 +427,13 @@ impl AppWindow for SnapshotsApp {
                     }
                 }
             }
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if let Some((_, input)) = &mut self.prompt {
+            super::paste_line(input, text);
         }
         Action::None
     }

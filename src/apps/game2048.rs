@@ -26,13 +26,6 @@ pub struct Game2048 {
     rng: u64,
 }
 
-fn xorshift(s: &mut u64) -> u32 {
-    *s ^= *s << 13;
-    *s ^= *s >> 7;
-    *s ^= *s << 17;
-    (*s >> 32) as u32
-}
-
 fn tile_color(v: u32) -> (Color, Color) {
     let bg = match v {
         2 => Color::Rgb(66, 72, 94),
@@ -96,8 +89,8 @@ impl Game2048 {
         if empty.is_empty() {
             return;
         }
-        let (x, y) = empty[(xorshift(&mut self.rng) as usize) % empty.len()];
-        self.grid[y][x] = if xorshift(&mut self.rng) % 10 == 0 { 4 } else { 2 };
+        let (x, y) = empty[(super::xorshift(&mut self.rng) as usize) % empty.len()];
+        self.grid[y][x] = if super::xorshift(&mut self.rng) % 10 == 0 { 4 } else { 2 };
     }
 
     /// Slide+merge one row leftward; returns (new row, gained score, moved).

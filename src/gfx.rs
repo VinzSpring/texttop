@@ -169,6 +169,8 @@ pub fn adapt_buffer(buf: &mut Buffer, area: Rect, truecolor: bool) {
 }
 
 /// The color the terminal actually paints for an xterm-256 index.
+/// Only the golden-file tests need this — the app maps the other direction.
+#[cfg(test)]
 pub fn palette_level(idx: u8) -> (u8, u8, u8) {
     if idx >= 232 {
         let v = 8 + (idx as u16 - 232) * 10;
@@ -503,17 +505,6 @@ pub fn fmt_dur(d: std::time::Duration) -> String {
 mod tests {
     use super::*;
 
-    /// Level rendered by the terminal for a given xterm-256 index.
-    fn level_of(idx: u8) -> (u8, u8, u8) {
-        if idx >= 232 {
-            let v = 8 + (idx as u16 - 232) * 10;
-            (v as u8, v as u8, v as u8)
-        } else {
-            let i = idx as usize - 16;
-            (CUBE[i / 36], CUBE[(i / 6) % 6], CUBE[i % 6])
-        }
-    }
-
     fn chroma(c: (u8, u8, u8)) -> u8 {
         c.0.max(c.1).max(c.2) - c.0.min(c.1).min(c.2)
     }
@@ -523,10 +514,10 @@ mod tests {
     /// ones (the gray ramp is off-limits there — it would erase the hue).
     fn assert_nearest_allowed(c: (u8, u8, u8)) {
         let got = to_ansi256(c.0, c.1, c.2);
-        let got_err = dist2(c, level_of(got));
+        let got_err = dist2(c, palette_level(got));
         let last = if chroma(c) > NEUTRAL_CHROMA { 231 } else { 255 };
         for idx in 16..=last {
-            let err = dist2(c, level_of(idx));
+            let err = dist2(c, palette_level(idx));
             assert!(
                 err >= got_err,
                 "{c:?}: picked {got} (err {got_err}) but {idx} is closer (err {err})",
@@ -586,7 +577,7 @@ mod tests {
         // to (0,0,95) and (95,95,95) — saturated blue and mid gray.
         for c in [(16, 19, 32), (4, 4, 10), (30, 30, 46), (24, 26, 38)] {
             let idx = to_ansi256(c.0, c.1, c.2);
-            let got = level_of(idx);
+            let got = palette_level(idx);
             assert!(
                 dist2(c, got) < 400,
                 "{c:?} -> index {idx} = {got:?}, too far off",
