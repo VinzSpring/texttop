@@ -162,6 +162,14 @@ path = "examples/22_async_data_store.rs"
 required-features = ["async"]
 
 [[example]]
+name = "94_window_modes"
+path = "examples/94_window_modes.rs"
+
+[[example]]
+name = "95_snap_bench"
+path = "examples/95_snap_bench.rs"
+
+[[example]]
 name = "96_page_diag"
 path = "examples/96_page_diag.rs"
 

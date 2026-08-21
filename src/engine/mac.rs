@@ -2,9 +2,8 @@
 //! WebKit bindings on a dedicated thread; raw RGBA snapshots (scaled to the
 //! logical viewport width) are converted into RGB frames for the TUI.
 //!
-//! The WKWebView frame tracks the TUI window size (Cmd::ResizePx), matching
-//! the Windows/Linux engines: pages lay out at the real viewport size and
-//! mouse coordinates map 1:1 (divided by page zoom).
+//! The view is hosted in a real (invisible, click-through) window and laid
+//! out at a capped viewport; see WINDOW_ALPHA and MAX_VIEW_W below.
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -16,6 +15,40 @@ use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
     EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
+
+/// Largest viewport we lay pages out at, and the window aspect is preserved
+/// within it.
+///
+/// Frame cost scales with the *layout* viewport, not the snapshot resolution:
+/// with a video playing, a 1712x1040 viewport costs ~81ms per capture (12fps)
+/// and stays ~75ms even when the snapshot is scaled down to 428px wide, while
+/// 856x520 costs ~30ms (33fps). Since the TUI only samples `width * 2`
+/// quadrants — 428 columns on a 214-cell window — a capped viewport throws
+/// away no detail the terminal could have shown, and buys back the frame rate.
+const MAX_VIEW_W: f64 = 960.0;
+const MAX_VIEW_H: f64 = 600.0;
+
+/// Fully transparent, so the hosting window is invisible; see `attach_window`.
+const WINDOW_ALPHA: f64 = 0.0;
+
+/// Fit `w`x`h` inside the cap, preserving aspect. Returns the viewport size
+/// and the CSS-pixels-per-TUI-pixel scale that mouse input must undo.
+fn capped_viewport(w: f64, h: f64) -> (f64, f64, f64) {
+    let (w, h) = (w.max(1.0), h.max(1.0));
+    let s = (MAX_VIEW_W / w).min(MAX_VIEW_H / h).min(1.0);
+    ((w * s).round().max(1.0), (h * s).round().max(1.0), s)
+}
+
+/// Engine state that commands mutate.
+struct ViewState {
+    overlay: bool,
+    page_zoom: f64,
+    /// Snapshot width, equal to the capped viewport width so one frame pixel
+    /// is one CSS pixel.
+    snap_w: u32,
+    /// CSS pixels per TUI pixel, from capping the viewport.
+    scale: f64,
+}
 
 pub struct Engine {
     tx: Sender<Cmd>,
@@ -104,14 +137,14 @@ fn run(
         }
     };
 
-    let mut page_zoom = zoom.max(0.01);
-    view.set_page_zoom(page_zoom);
-    // Snapshots are scaled to the logical width: keeps frames cheap and —
-    // crucially — matches the Windows/Linux engines, where 1 frame pixel ==
-    // 1 viewport point (the text overlay's mapping assumes this).
-    let mut snap_w = size0.0.max(1) as u32;
-    view.set_frame_size(size0.0.max(1) as f64, size0.1.max(1) as f64);
-    let mut overlay = false;
+    let mut st = ViewState {
+        overlay: false,
+        page_zoom: zoom.max(0.01),
+        snap_w: 1,
+        scale: 1.0,
+    };
+    view.set_page_zoom(st.page_zoom);
+    resize(&view, &mut st, size0.0, size0.1);
 
     if let Err(e) = apply_nav(&view, &initial) {
         *status.lock().unwrap() = Status::Error(format!("initial navigation failed: {e}"));
@@ -127,15 +160,7 @@ fn run(
         loop {
             match rx.try_recv() {
                 Ok(cmd) => {
-                    handle_cmd(
-                        cmd,
-                        &view,
-                        &mut overlay,
-                        &mut page_zoom,
-                        &mut snap_w,
-                        &frame,
-                        &texts,
-                    );
+                    handle_cmd(cmd, &view, &mut st, &frame, &texts);
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return,
@@ -158,7 +183,7 @@ fn run(
             i.title = title;
         }
 
-        if overlay && last_extract.elapsed() >= Duration::from_millis(300) {
+        if st.overlay && last_extract.elapsed() >= Duration::from_millis(300) {
             last_extract = Instant::now();
             match view.evaluate_javascript(EXTRACT_JS) {
                 Ok(json) => {
@@ -172,7 +197,7 @@ fn run(
         if last_cap.elapsed() >= Duration::from_millis(33) {
             last_cap = Instant::now();
             let gen = super::page_gen();
-            match view.take_snapshot_rgba(Some(snap_w)) {
+            match view.take_snapshot_rgba(Some(st.snap_w)) {
                 Ok((rgba, w, h)) if super::page_gen() == gen => {
                     if let Some(f) = rgba_to_frame(&rgba, w, h) {
                         *frame.lock().unwrap() = Some(Arc::new(f));
@@ -189,19 +214,31 @@ fn run(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Apply a capped viewport of `w`x`h` TUI pixels, keeping the hosting window
+/// in step.
+///
+/// The view must live in a real window. Without one the page is treated as a
+/// background tab: `requestAnimationFrame` is never serviced and `<video>`
+/// never decodes (`videoWidth` stays 0), so pages capture frozen. The window
+/// is fully transparent and click-through, so it is never seen.
+fn resize(view: &WebView, st: &mut ViewState, w: i32, h: i32) {
+    let (vw, vh, scale) = capped_viewport(w as f64, h as f64);
+    st.snap_w = vw as u32;
+    st.scale = scale;
+    view.set_frame_size(vw, vh);
+    view.attach_window(vw, vh, 1, WINDOW_ALPHA);
+}
+
 fn handle_cmd(
     cmd: Cmd,
     view: &WebView,
-    overlay: &mut bool,
-    page_zoom: &mut f64,
-    snap_w: &mut u32,
+    st: &mut ViewState,
     frame: &Arc<Mutex<Option<Arc<Frame>>>>,
     texts: &Arc<Mutex<Vec<TextRun>>>,
 ) {
     match cmd {
         Cmd::TextOverlay(on) => {
-            *overlay = on;
+            st.overlay = on;
             if !on {
                 texts.lock().unwrap().clear();
                 let _ = view.evaluate_javascript(REMOVE_STYLE_JS);
@@ -231,22 +268,18 @@ fn handle_cmd(
             clear_page_state(frame, texts);
             let _ = view.reload();
         }
-        Cmd::ResizePx(w, h) => {
-            *snap_w = w.max(1) as u32;
-            view.set_frame_size(w.max(1) as f64, h.max(1) as f64);
-        }
+        Cmd::ResizePx(w, h) => resize(view, st, w, h),
         Cmd::Zoom(z) => {
-            *page_zoom = z.max(0.01);
-            view.set_page_zoom(*page_zoom);
+            st.page_zoom = z.max(0.01);
+            view.set_page_zoom(st.page_zoom);
         }
         Cmd::Script(s) => {
             let _ = view.evaluate_javascript(&s);
         }
         Cmd::Mouse { kind, x, y } => {
-            // Viewport px → CSS px: the frame matches the TUI window, so only
-            // page zoom needs undoing (same convention as the Linux engine).
-            let cx = (x as f64 / *page_zoom).round() as i32;
-            let cy = (y as f64 / *page_zoom).round() as i32;
+            // TUI px -> CSS px: undo the viewport cap, then the page zoom.
+            let cx = (x as f64 * st.scale / st.page_zoom).round() as i32;
+            let cy = (y as f64 * st.scale / st.page_zoom).round() as i32;
             let _ = view.evaluate_javascript(&mouse_sim_js(kind, cx, cy));
         }
     }

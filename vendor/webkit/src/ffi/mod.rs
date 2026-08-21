@@ -208,6 +208,13 @@ unsafe extern "C" {
     pub fn wk_webview_set_allows_link_preview(ptr: *mut c_void, value: bool);
     pub fn wk_webview_get_allows_link_preview(ptr: *mut c_void) -> bool;
     pub fn wk_webview_set_frame_size(ptr: *mut c_void, width: f64, height: f64);
+    pub fn wk_webview_attach_window(
+        ptr: *mut c_void,
+        width: f64,
+        height: f64,
+        mode: i32,
+        alpha: f64,
+    );
     pub fn wk_webview_set_page_zoom(ptr: *mut c_void, value: f64);
     pub fn wk_webview_get_page_zoom(ptr: *mut c_void) -> f64;
     pub fn wk_webview_set_media_type(ptr: *mut c_void, value: *const c_char);

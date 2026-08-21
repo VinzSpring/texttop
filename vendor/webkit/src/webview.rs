@@ -861,6 +861,16 @@ impl WebView {
         unsafe { ffi::wk_webview_set_frame_size(self.ptr, width, height) }
     }
 
+    /// Host this view in a real window so the page gets a live compositor.
+    ///
+    /// Without one, `requestAnimationFrame` is never serviced and `<video>`
+    /// never decodes. `mode` 0 parks the window far off-screen (which macOS
+    /// occlusion detection defeats); `mode` 1 places it on-screen above other
+    /// windows at `alpha`, click-through.
+    pub fn attach_window(&self, width: f64, height: f64, mode: i32, alpha: f64) {
+        unsafe { ffi::wk_webview_attach_window(self.ptr, width, height, mode, alpha) }
+    }
+
     /// Sets the corresponding value on `WKWebView`.
     pub fn set_page_zoom(&self, value: f64) {
         unsafe { ffi::wk_webview_set_page_zoom(self.ptr, value) }

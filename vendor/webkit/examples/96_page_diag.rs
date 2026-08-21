@@ -66,6 +66,12 @@ fn main() {
     }
     let view = WebView::with_config(&config).expect("webview");
     view.set_frame_size(w, h);
+    if let Ok(m) = std::env::var("DIAG_WINMODE") {
+        let mode: i32 = m.parse().unwrap_or(1);
+        let alpha: f64 = std::env::var("DIAG_ALPHA").ok().and_then(|a| a.parse().ok()).unwrap_or(0.0);
+        view.attach_window(w, h, mode, alpha);
+        println!("attached window mode={mode} alpha={alpha}");
+    }
     if let Ok(ua) = std::env::var("DIAG_UA") {
         view.set_custom_user_agent(Some(&ua));
         println!("custom UA set");

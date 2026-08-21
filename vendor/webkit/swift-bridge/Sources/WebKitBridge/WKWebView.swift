@@ -809,6 +809,60 @@ public func wk_webview_set_frame_size(_ ptr: UnsafeMutableRawPointer?, _ width: 
     }
 }
 
+/// Host the web view in a real window so the page gets a live compositor.
+///
+/// A WKWebView with no window is treated as a background tab: visibilityState
+/// is `hidden`, requestAnimationFrame is never serviced, and <video> never
+/// decodes (videoWidth stays 0). `mode` selects how the window is placed:
+///
+///  0 - parked far off-screen. Mirrors the Windows engine, but macOS occlusion
+///      detection reports it as not visible, so the page stays hidden.
+///  1 - on-screen at the given alpha, above normal windows so nothing can
+///      occlude it. Click-through and, at a low enough alpha, invisible.
+@_cdecl("wk_webview_attach_window")
+public func wk_webview_attach_window(
+    _ ptr: UnsafeMutableRawPointer?,
+    _ width: Double,
+    _ height: Double,
+    _ mode: Int32,
+    _ alpha: Double
+) {
+    guard let ptr, width > 0, height > 0 else { return }
+    let box: WKWebViewBox = wkBorrow(ptr)
+    wkOnMain {
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        let window: NSWindow
+        if let existing = box.webView.window {
+            window = existing
+            window.setContentSize(NSSize(width: width, height: height))
+        } else {
+            window = NSWindow(
+                contentRect: rect,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.ignoresMouseEvents = true
+            window.hasShadow = false
+            window.contentView = box.webView
+        }
+        box.webView.frame = rect
+        window.alphaValue = alpha
+        if mode == 0 {
+            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.minimumWindow)))
+            window.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle, .stationary]
+            window.setFrameOrigin(NSPoint(x: -30000, y: -30000))
+        } else {
+            // Above normal windows so nothing occludes it, and on every space.
+            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.floatingWindow)))
+            window.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle, .stationary, .fullScreenAuxiliary]
+            window.setFrameOrigin(NSPoint(x: 0, y: 0))
+        }
+        window.orderFrontRegardless()
+    }
+}
+
 @_cdecl("wk_webview_set_page_zoom")
 public func wk_webview_set_page_zoom(_ ptr: UnsafeMutableRawPointer?, _ value: Double) {
     guard let ptr else { return }
