@@ -871,6 +871,15 @@ impl WebView {
         unsafe { ffi::wk_webview_attach_window(self.ptr, width, height, mode, alpha) }
     }
 
+    /// Remove this view from its hosting window and close that window.
+    ///
+    /// Required before dropping a view attached with [`Self::attach_window`]:
+    /// `NSWindow` retains its content view, so the web view would otherwise
+    /// outlive the handle and keep playing audio.
+    pub fn detach_window(&self) {
+        unsafe { ffi::wk_webview_detach_window(self.ptr) }
+    }
+
     /// Sets the corresponding value on `WKWebView`.
     pub fn set_page_zoom(&self, value: f64) {
         unsafe { ffi::wk_webview_set_page_zoom(self.ptr, value) }

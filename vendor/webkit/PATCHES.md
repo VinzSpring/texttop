@@ -22,6 +22,7 @@ diff -ru webkit-0.3.11 vendor/webkit --exclude=Cargo.lock --exclude=Cargo.toml.o
 | `WebView::take_snapshot_rgba(pixel_width)` | `src/webview.rs`, `src/ffi/mod.rs`, `swift-bridge/.../WKWebView.swift` |
 | `webkit::drain_main()` | `src/lib.rs`, `src/ffi/mod.rs`, `swift-bridge/.../Core.swift` |
 | `WebView::attach_window(w, h, mode, alpha)` | `src/webview.rs`, `src/ffi/mod.rs`, `swift-bridge/.../WKWebView.swift` |
+| `WebView::detach_window()` | `src/webview.rs`, `src/ffi/mod.rs`, `swift-bridge/.../WKWebView.swift` |
 
 `set_frame_size` resizes the off-screen `WKWebView` so the page lays out at the
 real TUI viewport size. Upstream only ever creates the view at a fixed 800×600.
@@ -34,6 +35,10 @@ off-screen — the Windows engine's trick, which macOS occlusion detection
 defeats — and `mode` 1 places it on-screen above other windows at a given
 alpha. At alpha 0 it is invisible and click-through, and the page behaves
 like a normal tab.
+
+`detach_window` is its counterpart and is required before dropping an attached
+view. `NSWindow` retains its content view, so releasing the Rust handle alone
+leaves the page alive and playing audio after its tab is closed.
 
 `take_snapshot_rgba` returns raw premultiplied-RGBA pixels scaled to an exact
 pixel width, instead of upstream's `take_snapshot_png`. This skips a PNG
@@ -82,6 +87,12 @@ cargo run --release --example 98_texttop_verify --manifest-path vendor/webkit/Ca
 ```
 
 `examples/99_resize_check.rs` is a smaller timing/lay-out sanity check.
+
+`examples/93_teardown.rs` checks that closing a tab actually stops its audio.
+`TEARDOWN_SKIP=1` drops the handle without detaching to reproduce the leak;
+sample it from another shell with `pmset -g assertions`, which shows the
+process still holding `com.apple.WebCore: HTMLMediaElement playback` in the
+leaking case and nothing once detached.
 
 `examples/94_window_modes.rs` compares the window placements above on a real
 video page, reporting visibility state, whether rAF fires, whether `<video>`

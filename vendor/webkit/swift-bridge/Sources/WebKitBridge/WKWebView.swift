@@ -863,6 +863,24 @@ public func wk_webview_attach_window(
     }
 }
 
+/// Take the view out of its hosting window and close the window.
+///
+/// `NSWindow` retains its `contentView`, so a view attached by
+/// `wk_webview_attach_window` outlives the Rust handle: releasing the box is
+/// not enough, and a page carries on playing audio after its tab is gone.
+@_cdecl("wk_webview_detach_window")
+public func wk_webview_detach_window(_ ptr: UnsafeMutableRawPointer?) {
+    guard let ptr else { return }
+    let box: WKWebViewBox = wkBorrow(ptr)
+    wkOnMain {
+        guard let window = box.webView.window else { return }
+        box.webView.removeFromSuperview()
+        window.contentView = NSView(frame: .zero)
+        window.orderOut(nil)
+        window.close()
+    }
+}
+
 @_cdecl("wk_webview_set_page_zoom")
 public func wk_webview_set_page_zoom(_ ptr: UnsafeMutableRawPointer?, _ value: Double) {
     guard let ptr else { return }

@@ -152,6 +152,7 @@ fn run(
 
     if let Err(e) = apply_nav(&view, &initial) {
         *status.lock().unwrap() = Status::Error(format!("initial navigation failed: {e}"));
+        shutdown(&view);
         return;
     }
     *status.lock().unwrap() = Status::Ready;
@@ -167,7 +168,11 @@ fn run(
                     handle_cmd(cmd, &view, &mut st, &frame, &texts);
                 }
                 Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => return,
+                // The app window closed and dropped the sender.
+                Err(TryRecvError::Disconnected) => {
+                    shutdown(&view);
+                    return;
+                }
             }
         }
 
@@ -216,6 +221,22 @@ fn run(
         // thread only needs to pace itself between polls.
         std::thread::sleep(Duration::from_millis(4));
     }
+}
+
+/// Stop everything the page is doing and release the hosting window.
+///
+/// Dropping the `WebView` is not enough on its own: the window created by
+/// `attach_window` retains it as its content view, so the page survives its
+/// tab being closed and carries on playing audio. Media is paused explicitly
+/// first, because a page can hold references that keep it alive regardless.
+fn shutdown(view: &WebView) {
+    let _ = view.evaluate_javascript(
+        "(function(){try{document.querySelectorAll('video,audio')\
+         .forEach(function(m){m.pause();m.muted=true;m.removeAttribute('src');m.load();});\
+         }catch(e){}})()",
+    );
+    let _ = view.load_html("", None);
+    view.detach_window();
 }
 
 /// Apply a capped viewport of `w`x`h` TUI pixels, keeping the hosting window
