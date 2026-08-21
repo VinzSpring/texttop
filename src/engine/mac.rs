@@ -2,8 +2,9 @@
 //! WebKit bindings on a dedicated thread; raw RGBA snapshots (scaled to the
 //! logical viewport width) are converted into RGB frames for the TUI.
 //!
-//! The view is hosted in a real (invisible, click-through) window and laid
-//! out at a capped viewport; see WINDOW_ALPHA and MAX_VIEW_W below.
+//! The view is hosted in a real (invisible, click-through) window, without
+//! which pages never composite; see `resize` and WINDOW_ALPHA below. The
+//! layout viewport tracks the TUI window so pages get their true CSS width.
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -16,23 +17,26 @@ use super::{
     EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
-/// Largest viewport we lay pages out at, and the window aspect is preserved
-/// within it.
+/// Safety bound on the layout viewport, well above any real terminal.
 ///
-/// Frame cost scales with the *layout* viewport, not the snapshot resolution:
-/// with a video playing, a 1712x1040 viewport costs ~81ms per capture (12fps)
-/// and stays ~75ms even when the snapshot is scaled down to 428px wide, while
-/// 856x520 costs ~30ms (33fps). Since the TUI only samples `width * 2`
-/// quadrants — 428 columns on a 214-cell window — a capped viewport throws
-/// away no detail the terminal could have shown, and buys back the frame rate.
-const MAX_VIEW_W: f64 = 960.0;
-const MAX_VIEW_H: f64 = 600.0;
+/// The viewport tracks the TUI window so pages get their true CSS width and
+/// lay out like a desktop browser. Shrinking it does buy frame rate — capture
+/// cost tracks the layout viewport, not the snapshot resolution, so a video
+/// at 1712x1040 costs ~81ms per frame against ~30ms at 856x520 — but it also
+/// narrows the page, and sites with a min-width (YouTube's consent dialog
+/// among them) then overflow horizontally and the crisp-text overlay spreads
+/// words apart, because a cell no longer corresponds to CELL_PX_W CSS pixels.
+/// Fidelity wins; this bound only exists so an enormous terminal cannot ask
+/// for an absurd surface.
+const MAX_VIEW_W: f64 = 2560.0;
+const MAX_VIEW_H: f64 = 1600.0;
 
 /// Fully transparent, so the hosting window is invisible; see `attach_window`.
 const WINDOW_ALPHA: f64 = 0.0;
 
-/// Fit `w`x`h` inside the cap, preserving aspect. Returns the viewport size
-/// and the CSS-pixels-per-TUI-pixel scale that mouse input must undo.
+/// Fit `w`x`h` inside [`MAX_VIEW_W`]/[`MAX_VIEW_H`], preserving aspect.
+/// Returns the viewport size and the CSS-pixels-per-TUI-pixel scale that
+/// mouse input must undo — 1.0 unless the bound actually bit.
 fn capped_viewport(w: f64, h: f64) -> (f64, f64, f64) {
     let (w, h) = (w.max(1.0), h.max(1.0));
     let s = (MAX_VIEW_W / w).min(MAX_VIEW_H / h).min(1.0);
