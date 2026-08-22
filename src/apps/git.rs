@@ -495,11 +495,9 @@ impl AppWindow for GitApp {
                         }
                     }
                 }
-                KeyCode::Backspace => {
-                    input.pop();
+                _ => {
+                    super::text_edit(input, k);
                 }
-                KeyCode::Char(c) if !ctrl => input.push(c),
-                _ => {}
             }
             return Action::None;
         }
@@ -628,6 +626,13 @@ impl AppWindow for GitApp {
                 self.load_diff_for_sel();
             }
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if let Some((_, input)) = &mut self.prompt {
+            super::paste_line(input, text);
         }
         Action::None
     }

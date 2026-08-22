@@ -1046,9 +1046,11 @@ impl Desktop {
             ("middle-click taskbar", "close that window"),
             ("right-click", "context menus everywhere"),
             ("F5", "clean dead desktop shortcuts"),
+            ("drag in terminal", "select · copies on release"),
+            ("Ctrl+Shift+C/V", "copy / paste in the terminal"),
             ("F12", "this overlay"),
         ];
-        let w = 54u16.min(self.screen.width.saturating_sub(2));
+        let w = 58u16.min(self.screen.width.saturating_sub(2));
         let h = (KEYS.len() as u16 + 4).min(self.screen.height.saturating_sub(2));
         let x = self.screen.width.saturating_sub(w) / 2;
         let y = self.screen.height.saturating_sub(h) / 3;
@@ -1250,15 +1252,11 @@ impl Desktop {
                         self.activate_menu(MENU[mi].1);
                     }
                 }
-                KeyCode::Backspace => {
-                    self.start_filter.pop();
-                    self.start_sel = 0;
+                _ => {
+                    if crate::apps::text_edit(&mut self.start_filter, k) {
+                        self.start_sel = 0;
+                    }
                 }
-                KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.start_filter.push(c);
-                    self.start_sel = 0;
-                }
-                _ => {}
             }
             return;
         }
@@ -1399,6 +1397,20 @@ impl Desktop {
                 _ => {}
             }
         }
+    }
+
+    /// Route a clipboard paste to the focused window. The start menu's filter
+    /// takes it first when that is what has focus.
+    pub fn on_paste(&mut self, text: &str) {
+        if self.start_open {
+            self.start_filter.push_str(text.trim());
+            self.start_sel = 0;
+            return;
+        }
+        let Some(i) = self.top_idx() else { return };
+        let id = self.windows[i].id;
+        let action = self.windows[i].app.on_paste(text);
+        self.process(id, action);
     }
 
     pub fn on_mouse(&mut self, m: MouseEvent) {
@@ -2245,106 +2257,51 @@ impl Desktop {
     }
 
     fn activate_menu(&mut self, action: MenuAction) {
-        match action {
+        // Most entries just open a window and dismiss the start menu; the few
+        // that act on the desktop itself return early.
+        let launch = match action {
             MenuAction::Files => {
                 let root = if cfg!(windows) { "C:\\" } else { "/" };
-                let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from(root));
-                self.spawn(Launch::Files(home));
-                self.start_open = false;
+                Launch::Files(dirs::home_dir().unwrap_or_else(|| PathBuf::from(root)))
             }
-            MenuAction::Web => {
-                self.spawn(Launch::Web(None));
-                self.start_open = false;
-            }
-            MenuAction::Terminal => {
-                self.spawn(Launch::Terminal {
-                    program: None,
-                    args: Vec::new(),
-                    cwd: None,
-                });
-                self.start_open = false;
-            }
-            MenuAction::AppHost => {
-                self.spawn(Launch::AppHost { cmd: None });
-                self.start_open = false;
-            }
-            MenuAction::VsCode => {
-                self.spawn(Launch::AppHost {
-                    cmd: Some(
-                        r"C:\Program Files\Microsoft VS Code\Code.exe".into(),
-                    ),
-                });
-                self.start_open = false;
-            }
-            MenuAction::Editor => {
-                self.spawn(Launch::Editor(None));
-                self.start_open = false;
-            }
-            MenuAction::Git => {
-                self.spawn(Launch::Git(self.active_git_root.clone()));
-                self.start_open = false;
-            }
-            MenuAction::Search => {
-                self.spawn(Launch::Search(self.active_git_root.clone()));
-                self.start_open = false;
-            }
-            MenuAction::Processes => {
-                self.spawn(Launch::Processes);
-                self.start_open = false;
-            }
-            MenuAction::Calculator => {
-                self.spawn(Launch::Calculator);
-                self.start_open = false;
-            }
-            MenuAction::Clock => {
-                self.spawn(Launch::Clock);
-                self.start_open = false;
-            }
-            MenuAction::Calendar => {
-                self.spawn(Launch::Calendar);
-                self.start_open = false;
-            }
-            MenuAction::Notes => {
-                self.spawn(Launch::Notes);
-                self.start_open = false;
-            }
-            MenuAction::Hex => {
-                self.spawn(Launch::Hex(None));
-                self.start_open = false;
-            }
-            MenuAction::SysInfo => {
-                self.spawn(Launch::SysInfo);
-                self.start_open = false;
-            }
-            MenuAction::Snake => {
-                self.spawn(Launch::Snake);
-                self.start_open = false;
-            }
-            MenuAction::Minesweeper => {
-                self.spawn(Launch::Minesweeper);
-                self.start_open = false;
-            }
-            MenuAction::Game2048 => {
-                self.spawn(Launch::Game2048);
-                self.start_open = false;
-            }
-            MenuAction::Wallpaper => {
-                self.spawn(Launch::Wallpaper);
-                self.start_open = false;
-            }
+            MenuAction::Web => Launch::Web(None),
+            MenuAction::Terminal => Launch::Terminal {
+                program: None,
+                args: Vec::new(),
+                cwd: None,
+            },
+            MenuAction::AppHost => Launch::AppHost { cmd: None },
+            MenuAction::VsCode => Launch::AppHost {
+                cmd: Some(r"C:\Program Files\Microsoft VS Code\Code.exe".into()),
+            },
+            MenuAction::Editor => Launch::Editor(None),
+            MenuAction::Git => Launch::Git(self.active_git_root.clone()),
+            MenuAction::Search => Launch::Search(self.active_git_root.clone()),
+            MenuAction::Processes => Launch::Processes,
+            MenuAction::Calculator => Launch::Calculator,
+            MenuAction::Clock => Launch::Clock,
+            MenuAction::Calendar => Launch::Calendar,
+            MenuAction::Notes => Launch::Notes,
+            MenuAction::Hex => Launch::Hex(None),
+            MenuAction::SysInfo => Launch::SysInfo,
+            MenuAction::Snake => Launch::Snake,
+            MenuAction::Minesweeper => Launch::Minesweeper,
+            MenuAction::Game2048 => Launch::Game2048,
+            MenuAction::About => Launch::About,
+            MenuAction::Wallpaper => Launch::Wallpaper,
             MenuAction::Keys => {
                 self.show_keys = true;
                 self.start_open = false;
-            }
-            MenuAction::About => {
-                self.spawn(Launch::About);
-                self.start_open = false;
+                return;
             }
             MenuAction::Quit => {
                 self.save_session();
                 self.should_quit = true;
+                return;
             }
-        }
+        };
+        self.spawn(launch);
+        self.start_open = false;
     }
 
     fn spawn(&mut self, launch: Launch) {

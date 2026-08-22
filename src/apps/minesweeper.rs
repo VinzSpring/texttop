@@ -63,13 +63,6 @@ pub struct Minesweeper {
     rng: u64,
 }
 
-fn xorshift(s: &mut u64) -> u32 {
-    *s ^= *s << 13;
-    *s ^= *s >> 7;
-    *s ^= *s << 17;
-    (*s >> 32) as u32
-}
-
 impl Minesweeper {
     pub fn new() -> Self {
         let seed = SystemTime::now()
@@ -144,7 +137,7 @@ impl Minesweeper {
         let n = self.w * self.h;
         let mut placed = 0;
         while placed < self.mines.min(n.saturating_sub(safe.len())) {
-            let i = (xorshift(&mut self.rng) as usize) % n;
+            let i = (super::xorshift(&mut self.rng) as usize) % n;
             if self.mine[i] || safe.contains(&i) {
                 continue;
             }

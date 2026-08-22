@@ -256,21 +256,28 @@ public func wk_config_set_website_data_store(
     guard let ptr, let storePtr else { return }
     let box: WKConfigBox = wkBorrow(ptr)
     let storeBox: WKWebsiteDataStoreBox = wkBorrow(storePtr)
-    box.config.websiteDataStore = storeBox.dataStore
+    wkOnMain {
+        box.config.websiteDataStore = storeBox.dataStore
+    }
 }
 
 @_cdecl("wk_config_copy_website_data_store")
 public func wk_config_copy_website_data_store(_ ptr: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer? {
     guard let ptr else { return nil }
     let box: WKConfigBox = wkBorrow(ptr)
-    return wkRetain(WKWebsiteDataStoreBox(dataStore: box.config.websiteDataStore))
+    return wkOnMain {
+        wkRetain(WKWebsiteDataStoreBox(dataStore: box.config.websiteDataStore))
+    }
 }
 
 @_cdecl("wk_config_use_nonpersistent_data_store")
 public func wk_config_use_nonpersistent_data_store(_ ptr: UnsafeMutableRawPointer?) {
     guard let ptr else { return }
     let box: WKConfigBox = wkBorrow(ptr)
-    box.config.websiteDataStore = .nonPersistent()
+    // .nonPersistent() is main-thread-only; hop like the rest of the bridge.
+    wkOnMain {
+        box.config.websiteDataStore = .nonPersistent()
+    }
 }
 
 @_cdecl("wk_config_add_content_rule_list")

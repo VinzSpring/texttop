@@ -44,6 +44,27 @@ pub enum Status {
     Error(String),
 }
 
+/// Kinds of stored site data the engine can drop.
+#[derive(Clone, Copy, PartialEq)]
+pub enum DataKind {
+    Cookies,
+    Cache,
+    /// Everything WebKit keeps for a site: cookies, caches, local storage,
+    /// IndexedDB, service workers.
+    All,
+}
+
+/// One stored cookie, for the browser's cookie inspector. Deliberately no
+/// value — showing session tokens on screen buys nothing and leaks plenty.
+#[derive(Clone)]
+pub struct CookieInfo {
+    pub domain: String,
+    pub name: String,
+    pub secure: bool,
+    pub http_only: bool,
+    pub session_only: bool,
+}
+
 #[derive(Clone, Copy)]
 pub enum MouseKind {
     Move,
@@ -67,6 +88,13 @@ pub enum Cmd {
     /// made transparent in the pixel frame and extracted as positioned
     /// words so the TUI can draw it with real terminal characters.
     TextOverlay(bool),
+    /// Drop stored site data of this kind.
+    ClearData(DataKind),
+    /// Whether to accept cookies from here on. Existing ones are untouched —
+    /// pair it with [`Cmd::ClearData`] to start clean.
+    SetCookiePolicy(bool),
+    /// Re-read the cookie store into [`Engine::cookies`].
+    RefreshCookies,
 }
 
 /// One extracted word (CSS pixel coordinates).

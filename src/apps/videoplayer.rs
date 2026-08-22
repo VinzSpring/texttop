@@ -37,7 +37,7 @@ impl VideoPlayer {
         let abs = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
         let (engine, error) = match url::Url::from_file_path(&abs) {
             Ok(u) => (
-                Some(Engine::start(Cmd::Navigate(u.to_string()), 1.0, 800, 450)),
+                Some(Engine::start(Cmd::Navigate(u.to_string()), 1.0, 800, 450, false)),
                 None,
             ),
             Err(_) => (None, Some("invalid file path".to_string())),

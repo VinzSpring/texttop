@@ -535,11 +535,9 @@ impl AppWindow for AppLauncher {
                     if let Some(target) = target {
                         match k.code {
                             KeyCode::Esc | KeyCode::Enter => self.editing = false,
-                            KeyCode::Backspace => {
-                                target.pop();
+                            _ => {
+                                super::text_edit(target, k);
                             }
-                            KeyCode::Char(c) => target.push(c),
-                            _ => {}
                         }
                         return Action::None;
                     }
@@ -597,6 +595,18 @@ impl AppWindow for AppLauncher {
                     KeyCode::Esc => return Action::Close,
                     _ => {}
                 }
+            }
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if let (true, Stage::Form(p)) = (self.editing, &mut self.stage) {
+            let rows = Self::form_rows(p);
+            match rows.get(self.sel) {
+                Some(FormRow::Opt(o)) => super::paste_line(&mut p.opts[*o].value, text),
+                Some(FormRow::Extra) => super::paste_line(&mut self.extra, text),
+                _ => {}
             }
         }
         Action::None

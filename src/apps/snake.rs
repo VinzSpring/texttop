@@ -40,13 +40,6 @@ pub struct Snake {
     rng: u64,
 }
 
-fn xorshift(s: &mut u64) -> u32 {
-    *s ^= *s << 13;
-    *s ^= *s >> 7;
-    *s ^= *s << 17;
-    (*s >> 32) as u32
-}
-
 impl Snake {
     pub fn new() -> Self {
         let seed = SystemTime::now()
@@ -92,8 +85,8 @@ impl Snake {
             return;
         }
         for _ in 0..512 {
-            let x = (xorshift(&mut self.rng) % gw as u32) as i16;
-            let y = (xorshift(&mut self.rng) % gh as u32) as i16;
+            let x = (super::xorshift(&mut self.rng) % gw as u32) as i16;
+            let y = (super::xorshift(&mut self.rng) % gh as u32) as i16;
             if !self.body.contains(&(x, y)) {
                 self.food = (x, y);
                 return;

@@ -4,9 +4,12 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{
+    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -24,6 +27,13 @@ pub struct Terminal {
     size: (u16, u16),
     exited: bool,
     error: Option<String>,
+    /// Mouse selection over the visible grid, as (anchor, cursor) in
+    /// (row, col). Either end may come first — [`Terminal::sel_span`] orders
+    /// them.
+    sel: Option<((u16, u16), (u16, u16))>,
+    /// When the last copy happened, so the confirmation can fade out. Copying
+    /// silently replaces the system clipboard, which is worth showing.
+    copied: Option<(Instant, usize)>,
 }
 
 impl Terminal {
@@ -56,6 +66,8 @@ impl Terminal {
             size: (cols, rows),
             exited: false,
             error: None,
+            sel: None,
+            copied: None,
         };
 
         let pty = native_pty_system();
@@ -152,6 +164,50 @@ impl Terminal {
         term
     }
 
+    /// How long the "copied" confirmation stays up.
+    const COPIED_FOR: Duration = Duration::from_millis(1600);
+
+    fn sel_span(&self) -> Option<((u16, u16), (u16, u16))> {
+        span(self.sel?)
+    }
+
+    fn selected_text(&self) -> Option<String> {
+        let span = self.sel_span()?;
+        let parser = self.parser.lock().ok()?;
+        Some(grab(parser.screen(), span))
+    }
+
+    fn copy_selection(&mut self) {
+        match self.selected_text().filter(|t| !t.is_empty()) {
+            Some(text) => {
+                let n = text.chars().count();
+                crate::clipboard::copy(&text);
+                self.copied = Some((Instant::now(), n));
+            }
+            None => self.copied = None,
+        }
+    }
+
+    /// Send clipboard text to the child, bracketed so a shell with paste
+    /// protection treats a multi-line paste as one unit instead of running
+    /// each line as it arrives.
+    fn paste_text(&mut self, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+        self.send(b"\x1b[200~");
+        self.send(text.as_bytes());
+        self.send(b"\x1b[201~");
+    }
+
+    /// Grid cell under the pointer, clamped to the window.
+    fn cell_at(m: MouseEvent, area: Rect) -> (u16, u16) {
+        (
+            m.row.saturating_sub(area.y).min(area.height.saturating_sub(1)),
+            m.column.saturating_sub(area.x).min(area.width.saturating_sub(1)),
+        )
+    }
+
     fn send(&mut self, bytes: &[u8]) {
         if let Some(w) = &mut self.writer {
             let _ = w.write_all(bytes);
@@ -172,6 +228,38 @@ impl Terminal {
             vt100::Color::Rgb(r, g, b) => Color::Rgb(r, g, b),
         }
     }
+}
+
+/// Order a selection top-left to bottom-right, with the end column exclusive.
+/// None for a bare click, which has no extent.
+fn span((a, b): ((u16, u16), (u16, u16))) -> Option<((u16, u16), (u16, u16))> {
+    if a == b {
+        return None;
+    }
+    let (start, (er, ec)) = if a <= b { (a, b) } else { (b, a) };
+    // Both ends are cells the pointer touched, so the far one is inside the
+    // selection — without this the last character never comes along.
+    Some((start, (er, ec + 1)))
+}
+
+/// Read selected cells off the vt100 grid. Rows are trimmed on the right, the
+/// way every terminal copies: the cells past the end of a line are blanks the
+/// emulator painted, not spaces the user typed.
+fn grab(screen: &vt100::Screen, ((sr, sc), (er, ec)): ((u16, u16), (u16, u16))) -> String {
+    let (rows, cols) = screen.size();
+    let mut out: Vec<String> = Vec::new();
+    for row in sr..=er.min(rows.saturating_sub(1)) {
+        let from = if row == sr { sc } else { 0 };
+        let to = if row == er { ec } else { cols };
+        let mut line = String::new();
+        for col in from..to.min(cols) {
+            if let Some(c) = screen.cell(row, col) {
+                line.push_str(&c.contents());
+            }
+        }
+        out.push(line.trim_end().to_string());
+    }
+    out.join("\n")
 }
 
 impl Drop for Terminal {
@@ -223,6 +311,7 @@ impl AppWindow for Terminal {
                 .set_size(area.height, area.width);
         }
 
+        let sel = self.sel_span();
         let parser = self.parser.lock().unwrap();
         let screen = parser.screen();
         let buf = f.buffer_mut();
@@ -266,6 +355,20 @@ impl AppWindow for Terminal {
                 }
             }
         }
+        // selection, over the grid the shell drew
+        if let Some(((sr, sc), (er, ec))) = sel {
+            let bg = Color::Rgb(46, 70, 116);
+            for row in sr..=er.min(area.height.saturating_sub(1)) {
+                let from = if row == sr { sc } else { 0 };
+                let to = if row == er { ec } else { area.width };
+                for col in from..to.min(area.width) {
+                    if let Some(c) = buf.cell_mut((area.x + col, area.y + row)) {
+                        c.set_bg(bg);
+                    }
+                }
+            }
+        }
+
         // cursor
         if focused && !self.exited && !screen.hide_cursor() {
             let (crow, ccol) = screen.cursor_position();
@@ -273,6 +376,20 @@ impl AppWindow for Terminal {
                 if let Some(c) = buf.cell_mut((area.x + ccol, area.y + crow)) {
                     c.modifier |= Modifier::REVERSED;
                 }
+            }
+        }
+        if let Some((at, n)) = self.copied {
+            if at.elapsed() < Self::COPIED_FOR {
+                let msg = format!(" ✓ copied {n} chars ");
+                let x = area.x + area.width.saturating_sub(msg.len() as u16) / 2;
+                buf.set_string(
+                    x,
+                    area.y,
+                    &msg,
+                    Style::default()
+                        .fg(Color::Rgb(140, 230, 170))
+                        .bg(Color::Rgb(20, 44, 30)),
+                );
             }
         }
         if self.exited {
@@ -292,6 +409,29 @@ impl AppWindow for Terminal {
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        let shift = k.modifiers.contains(KeyModifiers::SHIFT);
+        let sup = k.modifiers.contains(KeyModifiers::SUPER);
+
+        // Copy and paste have to be shifted here: plain Ctrl+C is SIGINT and
+        // Ctrl+V is the shell's literal-next, and a terminal that cannot send
+        // those is not a terminal.
+        match k.code {
+            KeyCode::Char(c) if (ctrl && shift || sup) && c.eq_ignore_ascii_case(&'c') => {
+                self.copy_selection();
+                return Action::None;
+            }
+            KeyCode::Char(c) if (ctrl && shift || sup) && c.eq_ignore_ascii_case(&'v') => {
+                let text = crate::clipboard::paste();
+                self.paste_text(&text);
+                self.sel = None;
+                return Action::None;
+            }
+            _ => {}
+        }
+        // Anything else is input for the child, and scrolls the selection out
+        // from under the user.
+        self.sel = None;
+
         let bytes: Vec<u8> = match k.code {
             KeyCode::Char(c) if ctrl => {
                 let u = (c.to_ascii_uppercase() as u8).wrapping_sub(b'@');
@@ -322,10 +462,41 @@ impl AppWindow for Terminal {
         Action::None
     }
 
-    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+    fn on_paste(&mut self, text: &str) -> Action {
+        // Forward the bracketing too, so a shell with paste protection on still
+        // treats a multi-line paste as one unit rather than running each line.
+        self.send(b"\x1b[200~");
+        self.send(text.as_bytes());
+        self.send(b"\x1b[201~");
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
         match m.kind {
-            MouseEventKind::ScrollUp => self.send(b"\x1b[A"),
-            MouseEventKind::ScrollDown => self.send(b"\x1b[B"),
+            MouseEventKind::ScrollUp => {
+                self.sel = None;
+                self.send(b"\x1b[A");
+            }
+            MouseEventKind::ScrollDown => {
+                self.sel = None;
+                self.send(b"\x1b[B");
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                let at = Self::cell_at(m, area);
+                self.sel = Some((at, at));
+                self.copied = None;
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some((_, cur)) = &mut self.sel {
+                    *cur = Self::cell_at(m, area);
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                // Copy on release, the way iTerm2 does — needing a chord after
+                // every drag is what makes terminal copy tedious. A bare click
+                // selects nothing, so it leaves the clipboard alone.
+                self.copy_selection();
+            }
             _ => {}
         }
         Action::None
@@ -360,5 +531,60 @@ impl AppWindow for Terminal {
         let s = format!("{} ", p.display());
         self.send(s.as_bytes());
         Action::None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{grab, span};
+
+    fn screen(lines: &[&str]) -> vt100::Parser {
+        let mut p = vt100::Parser::new(6, 20, 0);
+        p.process(lines.join("\r\n").as_bytes());
+        p
+    }
+
+    #[test]
+    fn grabs_a_run_within_one_row() {
+        let p = screen(&["hello world"]);
+        // columns 6..=10 — "world"
+        let s = span(((0, 6), (0, 10))).unwrap();
+        assert_eq!(grab(p.screen(), s), "world");
+    }
+
+    #[test]
+    fn the_cell_under_the_pointer_is_included() {
+        let p = screen(&["abcdef"]);
+        let s = span(((0, 0), (0, 2))).unwrap();
+        assert_eq!(grab(p.screen(), s), "abc");
+    }
+
+    #[test]
+    fn dragging_backwards_selects_the_same_run() {
+        let p = screen(&["hello world"]);
+        let forward = grab(p.screen(), span(((0, 6), (0, 10))).unwrap());
+        let backward = grab(p.screen(), span(((0, 10), (0, 6))).unwrap());
+        assert_eq!(forward, backward);
+    }
+
+    #[test]
+    fn multi_row_runs_to_the_end_of_each_line_and_trims_the_blanks() {
+        let p = screen(&["first line", "second", "third"]);
+        let s = span(((0, 6), (2, 4))).unwrap();
+        // tail of row 0, all of row 1, head of row 2 — with the blank cells
+        // past "second" dropped rather than copied as spaces.
+        assert_eq!(grab(p.screen(), s), "line\nsecond\nthird");
+    }
+
+    #[test]
+    fn a_bare_click_selects_nothing() {
+        assert!(span(((2, 5), (2, 5))).is_none());
+    }
+
+    #[test]
+    fn a_selection_past_the_end_of_a_line_yields_an_empty_row() {
+        let p = screen(&["ab", "cd"]);
+        let s = span(((0, 5), (0, 9))).unwrap();
+        assert_eq!(grab(p.screen(), s), "");
     }
 }

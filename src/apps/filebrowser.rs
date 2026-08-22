@@ -1434,6 +1434,51 @@ fn expand_path(s: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// Decode `%XX` escapes. Only used for `file://` pastes, which is the one
+/// clipboard flavor that arrives percent-encoded.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |j: usize| (b[j] as char).to_digit(16);
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let (Some(h), Some(l)) = (hex(i + 1), hex(i + 2)) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).to_string()
+}
+
+/// Normalize a path off the clipboard. Depending on where it was copied from a
+/// path arrives bare, wrapped in quotes, shell-escaped (dragging a file into a
+/// terminal), or as a `file://` URL — the nav bar takes all four.
+fn clean_pasted_path(text: &str) -> String {
+    let mut s = text.lines().next().unwrap_or("").trim().to_string();
+    for q in ['"', '\''] {
+        if s.len() >= 2 && s.starts_with(q) && s.ends_with(q) {
+            s = s[1..s.len() - 1].to_string();
+            break;
+        }
+    }
+    if let Some(rest) = s.strip_prefix("file://") {
+        // file:///Users/… — the empty host leaves the leading slash in place.
+        s = percent_decode(rest);
+    }
+    // A terminal drag escapes spaces with a backslash. On Windows a backslash
+    // is a separator, so leave it alone there.
+    #[cfg(not(windows))]
+    {
+        s = s.replace("\\ ", " ");
+    }
+    s.trim().to_string()
+}
+
 fn unique_path(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
@@ -1699,8 +1744,9 @@ impl AppWindow for FileBrowser {
                     ("Alt+← / Alt+→", "history back / forward"),
                     ("Space", "mark · Ctrl+A mark all"),
                     ("/ or Ctrl+F", "filter names"),
-                    ("Ctrl+L", "go to path"),
-                    ("Ctrl+C/X/V", "copy / cut / paste"),
+                    ("Ctrl+L", "go to path — or just paste one"),
+                    ("Ctrl+C/X/V", "copy / cut / paste files"),
+                    ("Ctrl+Shift+C", "copy path as text"),
                     ("Ctrl+P", "preview pane"),
                     ("Ctrl+H", "hidden files"),
                     ("Tab / click header", "sort columns"),
@@ -1757,11 +1803,9 @@ impl AppWindow for FileBrowser {
                     self.status = "cancelled".into();
                 }
                 KeyCode::Enter => return self.commit_prompt(),
-                KeyCode::Backspace => {
-                    input.pop();
+                _ => {
+                    super::text_edit(input, k);
                 }
-                KeyCode::Char(c) if !ctrl => input.push(c),
-                _ => {}
             }
             return Action::None;
         }
@@ -1827,6 +1871,15 @@ impl AppWindow for FileBrowser {
                     .map(|p| p.to_string_lossy().to_string())
                     .unwrap_or_default();
                 self.start_prompt(Prompt::Goto, initial);
+            }
+            KeyCode::Char('C') if ctrl => {
+                match self.current().filter(|e| !e.is_up).map(|e| e.path.clone()) {
+                    Some(p) => {
+                        crate::clipboard::copy(&p.to_string_lossy());
+                        self.status = format!("copied path: {}", p.display());
+                    }
+                    None => self.status = "nothing selected".into(),
+                }
             }
             KeyCode::Char('c') if ctrl => self.copy_sel(false),
             KeyCode::Char('x') if ctrl => self.copy_sel(true),
@@ -2076,7 +2129,50 @@ impl AppWindow for FileBrowser {
         self.cwd.is_some()
     }
 
+    fn on_paste(&mut self, text: &str) -> Action {
+        // An open prompt is a text field — the paste is just typing.
+        if let Some((_, input)) = &mut self.prompt {
+            input.push_str(text.lines().next().unwrap_or("").trim());
+            return Action::None;
+        }
+        // Otherwise drop it into the nav bar, pre-filled and waiting on Enter,
+        // rather than navigating somewhere the user cannot see first.
+        let path = clean_pasted_path(text);
+        if !path.is_empty() {
+            self.start_prompt(Prompt::Goto, path);
+        }
+        Action::None
+    }
+
     fn workspace_path(&self) -> Option<PathBuf> {
         self.cwd.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_pasted_path;
+
+    #[test]
+    fn accepts_every_clipboard_flavor_of_a_path() {
+        let want = "/Users/dan/My Docs";
+        for pasted in [
+            "/Users/dan/My Docs",
+            "  /Users/dan/My Docs\n",
+            "\"/Users/dan/My Docs\"",
+            "'/Users/dan/My Docs'",
+            "file:///Users/dan/My%20Docs",
+            "/Users/dan/My\\ Docs",
+            // multi-line clipboards (a file list) take the first entry
+            "/Users/dan/My Docs\n/Users/dan/other",
+        ] {
+            assert_eq!(clean_pasted_path(pasted), want, "input: {pasted:?}");
+        }
+    }
+
+    #[test]
+    fn leaves_a_plain_relative_path_alone() {
+        assert_eq!(clean_pasted_path("src/apps"), "src/apps");
+        assert_eq!(clean_pasted_path("   "), "");
     }
 }

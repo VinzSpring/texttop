@@ -284,15 +284,11 @@ impl AppWindow for Processes {
                     self.filtering = false;
                     self.apply_filter();
                 }
-                KeyCode::Backspace => {
-                    self.filter.pop();
-                    self.apply_filter();
+                _ => {
+                    if super::text_edit(&mut self.filter, k) {
+                        self.apply_filter();
+                    }
                 }
-                KeyCode::Char(c) if !ctrl => {
-                    self.filter.push(c);
-                    self.apply_filter();
-                }
-                _ => {}
             }
             return Action::None;
         }
@@ -327,6 +323,14 @@ impl AppWindow for Processes {
             }
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if self.filtering {
+            super::paste_line(&mut self.filter, text);
+            self.apply_filter();
         }
         Action::None
     }

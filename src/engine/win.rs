@@ -49,7 +49,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32) -> Engine {
+    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, _private: bool) -> Engine {
         let (tx, rx) = mpsc::channel();
         let frame: Arc<Mutex<Option<Arc<Frame>>>> = Arc::new(Mutex::new(None));
         let info = Arc::new(Mutex::new(PageInfo::default()));
@@ -87,6 +87,12 @@ impl Engine {
 
     pub fn status(&self) -> Status {
         self.status.lock().unwrap().clone()
+    }
+
+    /// WebView2 cookie management is not wired up here; the browser shows an
+    /// empty inventory rather than pretending.
+    pub fn cookies(&self) -> Vec<super::CookieInfo> {
+        Vec::new()
     }
 
     pub fn texts(&self) -> Vec<TextRun> {
@@ -550,6 +556,9 @@ fn handle_cmd(
                     }
                 }
             }
+            // Cookie and site-data management are macOS-only so far. The
+            // browser reports that rather than silently doing nothing.
+            Cmd::ClearData(_) | Cmd::SetCookiePolicy(_) | Cmd::RefreshCookies => {}
         }
     }
 }

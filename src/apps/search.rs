@@ -310,17 +310,11 @@ impl AppWindow for SearchApp {
                     self.status = "root edit cancelled".into();
                 }
                 KeyCode::Enter => self.commit_root(),
-                KeyCode::Backspace => {
+                _ => {
                     if let Some(s) = &mut self.root_input {
-                        s.pop();
+                        super::text_edit(s, k);
                     }
                 }
-                KeyCode::Char(c) if !ctrl => {
-                    if let Some(s) = &mut self.root_input {
-                        s.push(c);
-                    }
-                }
-                _ => {}
             }
             return Action::None;
         }
@@ -333,15 +327,13 @@ impl AppWindow for SearchApp {
                     self.editing = false;
                 }
                 KeyCode::Enter => self.run_search(),
-                KeyCode::Backspace => {
-                    self.query.pop();
-                }
                 KeyCode::Char('l') if ctrl => {
                     self.editing = false;
                     self.root_input = Some(self.root.to_string_lossy().to_string());
                 }
-                KeyCode::Char(c) if !ctrl => self.query.push(c),
-                _ => {}
+                _ => {
+                    super::text_edit(&mut self.query, k);
+                }
             }
             return Action::None;
         }
@@ -369,6 +361,15 @@ impl AppWindow for SearchApp {
             KeyCode::F(5) => self.run_search(),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_paste(&mut self, text: &str) -> Action {
+        if let Some(root) = &mut self.root_input {
+            super::paste_line(root, text);
+        } else if self.editing {
+            super::paste_line(&mut self.query, text);
         }
         Action::None
     }
