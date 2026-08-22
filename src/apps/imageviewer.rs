@@ -512,6 +512,7 @@ impl AppWindow for ImageViewer {
                     row("[ ]", "rotate left / right"),
                     row("x / y", "flip horizontal / vertical"),
                     row("s", "slideshow"),
+                    row("w", "set as wallpaper"),
                     row("i", "image info"),
                     row("r", "reload"),
                     row("q / Esc", "close"),
@@ -578,6 +579,9 @@ impl AppWindow for ImageViewer {
             KeyCode::Char('s') => {
                 self.slideshow = !self.slideshow;
                 self.ticks = 0;
+            }
+            KeyCode::Char('w') => {
+                return Action::SetWallpaperImage(self.path.clone());
             }
             KeyCode::Char('r') => self.load(),
             _ => {}

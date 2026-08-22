@@ -13,32 +13,25 @@ use ratatui::Frame;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::apps::{
-    about::About, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
+    about::About, apphost::AppHost, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
     clock::ClockApp, compare::CompareApp, editor::Editor, filebrowser::FileBrowser,
     game2048::Game2048, git::GitApp, hexviewer::HexViewer, imageviewer::ImageViewer,
     launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
     pin::{PinEdit, PinEditor, PinPrompt, PinTo, PinnedApp},
     processes::Processes, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
-    sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer, webbrowser::WebBrowser,
+    sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer,
+    wallpaper::{self, WallpaperChooser, THEMES}, webbrowser::WebBrowser,
     Action, AppWindow, Launch,
 };
 use crate::apps::gitutil;
 use crate::gfx;
 
+use image::RgbImage;
+
 const TASKBAR_BG: Color = Color::Rgb(14, 16, 28);
 const ACCENT: Color = Color::Rgb(0, 190, 255);
 const MENU_BG: Color = Color::Rgb(18, 22, 38);
 const WIN_BG: Color = Color::Rgb(12, 14, 22);
-
-const THEMES: &[((u8, u8, u8), (u8, u8, u8), &str)] = &[
-    ((10, 14, 44), (66, 14, 78), "midnight"),
-    ((3, 30, 52), (0, 96, 116), "ocean"),
-    ((34, 8, 10), (140, 66, 12), "sunset"),
-    ((6, 30, 18), (22, 88, 54), "forest"),
-    ((14, 6, 34), (0, 110, 100), "aurora"),
-    ((44, 10, 64), (150, 40, 80), "vapor"),
-    ((30, 30, 38), (8, 8, 12), "graphite"),
-];
 
 const ICON_W: u16 = 12;
 const ICON_H: u16 = 3;
@@ -79,6 +72,8 @@ enum MenuAction {
     Files,
     Web,
     Terminal,
+    AppHost,
+    VsCode,
     Editor,
     Git,
     Search,
@@ -104,6 +99,8 @@ impl MenuAction {
             MenuAction::Files => "Files",
             MenuAction::Web => "Web",
             MenuAction::Terminal => "Terminal",
+            MenuAction::AppHost => "AppHost",
+            MenuAction::VsCode => "VsCode",
             MenuAction::Editor => "Editor",
             MenuAction::Git => "Git",
             MenuAction::Search => "Search",
@@ -129,6 +126,8 @@ impl MenuAction {
             "Files" => MenuAction::Files,
             "Web" => MenuAction::Web,
             "Terminal" => MenuAction::Terminal,
+            "AppHost" => MenuAction::AppHost,
+            "VsCode" => MenuAction::VsCode,
             "Editor" => MenuAction::Editor,
             "Git" => MenuAction::Git,
             "Search" => MenuAction::Search,
@@ -155,8 +154,10 @@ impl MenuAction {
 const MENU: &[(&str, MenuAction, &str)] = &[
     ("🗂  File Manager", MenuAction::Files, "System"),
     ("🖥  Terminal", MenuAction::Terminal, "System"),
+    ("🪟  Desktop Apps", MenuAction::AppHost, "System"),
     ("⚙  Processes", MenuAction::Processes, "System"),
     ("💻  System Info", MenuAction::SysInfo, "System"),
+    ("💙  VS Code", MenuAction::VsCode, "Development"),
     ("🌿  Git", MenuAction::Git, "Development"),
     ("🔎  Project Search", MenuAction::Search, "Development"),
     ("📝  Text Editor", MenuAction::Editor, "Development"),
@@ -179,6 +180,7 @@ const DEFAULT_ICONS: &[(&str, &str, MenuAction)] = &[
     ("🗂", "Files", MenuAction::Files),
     ("🌐", "Web", MenuAction::Web),
     ("🖥", "Terminal", MenuAction::Terminal),
+    ("💙", "VS Code", MenuAction::VsCode),
     ("📝", "Editor", MenuAction::Editor),
     ("🌿", "Git", MenuAction::Git),
     ("🔎", "Search", MenuAction::Search),
@@ -195,8 +197,11 @@ const DEFAULT_ICONS: &[(&str, &str, MenuAction)] = &[
     ("✨", "About", MenuAction::About),
 ];
 
-/// Desktop icons per column before wrapping to the next one.
+/// Fallback column height when the screen size is not yet known.
 const ICONS_PER_COL: usize = 8;
+/// Top-left of the icon grid (must match arrange / snap / default layout).
+const ICON_ORIGIN_X: u16 = 2;
+const ICON_ORIGIN_Y: u16 = 1;
 
 #[derive(Clone)]
 enum DeskKind {
@@ -289,6 +294,12 @@ pub struct Desktop {
     overflow_open: bool,
     overflow_rect: Rect,
     theme: usize,
+    /// Optional image wallpaper (cover-fill). When set, overrides the gradient.
+    wallpaper_image: Option<PathBuf>,
+    wallpaper_canvas: Option<RgbImage>,
+    wallpaper_seq: usize,
+    wallpaper_cache: gfx::RgbCache,
+    wallpaper_size: (u16, u16),
     status: String,
     status_until: Option<Instant>,
     snap_preview: Option<Rect>,
@@ -327,6 +338,11 @@ impl Desktop {
             overflow_open: false,
             overflow_rect: Rect::default(),
             theme: 0,
+            wallpaper_image: None,
+            wallpaper_canvas: None,
+            wallpaper_seq: 0,
+            wallpaper_cache: gfx::RgbCache::default(),
+            wallpaper_size: (0, 0),
             status: String::new(),
             status_until: None,
             snap_preview: None,
@@ -373,10 +389,24 @@ impl Desktop {
         let taskbar_y = area.height.saturating_sub(1);
         let desk = Rect::new(0, 0, area.width, taskbar_y);
         let th = THEMES[self.theme % THEMES.len()];
+        self.ensure_wallpaper_canvas(desk);
 
         {
             let buf = f.buffer_mut();
-            gfx::gradient(buf, desk, th.0, th.1);
+            if let Some(canvas) = &self.wallpaper_canvas {
+                gfx::fill(buf, desk, Color::Rgb(8, 10, 18));
+                gfx::draw_rgb_cached(
+                    buf,
+                    desk,
+                    canvas.as_raw(),
+                    canvas.width(),
+                    canvas.height(),
+                    self.wallpaper_seq,
+                    &mut self.wallpaper_cache,
+                );
+            } else {
+                gfx::gradient(buf, desk, th.0, th.1);
+            }
 
             // watermark
             if desk.width > 46 && desk.height > 12 {
@@ -384,16 +414,30 @@ impl Desktop {
                 let sub = "your terminal, but cozier";
                 let x = desk.width.saturating_sub(wm.len() as u16) / 2;
                 let y = desk.height / 2;
+                let (fg_r, fg_g, fg_b) = if self.wallpaper_image.is_some() {
+                    (220, 225, 240)
+                } else {
+                    (
+                        gfx::lerp(th.0 .0, 255, 0.30),
+                        gfx::lerp(th.0 .1, 255, 0.30),
+                        gfx::lerp(th.0 .2, 255, 0.30),
+                    )
+                };
+                let (sub_r, sub_g, sub_b) = if self.wallpaper_image.is_some() {
+                    (180, 185, 200)
+                } else {
+                    (
+                        gfx::lerp(th.0 .0, 255, 0.18),
+                        gfx::lerp(th.0 .1, 255, 0.18),
+                        gfx::lerp(th.0 .2, 255, 0.18),
+                    )
+                };
                 buf.set_string(
                     x,
                     y,
                     wm,
                     Style::default()
-                        .fg(Color::Rgb(
-                            gfx::lerp(th.0 .0, 255, 0.30),
-                            gfx::lerp(th.0 .1, 255, 0.30),
-                            gfx::lerp(th.0 .2, 255, 0.30),
-                        ))
+                        .fg(Color::Rgb(fg_r, fg_g, fg_b))
                         .add_modifier(Modifier::BOLD),
                 );
                 let x2 = desk.width.saturating_sub(sub.len() as u16) / 2;
@@ -401,11 +445,7 @@ impl Desktop {
                     x2,
                     y + 1,
                     sub,
-                    Style::default().fg(Color::Rgb(
-                        gfx::lerp(th.0 .0, 255, 0.18),
-                        gfx::lerp(th.0 .1, 255, 0.18),
-                        gfx::lerp(th.0 .2, 255, 0.18),
-                    )),
+                    Style::default().fg(Color::Rgb(sub_r, sub_g, sub_b)),
                 );
             }
 
@@ -919,7 +959,14 @@ impl Desktop {
                 last_group = group;
             }
             let text = if action == MenuAction::Wallpaper {
-                format!("  {label}  · {}", THEMES[self.theme % THEMES.len()].2)
+                let cur = if let Some(p) = &self.wallpaper_image {
+                    p.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "image".into())
+                } else {
+                    THEMES[self.theme % THEMES.len()].2.to_string()
+                };
+                format!("  {label}  · {cur}")
             } else {
                 format!("  {label}")
             };
@@ -1916,9 +1963,7 @@ impl Desktop {
             CtxAction::OpenTerminal => self.activate_menu(MenuAction::Terminal),
             CtxAction::OpenEditor => self.activate_menu(MenuAction::Editor),
             CtxAction::Wallpaper => {
-                self.theme = (self.theme + 1) % THEMES.len();
-                self.save_desktop();
-                self.toast(format!("wallpaper · {}", THEMES[self.theme].2));
+                self.spawn(Launch::Wallpaper);
             }
             CtxAction::ShowDesktop => self.show_desktop(),
             CtxAction::TileWindows => self.tile_windows(),
@@ -2018,6 +2063,7 @@ impl Desktop {
             }
             CtxAction::ResetIcons => {
                 self.icons = default_icons();
+                self.arrange_icons_grid();
                 self.icon_sel = 0;
                 self.save_desktop();
                 self.toast("icons reset");
@@ -2218,6 +2264,18 @@ impl Desktop {
                 });
                 self.start_open = false;
             }
+            MenuAction::AppHost => {
+                self.spawn(Launch::AppHost { cmd: None });
+                self.start_open = false;
+            }
+            MenuAction::VsCode => {
+                self.spawn(Launch::AppHost {
+                    cmd: Some(
+                        r"C:\Program Files\Microsoft VS Code\Code.exe".into(),
+                    ),
+                });
+                self.start_open = false;
+            }
             MenuAction::Editor => {
                 self.spawn(Launch::Editor(None));
                 self.start_open = false;
@@ -2271,8 +2329,8 @@ impl Desktop {
                 self.start_open = false;
             }
             MenuAction::Wallpaper => {
-                self.theme = (self.theme + 1) % THEMES.len();
-                self.save_desktop();
+                self.spawn(Launch::Wallpaper);
+                self.start_open = false;
             }
             MenuAction::Keys => {
                 self.show_keys = true;
@@ -2325,9 +2383,39 @@ impl Desktop {
             Launch::Processes => (Box::new(Processes::new()), "⚙", 72, 26, 40, 12),
             Launch::Snapshots(p) => (Box::new(SnapshotsApp::new(p)), "⏱", 84, 28, 48, 12),
             Launch::Compare(paths) => (Box::new(CompareApp::new(paths)), "↔", 90, 30, 48, 12),
+            Launch::AppHost { cmd } => {
+                let icon = if cmd
+                    .as_deref()
+                    .is_some_and(|c| c.to_ascii_lowercase().contains("code.exe"))
+                {
+                    "💙"
+                } else {
+                    "🪟"
+                };
+                (Box::new(AppHost::with_cmd(cmd)), icon, 96, 34, 48, 14)
+            }
             Launch::Snake => (Box::new(Snake::new()), "🐍", 64, 24, 30, 10),
             Launch::Minesweeper => (Box::new(Minesweeper::new()), "💣", 56, 22, 30, 12),
             Launch::Game2048 => (Box::new(Game2048::new()), "🎮", 44, 22, 28, 12),
+            Launch::Wallpaper => (
+                Box::new(WallpaperChooser::new(
+                    self.theme,
+                    self.wallpaper_image.clone(),
+                )),
+                "🎨",
+                78,
+                32,
+                52,
+                18,
+            ),
+            Launch::WallpaperPicker { start } => (
+                Box::new(FileBrowser::wallpaper_picker(start)),
+                "🗂",
+                78,
+                28,
+                40,
+                12,
+            ),
         };
         let scr = self.screen;
         let taskbar = 1u16;
@@ -2543,12 +2631,27 @@ impl Desktop {
     fn snap_one_icon(&mut self, idx: usize) {
         let step_x = ICON_W + ICON_GAP;
         let step_y = ICON_H + ICON_GAP;
+        let taskbar_y = self.screen.height.saturating_sub(1);
+        let max_x = self.screen.width.saturating_sub(ICON_W + 1);
+        let max_y = taskbar_y.saturating_sub(ICON_H + 1).max(ICON_ORIGIN_Y);
         if let Some(icon) = self.icons.get_mut(idx) {
-            icon.x = ((icon.x + step_x / 2) / step_x) * step_x;
-            icon.y = ((icon.y.max(1) + step_y / 2) / step_y) * step_y;
-            if icon.y == 0 {
-                icon.y = 1;
-            }
+            // Snap relative to the same origin the grid uses (not 0,0).
+            let rx = icon.x.saturating_sub(ICON_ORIGIN_X);
+            let ry = icon.y.saturating_sub(ICON_ORIGIN_Y);
+            icon.x = (ICON_ORIGIN_X + ((rx + step_x / 2) / step_x) * step_x).min(max_x);
+            icon.y = (ICON_ORIGIN_Y + ((ry + step_y / 2) / step_y) * step_y)
+                .clamp(ICON_ORIGIN_Y, max_y);
+        }
+    }
+
+    /// Pack every icon into a column-major grid that fits the desk height.
+    fn arrange_icons_grid(&mut self) {
+        let taskbar_y = self.screen.height.saturating_sub(1);
+        let per_col = icons_per_column(taskbar_y);
+        for (i, icon) in self.icons.iter_mut().enumerate() {
+            let (x, y) = icon_grid_slot(i, per_col);
+            icon.x = x;
+            icon.y = y;
         }
     }
 
@@ -2691,6 +2794,86 @@ impl Desktop {
                 self.close_id(id);
                 self.save_pin(pin, to, edit);
             }
+            Action::SetTheme(t) => {
+                self.theme = t % THEMES.len();
+                self.clear_wallpaper_image();
+                self.save_desktop();
+                self.toast(format!("wallpaper · {}", THEMES[self.theme].2));
+            }
+            Action::SetThemeAndClose(t) => {
+                self.theme = t % THEMES.len();
+                self.clear_wallpaper_image();
+                self.save_desktop();
+                self.toast(format!("wallpaper · {}", THEMES[self.theme].2));
+                self.close_id(id);
+            }
+            Action::SetWallpaperImage(path) => {
+                self.set_wallpaper_image(path);
+            }
+            Action::SetWallpaperImageAndClose(path) => {
+                self.set_wallpaper_image(path);
+                self.close_id(id);
+            }
+        }
+    }
+
+    fn clear_wallpaper_image(&mut self) {
+        self.wallpaper_image = None;
+        self.wallpaper_canvas = None;
+        self.wallpaper_cache.clear();
+        self.wallpaper_size = (0, 0);
+        self.notify_wallpaper_changed();
+    }
+
+    fn set_wallpaper_image(&mut self, path: PathBuf) {
+        if !path.is_file() || !wallpaper::is_image_path(&path) {
+            self.toast("not an image file");
+            return;
+        }
+        self.wallpaper_image = Some(path.clone());
+        self.wallpaper_canvas = None;
+        self.wallpaper_cache.clear();
+        self.wallpaper_size = (0, 0);
+        self.save_desktop();
+        self.notify_wallpaper_changed();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string_lossy().to_string());
+        self.toast(format!("wallpaper · {name}"));
+    }
+
+    fn notify_wallpaper_changed(&mut self) {
+        let image = self.wallpaper_image.clone();
+        let theme = self.theme;
+        for w in &mut self.windows {
+            w.app.on_wallpaper_changed(image.clone(), theme);
+        }
+    }
+
+    fn ensure_wallpaper_canvas(&mut self, desk: Rect) {
+        let Some(path) = self.wallpaper_image.clone() else {
+            if self.wallpaper_canvas.is_some() {
+                self.clear_wallpaper_image();
+            }
+            return;
+        };
+        let size = (desk.width, desk.height);
+        if self.wallpaper_canvas.is_some() && self.wallpaper_size == size {
+            return;
+        }
+        match wallpaper::cover_rgb(&path, desk.width, desk.height) {
+            Ok(canvas) => {
+                self.wallpaper_canvas = Some(canvas);
+                self.wallpaper_seq = self.wallpaper_seq.wrapping_add(1);
+                self.wallpaper_cache.clear();
+                self.wallpaper_size = size;
+            }
+            Err(err) => {
+                self.clear_wallpaper_image();
+                self.save_desktop();
+                self.toast(format!("wallpaper image failed · {err}"));
+            }
         }
     }
 
@@ -2753,8 +2936,8 @@ impl Desktop {
 
     fn next_icon_slot(&self) -> (u16, u16) {
         let taskbar_y = self.screen.height.saturating_sub(1);
-        let mut x = 2u16;
-        let mut y = 1u16;
+        let mut x = ICON_ORIGIN_X;
+        let mut y = ICON_ORIGIN_Y;
         for _ in 0..64 {
             let clash = self
                 .icons
@@ -2765,11 +2948,11 @@ impl Desktop {
             }
             y += ICON_H + ICON_GAP;
             if y + ICON_H >= taskbar_y {
-                y = 1;
+                y = ICON_ORIGIN_Y;
                 x += ICON_W + ICON_GAP;
             }
         }
-        (2, 1)
+        (ICON_ORIGIN_X, ICON_ORIGIN_Y)
     }
 
     fn toast(&mut self, msg: impl Into<String>) {
@@ -2828,6 +3011,16 @@ impl Desktop {
             .collect();
         let doc = serde_json::json!({
             "theme": self.theme,
+            "wallpaper": match &self.wallpaper_image {
+                Some(p) => serde_json::json!({
+                    "kind": "image",
+                    "path": p.to_string_lossy(),
+                }),
+                None => serde_json::json!({
+                    "kind": "gradient",
+                    "theme": self.theme,
+                }),
+            },
             "icons": icons,
             "taskbar_pins": self
                 .taskbar_pins
@@ -2847,6 +3040,25 @@ impl Desktop {
         };
         if let Some(t) = v.get("theme").and_then(|t| t.as_u64()) {
             self.theme = t as usize % THEMES.len();
+        }
+        if let Some(wp) = v.get("wallpaper") {
+            match wp.get("kind").and_then(|k| k.as_str()) {
+                Some("image") => {
+                    if let Some(p) = wp.get("path").and_then(|p| p.as_str()) {
+                        let path = PathBuf::from(p);
+                        if path.is_file() && wallpaper::is_image_path(&path) {
+                            self.wallpaper_image = Some(path);
+                        }
+                    }
+                }
+                Some("gradient") => {
+                    if let Some(t) = wp.get("theme").and_then(|t| t.as_u64()) {
+                        self.theme = t as usize % THEMES.len();
+                    }
+                    self.wallpaper_image = None;
+                }
+                _ => {}
+            }
         }
         if let Some(pins) = v.get("taskbar_pins").and_then(|a| a.as_array()) {
             self.taskbar_pins = pins.iter().filter_map(PinnedApp::from_json).collect();
@@ -2994,16 +3206,39 @@ impl Desktop {
     }
 }
 
+/// How many icon rows fit above the taskbar.
+fn icons_per_column(desk_h: u16) -> usize {
+    let step = ICON_H + ICON_GAP;
+    let usable = desk_h.saturating_sub(ICON_ORIGIN_Y);
+    if usable < ICON_H {
+        return 1;
+    }
+    (((usable - ICON_H) / step) + 1).max(1) as usize
+}
+
+fn icon_grid_slot(index: usize, per_col: usize) -> (u16, u16) {
+    let per_col = per_col.max(1);
+    let col = (index / per_col) as u16;
+    let row = (index % per_col) as u16;
+    (
+        ICON_ORIGIN_X + col * (ICON_W + ICON_GAP),
+        ICON_ORIGIN_Y + row * (ICON_H + ICON_GAP),
+    )
+}
+
 fn default_icons() -> Vec<DeskIcon> {
     DEFAULT_ICONS
         .iter()
         .enumerate()
-        .map(|(i, (emoji, label, action))| DeskIcon {
-            emoji: (*emoji).to_string(),
-            label: (*label).to_string(),
-            kind: DeskKind::App(*action),
-            x: 2 + (i / ICONS_PER_COL) as u16 * (ICON_W + ICON_GAP),
-            y: 1 + (i % ICONS_PER_COL) as u16 * (ICON_H + ICON_GAP),
+        .map(|(i, (emoji, label, action))| {
+            let (x, y) = icon_grid_slot(i, ICONS_PER_COL);
+            DeskIcon {
+                emoji: (*emoji).to_string(),
+                label: (*label).to_string(),
+                kind: DeskKind::App(*action),
+                x,
+                y,
+            }
         })
         .collect()
 }
@@ -3036,7 +3271,8 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
     let so = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().to_string());
     Some(match l {
         Launch::Files(p) => json!({"t": "files", "p": s(p)}),
-        Launch::Web(u) => json!({"t": "web", "u": u}),
+        // Browser is heavy (WebView2/WebKit) and annoying to always reopen.
+        Launch::Web(_) => return None,
         Launch::Audio(p) => json!({"t": "audio", "p": s(p)}),
         Launch::Image(p) => json!({"t": "image", "p": s(p)}),
         Launch::Video(p) => json!({"t": "video", "p": s(p)}),
@@ -3056,9 +3292,15 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
         Launch::Compare(ps) => {
             json!({"t": "compare", "ps": ps.iter().map(|p| s(p)).collect::<Vec<_>>()})
         }
+        Launch::AppHost { cmd } => match cmd {
+            Some(c) => json!({"t": "apphost", "cmd": c}),
+            None => json!({"t": "apphost"}),
+        },
         Launch::Snake => json!({"t": "snake"}),
         Launch::Minesweeper => json!({"t": "mines"}),
         Launch::Game2048 => json!({"t": "2048"}),
+        Launch::Wallpaper => json!({"t": "wallpaper"}),
+        Launch::WallpaperPicker { .. } => return None,
         Launch::AppLauncher(_) => return None,
         // one-shot pin dialogs are not restored
         Launch::PinEditor { .. } | Launch::PinPrompt(_) => return None,
@@ -3071,8 +3313,8 @@ fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
     // file-backed windows only come back if the file still exists
     let pf = || p().filter(|p| p.exists());
     Some(match t {
-        "files" => Launch::Files(pf()?),
-        "web" => Launch::Web(v.get("u").and_then(|u| u.as_str()).map(String::from)),
+        "files" => return None,
+        "web" => return None,
         "audio" => Launch::Audio(pf()?),
         "image" => Launch::Image(pf()?),
         "video" => Launch::Video(pf()?),
@@ -3106,9 +3348,13 @@ fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
                 .filter(|p| p.exists())
                 .collect(),
         ),
+        "apphost" => Launch::AppHost {
+            cmd: v.get("cmd").and_then(|c| c.as_str()).map(String::from),
+        },
         "snake" => Launch::Snake,
         "mines" => Launch::Minesweeper,
         "2048" => Launch::Game2048,
+        "wallpaper" => Launch::Wallpaper,
         _ => return None,
     })
 }

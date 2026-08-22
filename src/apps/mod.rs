@@ -1,4 +1,5 @@
 pub mod about;
+pub mod apphost;
 #[cfg(feature = "audio")]
 pub mod audioplayer;
 #[cfg(not(feature = "audio"))]
@@ -85,6 +86,7 @@ pub mod syntax;
 pub mod sysinfo;
 pub mod terminal;
 pub mod videoplayer;
+pub mod wallpaper;
 pub mod webbrowser;
 
 use std::path::{Path, PathBuf};
@@ -110,6 +112,14 @@ pub enum Action {
         to: pin::PinTo,
         edit: Option<pin::PinEdit>,
     },
+    /// Apply a wallpaper theme index (live preview from the chooser).
+    SetTheme(usize),
+    /// Apply a wallpaper theme and close the chooser.
+    SetThemeAndClose(usize),
+    /// Cover-fill an image as the desktop wallpaper.
+    SetWallpaperImage(PathBuf),
+    /// Cover-fill an image as wallpaper and close the requesting window.
+    SetWallpaperImageAndClose(PathBuf),
 }
 
 #[derive(Clone, Debug)]
@@ -151,6 +161,13 @@ pub enum Launch {
     Snake,
     Minesweeper,
     Game2048,
+    /// Mirror a real desktop application into a texttop window (Windows).
+    /// Optional `cmd` is launched immediately (e.g. VS Code path).
+    AppHost { cmd: Option<String> },
+    /// Wallpaper theme picker with gradient previews.
+    Wallpaper,
+    /// File browser in "pick an image for wallpaper" mode.
+    WallpaperPicker { start: PathBuf },
 }
 
 pub trait AppWindow {
@@ -173,6 +190,8 @@ pub trait AppWindow {
     fn workspace_path(&self) -> Option<PathBuf> {
         None
     }
+    /// Desktop wallpaper changed — pickers can refresh their applied state.
+    fn on_wallpaper_changed(&mut self, _image: Option<PathBuf>, _theme: usize) {}
 }
 
 /// Pick the right app for a file based on its extension.

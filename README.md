@@ -86,7 +86,7 @@ on headless boxes use `xvfb-run`.
 - Snapshots are stored in `~/.texttop_snap/` (content-addressed blobs + index)
 - Taskbar shows **⎇ branch*** when the focused workspace is a git repo — click to open Git
 - Layout & shortcuts persist in `~/.texttop_desktop.json`
-- Start menu → Wallpaper cycles color themes
+- Start menu → Wallpaper opens a chooser (gradient themes; **image…** tile opens Files to pick a photo)
 - Developer extras need **git** on PATH (and optionally **rg** for faster Search)
 
 ## Architecture notes

@@ -35,7 +35,10 @@ fn detect_truecolor() -> bool {
         }
     }
     if let Ok(v) = std::env::var("TERM_PROGRAM") {
-        if matches!(v.as_str(), "iTerm.app" | "WezTerm" | "ghostty" | "Hyper") {
+        if matches!(
+            v.as_str(),
+            "iTerm.app" | "WezTerm" | "ghostty" | "Hyper" | "vscode" | "WarpTerminal"
+        ) {
             return true;
         }
         if v == "Apple_Terminal" {
@@ -45,12 +48,26 @@ fn detect_truecolor() -> bool {
                 .is_some_and(|n| n >= APPLE_TERMINAL_TRUECOLOR);
         }
     }
+    // Windows Terminal (and Cursor/VS Code's WT-based terminal) always do 24-bit.
+    if std::env::var_os("WT_SESSION").is_some() || std::env::var_os("WT_PROFILE_ID").is_some() {
+        return true;
+    }
     if let Ok(v) = std::env::var("TERM") {
         if v.contains("truecolor") || v == "xterm-kitty" {
             return true;
         }
     }
-    false
+    // Modern Windows consoles (conhost, Windows Terminal, mintty/Git Bash,
+    // Cursor) all speak 24-bit, but Git Bash rarely sets COLORTERM — without
+    // this the wallpaper collapses to the 256-color grey wash.
+    #[cfg(windows)]
+    {
+        return true;
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 pub fn truecolor() -> bool {
@@ -607,6 +624,8 @@ mod tests {
             "TERM_PROGRAM",
             "TERM_PROGRAM_VERSION",
             "TERM",
+            "WT_SESSION",
+            "WT_PROFILE_ID",
         ];
         let saved: Vec<_> = keys.iter().map(|k| (*k, std::env::var(k).ok())).collect();
         for k in keys {
@@ -630,7 +649,10 @@ mod tests {
     #[test]
     fn truecolor_detection() {
         let cases: &[(&str, &[(&str, Option<&str>)], bool)] = &[
+            #[cfg(not(windows))]
             ("bare terminal", &[], false),
+            #[cfg(windows)]
+            ("bare terminal (Windows defaults on)", &[], true),
             (
                 "COLORTERM=truecolor",
                 &[("COLORTERM", Some("truecolor"))],

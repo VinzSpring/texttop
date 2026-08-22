@@ -126,6 +126,10 @@ impl About {
             kv("🐍 Snake", "arrows steer · gets faster as you eat"),
             kv("💣 Minesweeper", "click/flag mines · 3 difficulties"),
             kv("🎮 2048", "slide & merge tiles to 2048"),
+            kv(
+                "🎨 Wallpaper",
+                "themes + image… tile opens Files to pick a photo",
+            ),
             Line::default(),
             Line::from(Span::styled("   File Manager", accent)),
             kv("/ or Ctrl+F", "filter · F2 rename · Del delete"),

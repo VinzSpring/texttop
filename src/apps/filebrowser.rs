@@ -82,6 +82,7 @@ enum FileMenuAction {
     DragCopy,
     DragCut,
     PinToDesktop,
+    SetAsWallpaper,
     GitStage,
     GitUnstage,
     GitDiff,
@@ -133,6 +134,8 @@ pub struct FileBrowser {
     /// Multi-select marks (canonical paths of files/dirs).
     marked: HashSet<PathBuf>,
     show_help: bool,
+    /// When true, opening an image sets it as wallpaper and closes this window.
+    pick_wallpaper: bool,
 }
 
 impl FileBrowser {
@@ -167,8 +170,27 @@ impl FileBrowser {
             git_summary: String::new(),
             marked: HashSet::new(),
             show_help: false,
+            pick_wallpaper: false,
         };
         fb.refresh();
+        fb
+    }
+
+    /// File browser used to pick a wallpaper image.
+    pub fn wallpaper_picker(start: PathBuf) -> Self {
+        let start = if start.is_dir() {
+            start
+        } else if let Some(parent) = start.parent().filter(|p| p.is_dir()) {
+            parent.to_path_buf()
+        } else {
+            dirs::picture_dir()
+                .or_else(dirs::home_dir)
+                .unwrap_or_else(|| PathBuf::from("."))
+        };
+        let mut fb = Self::new(start);
+        fb.pick_wallpaper = true;
+        fb.preview = true;
+        fb.status = "Enter / double-click an image · Esc cancel".into();
         fb
     }
 
@@ -474,6 +496,13 @@ impl FileBrowser {
         if e.is_dir {
             let p = e.path.clone();
             self.set_cwd(Some(p));
+            return Action::None;
+        }
+        if self.pick_wallpaper {
+            if crate::apps::wallpaper::is_image_path(&e.path) {
+                return Action::SetWallpaperImageAndClose(e.path.clone());
+            }
+            self.status = "pick an image file (png/jpg/webp/…)".into();
             return Action::None;
         }
         Action::Launch(launch_for_path(&e.path))
@@ -794,6 +823,13 @@ impl FileBrowser {
                 items.push(("Drag copy…".into(), FileMenuAction::DragCopy));
                 items.push(("Drag cut…".into(), FileMenuAction::DragCut));
                 items.push(("Pin to desktop".into(), FileMenuAction::PinToDesktop));
+                if !is_dir {
+                    if let Some(p) = self.current().map(|e| e.path.clone()) {
+                        if crate::apps::wallpaper::is_image_path(&p) {
+                            items.push(("Set as wallpaper".into(), FileMenuAction::SetAsWallpaper));
+                        }
+                    }
+                }
                 if self.git_root.is_some() {
                     items.push(("Git: stage".into(), FileMenuAction::GitStage));
                     items.push(("Git: unstage".into(), FileMenuAction::GitUnstage));
@@ -947,6 +983,15 @@ impl FileBrowser {
             FileMenuAction::PinToDesktop => {
                 if let Some(e) = self.current().filter(|e| !e.is_up) {
                     return Action::PinToDesktop(e.path.clone());
+                }
+            }
+            FileMenuAction::SetAsWallpaper => {
+                if let Some(e) = self.current().filter(|e| !e.is_up) {
+                    return if self.pick_wallpaper {
+                        Action::SetWallpaperImageAndClose(e.path.clone())
+                    } else {
+                        Action::SetWallpaperImage(e.path.clone())
+                    };
                 }
             }
             FileMenuAction::GitStage => {
@@ -1444,6 +1489,9 @@ fn hex_preview(buf: &[u8]) -> String {
 
 impl AppWindow for FileBrowser {
     fn title(&self) -> String {
+        if self.pick_wallpaper {
+            return "Choose wallpaper".into();
+        }
         match &self.cwd {
             None => "Drives".into(),
             Some(p) => {
@@ -1742,6 +1790,7 @@ impl AppWindow for FileBrowser {
             }
             KeyCode::Enter => return self.open_sel(),
             KeyCode::Backspace => self.go_up(),
+            KeyCode::Esc | KeyCode::Char('q') if self.pick_wallpaper => return Action::Close,
             KeyCode::Esc if !self.marked.is_empty() => self.clear_marks(),
             KeyCode::Char(' ') if !ctrl && !alt => self.toggle_mark_current(),
             KeyCode::Char('a') if ctrl => self.mark_all_filtered(),
