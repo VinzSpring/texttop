@@ -72,7 +72,7 @@ impl About {
             kv("double-click title", "maximize / restore"),
             kv("drag ◢ corner", "resize window"),
             kv("─ □ ✕", "minimize · maximize · close"),
-            kv("drag icons", "rearrange desktop icons"),
+            kv("drag icons", "custom placement · right-click Arrange to pack"),
             kv("drag files", "drop on desktop / apps · Shift=cut"),
             kv("taskbar »N", "overflow window list"),
             kv("middle-click taskbar", "close window"),

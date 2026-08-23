@@ -77,7 +77,7 @@ on headless boxes use `xvfb-run`.
   drag the `◢` corner to resize, `─ □ ✕` buttons, taskbar buttons to focus/minimize
   (middle-click to close), **»N** overflow menu when windows don't fit
 - **Right-click** context menus on the desktop, icons, window title bars, taskbar, and files
-- **Drag** desktop icons to rearrange; **drag files** from Files onto the desktop
+- **Drag** desktop icons to place them on the grid (right-click **Arrange icons** to pack them again); **drag files** from Files onto the desktop
   (shortcut), into Files (copy/move), or onto Editor / Hex / Image / Audio / Video / Web / Terminal
   — hold **Shift** while dragging to cut; **Esc** cancels
 - Files → right-click → **Pin to desktop** · **Git: stage / unstage / diff** · **Create snapshot** · **Snapshot history** · **Compare N files**

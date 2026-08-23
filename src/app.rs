@@ -36,6 +36,23 @@ const WIN_BG: Color = Color::Rgb(12, 14, 22);
 const ICON_W: u16 = 12;
 const ICON_H: u16 = 3;
 const ICON_GAP: u16 = 1;
+const ICON_STEP_X: u16 = ICON_W + ICON_GAP;
+const ICON_STEP_Y: u16 = ICON_H + ICON_GAP;
+
+/// How close the pointer has to get to a screen edge to trigger a snap. The
+/// pointer has to land on the edge itself: a title bar can legitimately rest
+/// on row 1 or against a side, and a wider zone would swallow ordinary drags
+/// that start there.
+const SNAP_EDGE: u16 = 0;
+/// Gap a freshly spawned window keeps from the right edge.
+const SPAWN_MARGIN: u16 = 2;
+
+#[derive(Clone, Copy, PartialEq)]
+enum SnapZone {
+    Left,
+    Right,
+    Max,
+}
 
 struct Win {
     id: u64,
@@ -49,8 +66,18 @@ struct Win {
 }
 
 enum Drag {
-    Move { id: u64, dx: u16 },
-    Resize { id: u64 },
+    Move {
+        id: u64,
+        dx: u16,
+        /// Edge snapping only arms once the pointer has left every snap zone.
+        /// Without this a window whose title bar already sits in a zone (top
+        /// row, or flush against a side) would re-snap the moment the button
+        /// comes up, so it could never be dragged away from the edge.
+        armed: bool,
+    },
+    Resize {
+        id: u64,
+    },
     Icon {
         idx: usize,
         grab_x: u16,
@@ -238,6 +265,7 @@ enum CtxAction {
     SnapRight(u64),
     RestoreWindow(u64),
     RemoveShortcut(usize),
+    ArrangeIcons,
     ResetIcons,
     /// Open the pin-settings editor for a desktop pin icon.
     EditIconPin(usize),
@@ -271,6 +299,17 @@ pub struct Desktop {
     start_filter: String,
     show_keys: bool,
     icons: Vec<DeskIcon>,
+    /// When true, icons are packed into a column-major grid that fits the
+    /// current screen and reflow when the terminal is resized. Dragging an
+    /// icon (or dropping a shortcut onto a chosen spot) turns this off so
+    /// the user's placement is kept.
+    icons_auto: bool,
+    /// Screen size the auto-grid was last packed for. `(0, 0)` means never.
+    icon_layout_size: (u16, u16),
+    /// True when this session opened the default About window rather than
+    /// restoring a saved one — used to nudge that window off the icon gutter
+    /// once the real terminal size is known.
+    fresh_session: bool,
     icon_sel: usize,
     last_click: Option<(Instant, i32)>,
     last_title_click: Option<(Instant, u64)>,
@@ -310,7 +349,18 @@ pub struct Desktop {
 
 impl Desktop {
     pub fn new() -> Self {
-        let mut d = Desktop {
+        let mut d = Self::blank();
+        d.load_desktop();
+        d.add_missing_default_apps();
+        if !d.load_session() {
+            d.spawn(Launch::About);
+            d.fresh_session = true;
+        }
+        d
+    }
+
+    fn blank() -> Self {
+        Desktop {
             should_quit: false,
             windows: Vec::new(),
             next_id: 0,
@@ -319,6 +369,9 @@ impl Desktop {
             start_filter: String::new(),
             show_keys: false,
             icons: default_icons(),
+            icons_auto: true,
+            icon_layout_size: (0, 0),
+            fresh_session: false,
             icon_sel: 0,
             last_click: None,
             last_title_click: None,
@@ -349,13 +402,7 @@ impl Desktop {
             active_git_root: None,
             git_btn: None,
             git_label: String::new(),
-        };
-        d.load_desktop();
-        d.add_missing_default_apps();
-        if !d.load_session() {
-            d.spawn(Launch::About);
         }
-        d
     }
 
     /// New releases add app icons; place any the saved desktop doesn't have
@@ -384,7 +431,12 @@ impl Desktop {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
         self.screen = area;
+        self.apply_icon_layout();
         self.sanitize();
+        if self.fresh_session && self.icons_auto && self.icon_layout_size != (0, 0) {
+            self.nudge_windows_off_icon_gutter();
+            self.fresh_session = false;
+        }
 
         let taskbar_y = area.height.saturating_sub(1);
         let desk = Rect::new(0, 0, area.width, taskbar_y);
@@ -1602,6 +1654,7 @@ impl Desktop {
                                 self.drag = Some(Drag::Move {
                                     id,
                                     dx: col.saturating_sub(rect.x),
+                                    armed: false,
                                 });
                             }
                         }
@@ -1668,24 +1721,24 @@ impl Desktop {
                     }
                 }
                 match &self.drag {
-                    Some(Drag::Move { id, dx }) => {
-                        let (id, dx) = (*id, *dx);
-                        // Unsnap on first movement if still maximized/snapped
+                    Some(Drag::Move { id, .. }) => {
+                        let id = *id;
+                        // Unsnap on first movement if still maximized/snapped.
+                        // That can rewrite the grab offset, so read it after.
                         self.unsnap_if_needed(id, col);
-                        let dx = self
-                            .drag
-                            .as_ref()
-                            .and_then(|d| match d {
-                                Drag::Move { dx, .. } => Some(*dx),
-                                _ => None,
-                            })
-                            .unwrap_or(dx);
+                        let off_edge = self.snap_zone_at(col, row).is_none();
+                        let Some(Drag::Move { dx, armed, .. }) = &mut self.drag else {
+                            return;
+                        };
+                        *armed |= off_edge;
+                        let (dx, armed) = (*dx, *armed);
                         if let Some(w) = self.windows.iter_mut().find(|w| w.id == id) {
                             let max_x = self.screen.width.saturating_sub(w.rect.width);
                             w.rect.x = col.saturating_sub(dx).min(max_x);
                             w.rect.y = row.min(taskbar_y.saturating_sub(w.rect.height));
                         }
-                        self.snap_preview = self.preview_snap_at(col, row);
+                        self.snap_preview =
+                            armed.then(|| self.preview_snap_at(col, row)).flatten();
                     }
                     Some(Drag::Resize { id }) => {
                         let id = *id;
@@ -1710,8 +1763,8 @@ impl Desktop {
                         self.snap_preview = None;
                         let (idx, gx, gy) = (*idx, *grab_x, *grab_y);
                         if let Some(icon) = self.icons.get_mut(idx) {
-                            let max_x = self.screen.width.saturating_sub(ICON_W + 1);
-                            let max_y = taskbar_y.saturating_sub(ICON_H + 1);
+                            let max_x = icon_max_x(self.screen.width);
+                            let max_y = icon_max_y(taskbar_y);
                             icon.x = col.saturating_sub(gx).min(max_x);
                             icon.y = row.saturating_sub(gy).min(max_y);
                         }
@@ -1740,20 +1793,13 @@ impl Desktop {
                 self.snap_preview = None;
                 let finished = self.drag.take();
                 match finished {
-                    Some(Drag::Move { id, .. }) => {
-                        if let Some(w) = self.windows.iter().find(|w| w.id == id) {
-                            let edge = 2u16;
-                            let near_left = w.rect.x <= edge;
-                            let near_right =
-                                w.rect.x + w.rect.width + edge >= self.screen.width;
-                            let near_top = w.rect.y <= edge;
-                            let id = w.id;
-                            if near_top {
-                                self.snap_window_max(id);
-                            } else if near_left {
-                                self.snap_window(id, true);
-                            } else if near_right {
-                                self.snap_window(id, false);
+                    Some(Drag::Move { id, armed, .. }) => {
+                        if armed {
+                            match self.snap_zone_at(col, row) {
+                                Some(SnapZone::Max) => self.snap_window_max(id),
+                                Some(SnapZone::Left) => self.snap_window(id, true),
+                                Some(SnapZone::Right) => self.snap_window(id, false),
+                                None => {}
                             }
                         }
                     }
@@ -1769,6 +1815,7 @@ impl Desktop {
                             .map(|i| i.x != start_x || i.y != start_y)
                             .unwrap_or(false);
                         if moved {
+                            self.icons_auto = false;
                             self.snap_one_icon(idx);
                             self.save_desktop();
                             self.toast("icon moved");
@@ -1931,6 +1978,7 @@ impl Desktop {
                 ("Show desktop".into(), CtxAction::ShowDesktop),
                 ("Tile windows".into(), CtxAction::TileWindows),
                 ("Cascade windows".into(), CtxAction::CascadeWindows),
+                ("Arrange icons".into(), CtxAction::ArrangeIcons),
                 ("Reset icons".into(), CtxAction::ResetIcons),
                 ("Wallpaper".into(), CtxAction::Wallpaper),
             ],
@@ -1952,6 +2000,7 @@ impl Desktop {
             }
             _ => {}
         }
+        items.push(("Arrange icons".into(), CtxAction::ArrangeIcons));
         items.push(("Reset icons".into(), CtxAction::ResetIcons));
         self.open_context(col, row, items);
     }
@@ -2073,10 +2122,23 @@ impl Desktop {
                     self.toast("unpinned from taskbar");
                 }
             }
+            CtxAction::ArrangeIcons => {
+                self.icons_auto = true;
+                self.icon_layout_size = (0, 0);
+                self.arrange_icons_grid();
+                self.icon_layout_size = (self.screen.width, self.screen.height);
+                self.nudge_windows_off_icon_gutter();
+                self.save_desktop();
+                self.toast("icons arranged");
+            }
             CtxAction::ResetIcons => {
                 self.icons = default_icons();
+                self.icons_auto = true;
+                self.icon_layout_size = (0, 0);
                 self.arrange_icons_grid();
+                self.icon_layout_size = (self.screen.width, self.screen.height);
                 self.icon_sel = 0;
+                self.nudge_windows_off_icon_gutter();
                 self.save_desktop();
                 self.toast("icons reset");
             }
@@ -2123,6 +2185,7 @@ impl Desktop {
             }
         }
         // drop on desktop → shortcut (never a filesystem move)
+        self.icons_auto = false;
         self.add_shortcut(path, col, row);
     }
 
@@ -2132,26 +2195,11 @@ impl Desktop {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| path.to_string_lossy().to_string());
         let (emoji, _) = crate::apps::file_icon(&name, path.is_dir());
-        let taskbar_y = self.screen.height.saturating_sub(1);
-        let x = col
-            .saturating_sub(ICON_W / 2)
-            .min(self.screen.width.saturating_sub(ICON_W + 1));
-        let y = row
-            .saturating_sub(1)
-            .min(taskbar_y.saturating_sub(ICON_H + 1));
-        // avoid exact overlaps
-        let mut x = x;
-        let y = y;
-        for _ in 0..8 {
-            let clash = self
-                .icons
-                .iter()
-                .any(|i| i.x.abs_diff(x) < ICON_W && i.y.abs_diff(y) < ICON_H);
-            if !clash {
-                break;
-            }
-            x = (x + ICON_W + ICON_GAP).min(self.screen.width.saturating_sub(ICON_W + 1));
-        }
+        let (x, y) = self.nearest_free_slot(
+            col.saturating_sub(ICON_W / 2),
+            row.saturating_sub(1),
+            None,
+        );
         self.icons.push(DeskIcon {
             emoji: emoji.to_string(),
             label: truncate_label(&name, ICON_W as usize),
@@ -2383,9 +2431,18 @@ impl Desktop {
         let w = prefer_w.clamp(min_w.min(avail_w), avail_w);
         let h = prefer_h.clamp(min_h.min(avail_h), avail_h);
         let n = self.next_id as u16;
-        let max_x = scr.width.saturating_sub(w).max(1);
+        let max_x = scr.width.saturating_sub(w);
         let max_y = scr.height.saturating_sub(h + taskbar).max(1);
-        let x = (16 + n * 4) % max_x;
+        // Cascade to the right of the icon column, but keep clear of the right
+        // edge and wrap instead of piling up against it — a window that opens
+        // inside the snap zone is awkward to drag back out.
+        let limit = max_x.saturating_sub(SPAWN_MARGIN);
+        let gutter = if self.icons_auto {
+            self.icon_gutter_width().min(limit)
+        } else {
+            16u16.min(limit)
+        };
+        let x = gutter + n.saturating_mul(4) % (limit - gutter + 1);
         let y = (1 + n * 2) % max_y;
         self.windows.push(Win {
             id: self.next_id,
@@ -2463,14 +2520,18 @@ impl Desktop {
 
     /// True when a window looks layout-managed (max / snap / tile), so a drag
     /// should pull it back to a floating size.
+    ///
+    /// Only sessions saved before tiling started recording `restore` reach
+    /// here, so the test is deliberately strict: it must fill the desk from
+    /// the very top and be flush against a side. A merely large window that
+    /// happens to open near the top edge is not "arranged", and resizing it
+    /// out from under the pointer would make it feel undraggable.
     fn is_arranged(&self, r: &Rect, taskbar_y: u16) -> bool {
-        let touches_top = r.y <= 1;
-        let tall = r.height + r.y >= taskbar_y.saturating_sub(1);
-        let wide = r.width >= self.screen.width.saturating_sub(2)
-            || r.width >= self.screen.width / 2;
-        let flush_left = r.x <= 1;
-        let flush_right = r.x + r.width + 1 >= self.screen.width;
-        touches_top && tall && (wide || flush_left || flush_right)
+        let full_height = r.y == 0 && r.height >= taskbar_y;
+        let half = self.screen.width / 2;
+        let flush_left = r.x == 0;
+        let flush_right = r.x + r.width >= self.screen.width;
+        full_height && r.width >= half && (flush_left || flush_right)
     }
 
     fn snap_window(&mut self, id: u64, left: bool) {
@@ -2586,18 +2647,13 @@ impl Desktop {
     }
 
     fn snap_one_icon(&mut self, idx: usize) {
-        let step_x = ICON_W + ICON_GAP;
-        let step_y = ICON_H + ICON_GAP;
-        let taskbar_y = self.screen.height.saturating_sub(1);
-        let max_x = self.screen.width.saturating_sub(ICON_W + 1);
-        let max_y = taskbar_y.saturating_sub(ICON_H + 1).max(ICON_ORIGIN_Y);
+        let Some(icon) = self.icons.get(idx) else {
+            return;
+        };
+        let (x, y) = self.nearest_free_slot(icon.x, icon.y, Some(idx));
         if let Some(icon) = self.icons.get_mut(idx) {
-            // Snap relative to the same origin the grid uses (not 0,0).
-            let rx = icon.x.saturating_sub(ICON_ORIGIN_X);
-            let ry = icon.y.saturating_sub(ICON_ORIGIN_Y);
-            icon.x = (ICON_ORIGIN_X + ((rx + step_x / 2) / step_x) * step_x).min(max_x);
-            icon.y = (ICON_ORIGIN_Y + ((ry + step_y / 2) / step_y) * step_y)
-                .clamp(ICON_ORIGIN_Y, max_y);
+            icon.x = x;
+            icon.y = y;
         }
     }
 
@@ -2612,23 +2668,145 @@ impl Desktop {
         }
     }
 
-    fn preview_snap_at(&self, col: u16, _row: u16) -> Option<Rect> {
-        let edge = 3u16;
+    /// Reflow auto icons when the terminal size changes; clamp custom ones
+    /// so they stay fully on the desk and never stack on top of each other.
+    fn apply_icon_layout(&mut self) {
+        let size = (self.screen.width, self.screen.height);
+        if self.screen.width < 30 || self.screen.height < 8 {
+            return;
+        }
+        if self.icons_auto {
+            if self.icon_layout_size != size {
+                self.arrange_icons_grid();
+                self.icon_layout_size = size;
+            }
+        } else if self.icon_layout_size != size {
+            self.clamp_icons_to_screen();
+            self.resolve_icon_collisions();
+            self.icon_layout_size = size;
+        }
+    }
+
+    fn clamp_icons_to_screen(&mut self) {
+        let max_x = icon_max_x(self.screen.width);
+        let max_y = icon_max_y(self.screen.height.saturating_sub(1));
+        for icon in &mut self.icons {
+            icon.x = icon.x.min(max_x);
+            icon.y = icon.y.min(max_y);
+        }
+    }
+
+    fn resolve_icon_collisions(&mut self) {
+        for idx in 0..self.icons.len() {
+            if self.icon_overlaps(idx) {
+                let (x, y) = {
+                    let icon = &self.icons[idx];
+                    self.nearest_free_slot(icon.x, icon.y, Some(idx))
+                };
+                self.icons[idx].x = x;
+                self.icons[idx].y = y;
+            }
+        }
+    }
+
+    fn icon_overlaps(&self, idx: usize) -> bool {
+        let Some(a) = self.icons.get(idx) else {
+            return false;
+        };
+        self.icons
+            .iter()
+            .enumerate()
+            .any(|(j, b)| j != idx && icons_overlap(a, b))
+    }
+
+    /// Right edge of the packed icon columns, plus a one-cell gap. New windows
+    /// spawn here in auto-layout so they don't sit on top of the default icons.
+    fn icon_gutter_width(&self) -> u16 {
+        if self.icons.is_empty() {
+            return ICON_ORIGIN_X;
+        }
+        let per = icons_per_column(self.screen.height.saturating_sub(1)).max(1);
+        let cols = (self.icons.len() + per - 1) / per;
+        ICON_ORIGIN_X
+            .saturating_add((cols as u16).saturating_mul(ICON_STEP_X))
+            .saturating_add(1)
+    }
+
+    fn nudge_windows_off_icon_gutter(&mut self) {
+        let gutter = self.icon_gutter_width();
+        for w in &mut self.windows {
+            if w.minimized || w.rect.x >= gutter {
+                continue;
+            }
+            // Never past the snap zone: covering a few icons beats opening a
+            // window flush against the edge.
+            let limit = self
+                .screen
+                .width
+                .saturating_sub(w.rect.width)
+                .saturating_sub(SPAWN_MARGIN);
+            w.rect.x = gutter.min(limit);
+        }
+    }
+
+    fn nearest_free_slot(&self, want_x: u16, want_y: u16, except: Option<usize>) -> (u16, u16) {
+        let desk_h = self.screen.height.saturating_sub(1);
+        let (snap_x, snap_y) = snap_to_icon_grid(want_x, want_y, self.screen.width, desk_h);
+        if !self.slot_taken(snap_x, snap_y, except) {
+            return (snap_x, snap_y);
+        }
+        let mut best = (snap_x, snap_y);
+        let mut best_d = u32::MAX;
+        for (x, y) in icon_slots(self.screen.width, desk_h) {
+            if self.slot_taken(x, y, except) {
+                continue;
+            }
+            let d = u32::from(x.abs_diff(snap_x)) + u32::from(y.abs_diff(snap_y));
+            if d < best_d {
+                best_d = d;
+                best = (x, y);
+            }
+        }
+        if best_d == u32::MAX {
+            (snap_x, snap_y)
+        } else {
+            best
+        }
+    }
+
+    fn slot_taken(&self, x: u16, y: u16, except: Option<usize>) -> bool {
+        self.icons.iter().enumerate().any(|(j, ic)| {
+            Some(j) != except && ic.x.abs_diff(x) < ICON_W && ic.y.abs_diff(y) < ICON_H
+        })
+    }
+
+    /// Which edge the pointer is currently over, if any. Snapping keys off the
+    /// pointer rather than the window rect so that a window too wide to move
+    /// sideways doesn't count as "dragged to the edge".
+    fn snap_zone_at(&self, col: u16, row: u16) -> Option<SnapZone> {
+        if col <= SNAP_EDGE {
+            Some(SnapZone::Left)
+        } else if col + SNAP_EDGE >= self.screen.width {
+            Some(SnapZone::Right)
+        } else if row <= SNAP_EDGE {
+            Some(SnapZone::Max)
+        } else {
+            None
+        }
+    }
+
+    fn preview_snap_at(&self, col: u16, row: u16) -> Option<Rect> {
         let taskbar_y = self.screen.height.saturating_sub(1);
         let half = (self.screen.width / 2).max(24);
-        if col <= edge {
-            Some(Rect::new(0, 0, half, taskbar_y))
-        } else if col + edge >= self.screen.width {
-            Some(Rect::new(
+        match self.snap_zone_at(col, row)? {
+            SnapZone::Left => Some(Rect::new(0, 0, half, taskbar_y)),
+            SnapZone::Right => Some(Rect::new(
                 self.screen.width.saturating_sub(half),
                 0,
                 half,
                 taskbar_y,
-            ))
-        } else if _row <= edge {
-            Some(Rect::new(0, 0, self.screen.width, taskbar_y))
-        } else {
-            None
+            )),
+            SnapZone::Max => Some(Rect::new(0, 0, self.screen.width, taskbar_y)),
         }
     }
 
@@ -2892,24 +3070,7 @@ impl Desktop {
     }
 
     fn next_icon_slot(&self) -> (u16, u16) {
-        let taskbar_y = self.screen.height.saturating_sub(1);
-        let mut x = ICON_ORIGIN_X;
-        let mut y = ICON_ORIGIN_Y;
-        for _ in 0..64 {
-            let clash = self
-                .icons
-                .iter()
-                .any(|i| i.x.abs_diff(x) < ICON_W && i.y.abs_diff(y) < ICON_H);
-            if !clash {
-                return (x, y);
-            }
-            y += ICON_H + ICON_GAP;
-            if y + ICON_H >= taskbar_y {
-                y = ICON_ORIGIN_Y;
-                x += ICON_W + ICON_GAP;
-            }
-        }
-        (ICON_ORIGIN_X, ICON_ORIGIN_Y)
+        self.nearest_free_slot(ICON_ORIGIN_X, ICON_ORIGIN_Y, None)
     }
 
     fn toast(&mut self, msg: impl Into<String>) {
@@ -2979,6 +3140,7 @@ impl Desktop {
                 }),
             },
             "icons": icons,
+            "icons_auto": self.icons_auto,
             "taskbar_pins": self
                 .taskbar_pins
                 .iter()
@@ -3081,6 +3243,10 @@ impl Desktop {
         }
         if !icons.is_empty() {
             self.icons = icons;
+            self.icons_auto = v
+                .get("icons_auto")
+                .and_then(|b| b.as_bool())
+                .unwrap_or_else(|| looks_auto_packed(&self.icons));
         }
     }
 
@@ -3156,21 +3322,61 @@ impl Desktop {
                 w.rect.y = taskbar_y.saturating_sub(w.rect.height);
             }
         }
-        for icon in &mut self.icons {
-            icon.x = icon.x.min(scr.width.saturating_sub(ICON_W + 1));
-            icon.y = icon.y.min(taskbar_y.saturating_sub(ICON_H + 1).max(1));
+        if !self.icons_auto {
+            for icon in &mut self.icons {
+                icon.x = icon.x.min(icon_max_x(scr.width));
+                icon.y = icon.y.min(icon_max_y(taskbar_y));
+            }
         }
     }
 }
 
 /// How many icon rows fit above the taskbar.
 fn icons_per_column(desk_h: u16) -> usize {
-    let step = ICON_H + ICON_GAP;
-    let usable = desk_h.saturating_sub(ICON_ORIGIN_Y);
-    if usable < ICON_H {
+    let last_y = icon_max_y(desk_h);
+    if last_y < ICON_ORIGIN_Y {
         return 1;
     }
-    (((usable - ICON_H) / step) + 1).max(1) as usize
+    (((last_y - ICON_ORIGIN_Y) / ICON_STEP_Y) + 1).max(1) as usize
+}
+
+fn icon_max_x(screen_w: u16) -> u16 {
+    screen_w.saturating_sub(ICON_W)
+}
+
+fn icon_max_y(desk_h: u16) -> u16 {
+    desk_h.saturating_sub(ICON_H)
+}
+
+fn snap_axis(val: u16, origin: u16, step: u16, max: u16) -> u16 {
+    if step == 0 {
+        return val.min(max);
+    }
+    let v = val.max(origin);
+    let r = v.saturating_sub(origin);
+    let snapped = origin.saturating_add((r + step / 2) / step * step);
+    let last = origin.saturating_add(max.saturating_sub(origin) / step * step);
+    snapped.min(last).min(max)
+}
+
+fn snap_to_icon_grid(x: u16, y: u16, screen_w: u16, desk_h: u16) -> (u16, u16) {
+    (
+        snap_axis(x, ICON_ORIGIN_X, ICON_STEP_X, icon_max_x(screen_w)),
+        snap_axis(y, ICON_ORIGIN_Y, ICON_STEP_Y, icon_max_y(desk_h)),
+    )
+}
+
+fn icon_slots(screen_w: u16, desk_h: u16) -> impl Iterator<Item = (u16, u16)> {
+    let per_col = icons_per_column(desk_h).max(1);
+    let max_x = icon_max_x(screen_w);
+    (0usize..).map_while(move |i| {
+        let (x, y) = icon_grid_slot(i, per_col);
+        if x > max_x {
+            None
+        } else {
+            Some((x, y))
+        }
+    })
 }
 
 fn icon_grid_slot(index: usize, per_col: usize) -> (u16, u16) {
@@ -3178,9 +3384,25 @@ fn icon_grid_slot(index: usize, per_col: usize) -> (u16, u16) {
     let col = (index / per_col) as u16;
     let row = (index % per_col) as u16;
     (
-        ICON_ORIGIN_X + col * (ICON_W + ICON_GAP),
-        ICON_ORIGIN_Y + row * (ICON_H + ICON_GAP),
+        ICON_ORIGIN_X + col * ICON_STEP_X,
+        ICON_ORIGIN_Y + row * ICON_STEP_Y,
     )
+}
+
+fn icons_overlap(a: &DeskIcon, b: &DeskIcon) -> bool {
+    a.x.abs_diff(b.x) < ICON_W && a.y.abs_diff(b.y) < ICON_H
+}
+
+fn looks_auto_packed(icons: &[DeskIcon]) -> bool {
+    if icons.is_empty() {
+        return true;
+    }
+    (1..=24).any(|per_col| {
+        icons.iter().enumerate().all(|(i, ic)| {
+            let (x, y) = icon_grid_slot(i, per_col);
+            ic.x == x && ic.y == y
+        })
+    })
 }
 
 fn default_icons() -> Vec<DeskIcon> {
@@ -3318,4 +3540,261 @@ fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
 
 fn contains(r: Rect, col: u16, row: u16) -> bool {
     col >= r.x && col < r.x + r.width && row >= r.y && row < r.y + r.height
+}
+
+#[cfg(test)]
+mod icon_layout_tests {
+    use super::*;
+
+    fn visible(icon: &DeskIcon, w: u16, h: u16) -> bool {
+        let desk_h = h.saturating_sub(1);
+        icon.x + ICON_W <= w && icon.y + ICON_H <= desk_h
+    }
+
+    fn assert_no_visible_overlaps(icons: &[DeskIcon], w: u16, h: u16) {
+        let vis: Vec<&DeskIcon> = icons.iter().filter(|i| visible(i, w, h)).collect();
+        for (i, a) in vis.iter().enumerate() {
+            for b in vis.iter().skip(i + 1) {
+                assert!(
+                    !icons_overlap(a, b),
+                    "icons overlap at ({},{}) and ({},{}) on {w}x{h}",
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn column_count_fits_above_the_taskbar() {
+        // 45-row terminal: desk is 44, last icon row at y=41 (cells 41..=43).
+        assert_eq!(icons_per_column(44), 11);
+        // 36-row terminal matches the old hardcoded fallback of 8.
+        assert_eq!(icons_per_column(35), 8);
+        // Short terminal: two rows at y=1 and y=5 (cells 5..=7), taskbar at 9.
+        assert_eq!(icons_per_column(9), 2);
+    }
+
+    #[test]
+    fn packed_layout_does_not_overlap_or_clip() {
+        for (w, h) in [(80, 24), (120, 36), (150, 45), (40, 12)] {
+            let mut desk = Desktop::blank();
+            desk.screen = Rect::new(0, 0, w, h);
+            desk.apply_icon_layout();
+            assert!(desk.icons_auto);
+            assert_eq!(desk.icons.len(), DEFAULT_ICONS.len());
+            assert_no_visible_overlaps(&desk.icons, w, h);
+            for (i, icon) in desk.icons.iter().enumerate() {
+                if !visible(icon, w, h) {
+                    continue;
+                }
+                let (x, y) = icon_grid_slot(i, icons_per_column(h.saturating_sub(1)));
+                assert_eq!(
+                    (icon.x, icon.y),
+                    (x, y),
+                    "icon {i} should sit on the packed grid"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn snap_stays_on_the_grid() {
+        let desk_h = 44;
+        let screen_w = 150;
+        let (x, y) = snap_to_icon_grid(2, 1, screen_w, desk_h);
+        assert_eq!((x, y), (2, 1));
+        // Near the last row: must land on a real slot, not one cell short of it.
+        let last = ICON_ORIGIN_Y + (icons_per_column(desk_h) as u16 - 1) * ICON_STEP_Y;
+        let (x, y) = snap_to_icon_grid(3, last, screen_w, desk_h);
+        assert_eq!((x, y), (ICON_ORIGIN_X, last));
+        let (x, y) = snap_to_icon_grid(20, 40, screen_w, desk_h);
+        assert_eq!(x % ICON_STEP_X, ICON_ORIGIN_X % ICON_STEP_X);
+        assert_eq!(y % ICON_STEP_Y, ICON_ORIGIN_Y % ICON_STEP_Y);
+        assert!(y + ICON_H <= desk_h);
+        assert!(x + ICON_W <= screen_w);
+    }
+
+    #[test]
+    fn default_grid_is_detected_as_auto() {
+        assert!(looks_auto_packed(&default_icons()));
+        let mut icons = default_icons();
+        icons[3].x = 40;
+        icons[3].y = 12;
+        assert!(!looks_auto_packed(&icons));
+    }
+
+    #[test]
+    fn custom_placement_survives_resize() {
+        let mut desk = Desktop::blank();
+        desk.screen = Rect::new(0, 0, 150, 45);
+        desk.apply_icon_layout();
+        let (x, y) = (ICON_ORIGIN_X + ICON_STEP_X * 4, ICON_ORIGIN_Y + ICON_STEP_Y * 2);
+        desk.icons[0].x = x;
+        desk.icons[0].y = y;
+        desk.icons_auto = false;
+        desk.icon_layout_size = (0, 0);
+        desk.screen = Rect::new(0, 0, 160, 50);
+        desk.apply_icon_layout();
+        assert_eq!((desk.icons[0].x, desk.icons[0].y), (x, y));
+        assert!(!desk.icons_auto);
+        assert_no_visible_overlaps(&desk.icons, 160, 50);
+    }
+
+    #[test]
+    fn dropping_on_an_occupied_slot_picks_a_neighbour() {
+        let mut desk = Desktop::blank();
+        desk.screen = Rect::new(0, 0, 150, 45);
+        desk.apply_icon_layout();
+        let occupied = (desk.icons[0].x, desk.icons[0].y);
+        let (x, y) = desk.nearest_free_slot(occupied.0, occupied.1, None);
+        assert_ne!((x, y), occupied);
+        assert!(!desk.slot_taken(x, y, None));
+    }
+
+    #[test]
+    fn clamping_stacked_icons_spreads_them() {
+        let mut desk = Desktop::blank();
+        desk.icons_auto = false;
+        desk.screen = Rect::new(0, 0, 80, 20);
+        let max_y = icon_max_y(19);
+        for icon in &mut desk.icons {
+            icon.x = 2;
+            icon.y = 80; // off the bottom — clamp would stack them
+        }
+        desk.icon_layout_size = (0, 0);
+        desk.apply_icon_layout();
+        for icon in &desk.icons {
+            assert!(icon.y <= max_y);
+        }
+        assert_no_visible_overlaps(&desk.icons, 80, 20);
+    }
+}
+
+#[cfg(test)]
+mod window_drag_tests {
+    use super::*;
+
+    fn ev(kind: MouseEventKind, col: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// A desktop with one window open, laid out for the given terminal size,
+    /// exactly as a fresh session would present it.
+    fn fresh(w: u16, h: u16) -> Desktop {
+        let mut d = Desktop::blank();
+        d.screen = Rect::new(0, 0, w, h);
+        d.apply_icon_layout();
+        d.spawn(Launch::About);
+        d.nudge_windows_off_icon_gutter();
+        d.sanitize();
+        d
+    }
+
+    fn drag_title(d: &mut Desktop, from: (u16, u16), to: (u16, u16)) {
+        d.on_mouse(ev(MouseEventKind::Down(MouseButton::Left), from.0, from.1));
+        let steps = from.0.abs_diff(to.0).max(from.1.abs_diff(to.1)).max(1);
+        for s in 1..=steps {
+            let lerp = |a: u16, b: u16| {
+                let (a, b) = (a as i32, b as i32);
+                (a + (b - a) * s as i32 / steps as i32) as u16
+            };
+            d.on_mouse(ev(
+                MouseEventKind::Drag(MouseButton::Left),
+                lerp(from.0, to.0),
+                lerp(from.1, to.1),
+            ));
+        }
+        d.on_mouse(ev(MouseEventKind::Up(MouseButton::Left), to.0, to.1));
+    }
+
+    const SIZES: [(u16, u16); 5] = [(80, 24), (120, 36), (150, 45), (200, 50), (75, 40)];
+
+    #[test]
+    fn a_new_window_opens_outside_the_snap_zone() {
+        for (w, h) in SIZES {
+            let d = fresh(w, h);
+            let r = d.windows[0].rect;
+            assert!(
+                r.x + r.width + SNAP_EDGE < w,
+                "{w}x{h}: window {r:?} opens inside the right snap zone"
+            );
+        }
+    }
+
+    #[test]
+    fn dragging_a_window_moves_it_and_keeps_its_size() {
+        for (w, h) in SIZES {
+            let mut d = fresh(w, h);
+            let before = d.windows[0].rect;
+            let from = (before.x + 5, before.y);
+            let to = (from.0 + 6, from.1 + 4);
+            drag_title(&mut d, from, to);
+            let after = d.windows[0].rect;
+            assert_eq!(
+                (after.width, after.height),
+                (before.width, before.height),
+                "{w}x{h}: drag resized the window"
+            );
+            // On a terminal barely wider or taller than the window there is
+            // nowhere to go, so compare against the reachable position.
+            let want = (
+                (before.x + 6).min(w.saturating_sub(before.width)),
+                (before.y + 4).min(h.saturating_sub(1 + before.height)),
+            );
+            assert_eq!(
+                (after.x, after.y),
+                want,
+                "{w}x{h}: window did not follow the pointer"
+            );
+            assert!(d.windows[0].restore.is_none(), "{w}x{h}: left snapped");
+        }
+    }
+
+    #[test]
+    fn a_window_at_the_top_can_be_dragged_down_without_maximizing() {
+        let mut d = fresh(150, 45);
+        d.windows[0].rect.x = 20;
+        d.windows[0].rect.y = 0;
+        let before = d.windows[0].rect;
+        drag_title(&mut d, (25, 0), (30, 9));
+        assert_eq!(d.windows[0].rect.height, before.height);
+        assert_eq!(d.windows[0].rect.y, 9);
+    }
+
+    #[test]
+    fn dragging_to_an_edge_still_snaps() {
+        let mut d = fresh(150, 45);
+        let r = d.windows[0].rect;
+        drag_title(&mut d, (r.x + 5, r.y), (0, 20));
+        assert_eq!(d.windows[0].rect.x, 0);
+        assert_eq!(d.windows[0].rect.width, 75);
+        assert!(d.windows[0].restore.is_some(), "snap should be undoable");
+
+        let mut d = fresh(150, 45);
+        let r = d.windows[0].rect;
+        drag_title(&mut d, (r.x + 5, r.y), (60, 0));
+        assert_eq!(d.windows[0].rect, Rect::new(0, 0, 150, 44));
+    }
+
+    #[test]
+    fn a_maximized_window_unsnaps_when_dragged_off_the_top() {
+        let mut d = fresh(150, 45);
+        let id = d.windows[0].id;
+        let floating = d.windows[0].rect;
+        d.snap_window_max(id);
+        assert_eq!(d.windows[0].rect, Rect::new(0, 0, 150, 44));
+        drag_title(&mut d, (40, 0), (46, 12));
+        let r = d.windows[0].rect;
+        assert_eq!((r.width, r.height), (floating.width, floating.height));
+        assert!(r.y > 0, "window stayed pinned to the top: {r:?}");
+        assert!(d.windows[0].restore.is_none());
+    }
 }

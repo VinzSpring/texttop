@@ -206,6 +206,19 @@ pub const VISIBILITY_JS: &str = r#"(function(){
  }catch(e){}
 })()"#;
 
+/// Desktop Chrome user-agent string. WKWebView and WebKitGTK otherwise
+/// identify as Safari, and WebView2 as Edge; many sites then serve a
+/// degraded or blocked page. The version is a recent stable Chrome; sites
+/// typically only look for the `Chrome/` token and the 537.36 WebKit token.
+#[cfg(all(feature = "web-engine", target_os = "macos"))]
+pub const CHROME_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+#[cfg(all(feature = "web-engine", target_os = "linux"))]
+pub const CHROME_UA: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+#[cfg(all(feature = "web-engine", windows))]
+pub const CHROME_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
 /// Simulated pointer events for engines without a native input path
 /// (WebKitGTK, or WebView2 when its input window can't be found). Tracks
 /// the hovered element so JS-driven hover UIs (menus, tooltips) fire
