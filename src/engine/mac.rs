@@ -14,7 +14,7 @@ use webkit::prelude::*;
 
 use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, CookieInfo, DataKind, Frame, PageInfo,
-    Status, TextRun, EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
+    Status, TextRun, CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
 /// Safety bound on the layout viewport, well above any real terminal.
@@ -175,6 +175,7 @@ fn run(
         snap_w: 1,
         scale: 1.0,
     };
+    view.set_custom_user_agent(Some(CHROME_UA));
     view.set_page_zoom(st.page_zoom);
     resize(&view, &mut st, size0.0, size0.1);
 

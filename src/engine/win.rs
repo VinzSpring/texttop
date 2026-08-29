@@ -10,14 +10,15 @@ use std::time::{Duration, Instant};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2EnvironmentOptions, COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
+    ICoreWebView2EnvironmentOptions, ICoreWebView2Settings2,
+    COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
 };
 use webview2_com::{
     CapturePreviewCompletedHandler, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     ExecuteScriptCompletedHandler, NewWindowRequestedEventHandler,
 };
-use windows::core::{PCWSTR, PWSTR};
+use windows::core::{Interface, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{HGLOBAL, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::System::Com::StructuredStorage::CreateStreamOnHGlobal;
 use windows::Win32::System::Com::{
@@ -37,7 +38,7 @@ const MK_LBUTTON: usize = 0x0001;
 
 use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, MouseKind, PageInfo, Status,
-    TextRun, EXTRACT_JS, REMOVE_STYLE_JS,
+    TextRun, CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS,
 };
 
 pub struct Engine {
@@ -287,6 +288,14 @@ fn run(
                                 return Ok(());
                             }
                         };
+                        unsafe {
+                            if let Ok(settings) = webview.Settings() {
+                                if let Ok(s2) = settings.cast::<ICoreWebView2Settings2>() {
+                                    let ua = wide(CHROME_UA);
+                                    let _ = s2.SetUserAgent(PCWSTR(ua.as_ptr()));
+                                }
+                            }
+                        }
                         // keep popups/new tabs in the same view
                         unsafe {
                             let mut token: i64 = 0;

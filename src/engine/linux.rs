@@ -14,7 +14,7 @@ use webkit2gtk::{SettingsExt, SnapshotOptions, SnapshotRegion, WebView, WebViewE
 
 use super::{
     clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
-    EXTRACT_JS, REMOVE_STYLE_JS,
+    CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS,
 };
 
 pub struct Engine {
@@ -104,6 +104,7 @@ fn run(
         settings.set_enable_developer_extras(false);
         // accelerated compositing breaks off-screen snapshots
         settings.set_hardware_acceleration_policy(webkit2gtk::HardwareAccelerationPolicy::Never);
+        settings.set_user_agent(Some(CHROME_UA));
     }
     view.set_zoom_level(zoom);
     win.add(&view);
