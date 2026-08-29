@@ -127,8 +127,8 @@ impl About {
             kv("💣 Minesweeper", "click/flag mines · 3 difficulties"),
             kv("🎮 2048", "slide & merge tiles to 2048"),
             kv(
-                "🎨 Wallpaper",
-                "themes + image… tile opens Files to pick a photo",
+                "🧩 Detected Apps",
+                "scan PATH for vim · claude · gemini · git · … and pin to desktop",
             ),
             Line::default(),
             Line::from(Span::styled("   File Manager", accent)),

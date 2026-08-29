@@ -14,9 +14,9 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::apps::{
     about::About, apphost::AppHost, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
-    clock::ClockApp, compare::CompareApp, editor::Editor, filebrowser::FileBrowser,
-    game2048::Game2048, git::GitApp, hexviewer::HexViewer, imageviewer::ImageViewer,
-    launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
+    clock::ClockApp, compare::CompareApp, detect::DetectedAppsChooser, editor::Editor,
+    filebrowser::FileBrowser, game2048::Game2048, git::GitApp, hexviewer::HexViewer,
+    imageviewer::ImageViewer, launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
     pin::{PinEdit, PinEditor, PinPrompt, PinTo, PinnedApp},
     processes::Processes, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
     sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer,
@@ -88,6 +88,7 @@ enum MenuAction {
     Minesweeper,
     Game2048,
     Wallpaper,
+    DetectedApps,
     Keys,
     About,
     Quit,
@@ -115,6 +116,7 @@ impl MenuAction {
             MenuAction::Minesweeper => "Minesweeper",
             MenuAction::Game2048 => "Game2048",
             MenuAction::Wallpaper => "Wallpaper",
+            MenuAction::DetectedApps => "DetectedApps",
             MenuAction::Keys => "Keys",
             MenuAction::About => "About",
             MenuAction::Quit => "Quit",
@@ -142,6 +144,7 @@ impl MenuAction {
             "Minesweeper" => MenuAction::Minesweeper,
             "Game2048" => MenuAction::Game2048,
             "Wallpaper" => MenuAction::Wallpaper,
+            "DetectedApps" => MenuAction::DetectedApps,
             "Keys" => MenuAction::Keys,
             "About" => MenuAction::About,
             "Quit" => MenuAction::Quit,
@@ -171,6 +174,7 @@ const MENU: &[(&str, MenuAction, &str)] = &[
     ("💣  Minesweeper", MenuAction::Minesweeper, "Games"),
     ("🎮  2048", MenuAction::Game2048, "Games"),
     ("🎨  Wallpaper", MenuAction::Wallpaper, "Settings"),
+    ("🧩  Detected Apps", MenuAction::DetectedApps, "Settings"),
     ("⌨  Shortcut Keys", MenuAction::Keys, "Settings"),
     ("✨  About & Help", MenuAction::About, "Settings"),
     ("⏻  Exit texttop", MenuAction::Quit, "Settings"),
@@ -245,6 +249,8 @@ enum CtxAction {
     PinShortcut(usize),
     /// Create a brand-new pin from scratch.
     NewPin(PinTo),
+    /// Open the PATH-detected CLI apps chooser.
+    AddDetectedApps,
     RunTaskbarPin(usize),
     EditTaskbarPin(usize),
     UnpinTaskbar(usize),
@@ -1857,6 +1863,7 @@ impl Desktop {
                 row.saturating_sub(1),
                 vec![
                     ("Pin app to taskbar…".into(), CtxAction::NewPin(PinTo::Taskbar)),
+                    ("Add detected apps…".into(), CtxAction::AddDetectedApps),
                     ("Show desktop".into(), CtxAction::ShowDesktop),
                     ("Tile windows".into(), CtxAction::TileWindows),
                     ("Cascade windows".into(), CtxAction::CascadeWindows),
@@ -1928,6 +1935,7 @@ impl Desktop {
                 ("Open Terminal".into(), CtxAction::OpenTerminal),
                 ("Open Editor".into(), CtxAction::OpenEditor),
                 ("Pin app to desktop…".into(), CtxAction::NewPin(PinTo::Desktop)),
+                ("Add detected apps…".into(), CtxAction::AddDetectedApps),
                 ("Show desktop".into(), CtxAction::ShowDesktop),
                 ("Tile windows".into(), CtxAction::TileWindows),
                 ("Cascade windows".into(), CtxAction::CascadeWindows),
@@ -2051,6 +2059,9 @@ impl Desktop {
                     to,
                     edit: None,
                 });
+            }
+            CtxAction::AddDetectedApps => {
+                self.spawn(Launch::DetectedApps);
             }
             CtxAction::RunTaskbarPin(idx) => {
                 if let Some(pin) = self.taskbar_pins.get(idx).cloned() {
@@ -2289,6 +2300,7 @@ impl Desktop {
             MenuAction::Game2048 => Launch::Game2048,
             MenuAction::About => Launch::About,
             MenuAction::Wallpaper => Launch::Wallpaper,
+            MenuAction::DetectedApps => Launch::DetectedApps,
             MenuAction::Keys => {
                 self.show_keys = true;
                 self.start_open = false;
@@ -2373,6 +2385,17 @@ impl Desktop {
                 40,
                 12,
             ),
+            Launch::DetectedApps => {
+                let already = self.pinned_stems();
+                (
+                    Box::new(DetectedAppsChooser::new(already)),
+                    "🧩",
+                    72,
+                    28,
+                    48,
+                    14,
+                )
+            }
         };
         let scr = self.screen;
         let taskbar = 1u16;
@@ -2771,7 +2794,46 @@ impl Desktop {
                 self.set_wallpaper_image(path);
                 self.close_id(id);
             }
+            Action::AddDetectedPins { pins, to } => {
+                self.close_id(id);
+                let n = pins.len();
+                for pin in pins {
+                    self.save_pin(pin, to, None);
+                }
+                self.toast(format!(
+                    "added {n} app{}",
+                    if n == 1 { "" } else { "s" }
+                ));
+            }
         }
+    }
+
+    /// Stems / ids already on the desktop or taskbar (to hide from the chooser).
+    fn pinned_stems(&self) -> std::collections::HashSet<String> {
+        let mut set = std::collections::HashSet::new();
+        let add = |set: &mut std::collections::HashSet<String>, p: &PathBuf| {
+            if let Some(s) = p.file_stem().and_then(|s| s.to_str()) {
+                set.insert(s.to_ascii_lowercase());
+            }
+            if let Some(s) = p.file_name().and_then(|s| s.to_str()) {
+                set.insert(s.to_ascii_lowercase());
+            }
+        };
+        for icon in &self.icons {
+            match &icon.kind {
+                DeskKind::Pin(pin) => {
+                    add(&mut set, &pin.program);
+                    set.insert(pin.name.to_ascii_lowercase());
+                }
+                DeskKind::Shortcut(p) => add(&mut set, p),
+                _ => {}
+            }
+        }
+        for pin in &self.taskbar_pins {
+            add(&mut set, &pin.program);
+            set.insert(pin.name.to_ascii_lowercase());
+        }
+        set
     }
 
     fn clear_wallpaper_image(&mut self) {
@@ -3258,6 +3320,7 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
         Launch::Game2048 => json!({"t": "2048"}),
         Launch::Wallpaper => json!({"t": "wallpaper"}),
         Launch::WallpaperPicker { .. } => return None,
+        Launch::DetectedApps => return None,
         Launch::AppLauncher(_) => return None,
         // one-shot pin dialogs are not restored
         Launch::PinEditor { .. } | Launch::PinPrompt(_) => return None,

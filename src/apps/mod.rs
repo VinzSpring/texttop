@@ -65,6 +65,7 @@ pub mod calculator;
 pub mod calendar;
 pub mod clock;
 pub mod compare;
+pub mod detect;
 pub mod editor;
 pub mod filebrowser;
 pub mod game2048;
@@ -121,6 +122,11 @@ pub enum Action {
     SetWallpaperImage(PathBuf),
     /// Cover-fill an image as wallpaper and close the requesting window.
     SetWallpaperImageAndClose(PathBuf),
+    /// Pin one or more detected CLI apps (closes the chooser).
+    AddDetectedPins {
+        pins: Vec<pin::PinnedApp>,
+        to: pin::PinTo,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -169,6 +175,8 @@ pub enum Launch {
     Wallpaper,
     /// File browser in "pick an image for wallpaper" mode.
     WallpaperPicker { start: PathBuf },
+    /// Chooser for CLI tools found on PATH.
+    DetectedApps,
 }
 
 pub trait AppWindow {
