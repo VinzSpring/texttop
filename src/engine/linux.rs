@@ -2,7 +2,7 @@
 //! WebView on a dedicated thread running the GLib main loop by hand;
 //! snapshots are converted from cairo surfaces into RGB frames.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -10,11 +10,16 @@ use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use javascriptcore::ValueExt;
-use webkit2gtk::{SettingsExt, SnapshotOptions, SnapshotRegion, WebView, WebViewExt};
+use webkit2gtk::{
+    CookieAcceptPolicy, CookieManagerExt, CookiePersistentStorage, SettingsExt, SnapshotOptions,
+    SnapshotRegion, UserContentInjectedFrames, UserContentManager, UserContentManagerExt,
+    UserScript, UserScriptInjectionTime, WebContext, WebContextExt, WebView, WebViewExt,
+    WebsiteDataManagerExt, WebsiteDataManagerExtManual, WebsiteDataTypes,
+};
 
 use super::{
-    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, PageInfo, Status, TextRun,
-    CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS,
+    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, CookieInfo, DataKind, Frame, PageInfo,
+    Status, TextRun, CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
 pub struct Engine {
@@ -23,22 +28,36 @@ pub struct Engine {
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
 }
 
 impl Engine {
-    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, _private: bool) -> Engine {
+    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, private: bool) -> Engine {
         let (tx, rx) = mpsc::channel();
         let frame: Arc<Mutex<Option<Arc<Frame>>>> = Arc::new(Mutex::new(None));
         let info = Arc::new(Mutex::new(PageInfo::default()));
         let status = Arc::new(Mutex::new(Status::Starting));
         let texts: Arc<Mutex<Vec<TextRun>>> = Arc::new(Mutex::new(Vec::new()));
+        let cookies: Arc<Mutex<Vec<CookieInfo>>> = Arc::new(Mutex::new(Vec::new()));
         {
             let frame = frame.clone();
             let info = info.clone();
             let status = status.clone();
             let texts = texts.clone();
+            let cookies = cookies.clone();
             std::thread::spawn(move || {
-                run(rx, frame, info, status, texts, initial, zoom, (w, h))
+                run(
+                    rx,
+                    frame,
+                    info,
+                    status,
+                    texts,
+                    cookies,
+                    initial,
+                    zoom,
+                    (w, h),
+                    private,
+                )
             });
         }
         Engine {
@@ -47,6 +66,7 @@ impl Engine {
             info,
             status,
             texts,
+            cookies,
         }
     }
 
@@ -66,10 +86,10 @@ impl Engine {
         self.status.lock().unwrap().clone()
     }
 
-    /// WebKitGTK cookie management is not wired up here; the browser shows an
-    /// empty inventory rather than pretending.
-    pub fn cookies(&self) -> Vec<super::CookieInfo> {
-        Vec::new()
+    /// Cookies as of the last [`Cmd::RefreshCookies`] — the cookie manager
+    /// answers asynchronously on the GTK thread.
+    pub fn cookies(&self) -> Vec<CookieInfo> {
+        self.cookies.lock().unwrap().clone()
     }
 
     pub fn texts(&self) -> Vec<TextRun> {
@@ -84,9 +104,11 @@ fn run(
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
     initial: Cmd,
     zoom: f64,
     size0: (i32, i32),
+    private: bool,
 ) {
     if gtk::init().is_err() {
         *status.lock().unwrap() = Status::Error(
@@ -98,7 +120,43 @@ fn run(
     }
 
     let win = gtk::OffscreenWindow::new();
-    let view = WebView::new();
+    let cm = UserContentManager::new();
+    let script = UserScript::new(
+        VISIBILITY_JS,
+        UserContentInjectedFrames::AllFrames,
+        UserScriptInjectionTime::Start,
+        &[],
+        &[],
+    );
+    cm.add_script(&script);
+    // Private windows get an ephemeral context: cookies, caches and storage
+    // stay in memory and die with the view. Otherwise cookies go to disk so
+    // logins survive restarts, as they do with the other engines.
+    let ctx = if private {
+        WebContext::new_ephemeral()
+    } else {
+        let ctx = WebContext::default().unwrap_or_else(WebContext::new);
+        if let (Some(cookie_mgr), Some(dir)) = (ctx.cookie_manager(), dirs::data_local_dir()) {
+            let dir = dir.join("texttop").join("webkitgtk");
+            if std::fs::create_dir_all(&dir).is_ok() {
+                cookie_mgr.set_persistent_storage(
+                    &dir.join("cookies.sqlite").to_string_lossy(),
+                    CookiePersistentStorage::Sqlite,
+                );
+            }
+        }
+        ctx
+    };
+    let view = WebView::builder()
+        .web_context(&ctx)
+        .user_content_manager(&cm)
+        .build();
+    let privacy = Privacy {
+        ctx,
+        cookies,
+        inflight: Rc::new(Cell::new(0)),
+    };
+    let mut quit_at: Option<Instant> = None;
     if let Some(settings) = WebViewExt::settings(&view) {
         settings.set_media_playback_requires_user_gesture(false);
         settings.set_enable_developer_extras(false);
@@ -127,11 +185,17 @@ fn run(
     gtk::glib::timeout_add_local(Duration::from_millis(15), move || {
         loop {
             match rx.try_recv() {
-                Ok(cmd) => handle_cmd(cmd, &win, &view, &overlay, &frame, &texts),
+                Ok(cmd) => handle_cmd(cmd, &win, &view, &overlay, &frame, &texts, &privacy),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
-                    gtk::main_quit();
-                    return gtk::glib::ControlFlow::Break;
+                    // Give queued store operations (clear-on-exit) time to land.
+                    let deadline =
+                        *quit_at.get_or_insert_with(|| Instant::now() + Duration::from_secs(2));
+                    if privacy.inflight.get() == 0 || Instant::now() >= deadline {
+                        gtk::main_quit();
+                        return gtk::glib::ControlFlow::Break;
+                    }
+                    return gtk::glib::ControlFlow::Continue;
                 }
             }
         }
@@ -207,6 +271,14 @@ fn log(msg: &str) {
     }
 }
 
+/// Cookie / site-data state owned by the GTK thread.
+struct Privacy {
+    ctx: WebContext,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
+    /// Async store operations still running.
+    inflight: Rc<Cell<u32>>,
+}
+
 fn handle_cmd(
     cmd: Cmd,
     win: &gtk::OffscreenWindow,
@@ -214,6 +286,7 @@ fn handle_cmd(
     overlay: &Rc<Cell<bool>>,
     frame: &Arc<Mutex<Option<Arc<Frame>>>>,
     texts: &Arc<Mutex<Vec<TextRun>>>,
+    privacy: &Privacy,
 ) {
     match cmd {
         Cmd::TextOverlay(on) => {
@@ -258,10 +331,118 @@ fn handle_cmd(
             let s = mouse_sim_js(kind, cx, cy);
             view.run_javascript(&s, None::<&gtk::gio::Cancellable>, |_| {});
         }
-        // Cookie and site-data management are macOS-only so far. The browser
-        // reports that rather than silently doing nothing.
-        Cmd::ClearData(_) | Cmd::SetCookiePolicy(_) | Cmd::RefreshCookies => {}
+        Cmd::ClearData(kind) => clear_data(privacy, kind),
+        Cmd::SetCookiePolicy(accept) => {
+            if let Some(cm) = privacy.ctx.cookie_manager() {
+                cm.set_accept_policy(if accept {
+                    CookieAcceptPolicy::Always
+                } else {
+                    CookieAcceptPolicy::Never
+                });
+            }
+        }
+        Cmd::RefreshCookies => read_cookies(privacy),
     }
+}
+
+fn data_types(kind: DataKind) -> WebsiteDataTypes {
+    match kind {
+        DataKind::Cookies => WebsiteDataTypes::COOKIES,
+        DataKind::Cache => {
+            WebsiteDataTypes::MEMORY_CACHE
+                | WebsiteDataTypes::DISK_CACHE
+                | WebsiteDataTypes::DOM_CACHE
+        }
+        DataKind::All => WebsiteDataTypes::ALL,
+    }
+}
+
+fn clear_data(privacy: &Privacy, kind: DataKind) {
+    let Some(dm) = privacy.ctx.website_data_manager() else {
+        return;
+    };
+    privacy.inflight.set(privacy.inflight.get() + 1);
+    // The completion callback must be Send, so it reports back through a
+    // channel the GTK thread polls instead of touching the Rc counter.
+    let (done_tx, done_rx) = mpsc::channel::<()>();
+    let inflight = privacy.inflight.clone();
+    gtk::glib::timeout_add_local(Duration::from_millis(20), move || match done_rx.try_recv() {
+        Err(TryRecvError::Empty) => gtk::glib::ControlFlow::Continue,
+        _ => {
+            inflight.set(inflight.get().saturating_sub(1));
+            gtk::glib::ControlFlow::Break
+        }
+    });
+    let cookies = privacy.cookies.clone();
+    // A zero timespan means "everything, regardless of age".
+    dm.clear(
+        data_types(kind),
+        gtk::glib::TimeSpan::from_seconds(0),
+        None::<&gtk::gio::Cancellable>,
+        move |res| {
+            if let Err(e) = res {
+                log(&format!("clear data err: {e}"));
+            }
+            if kind != DataKind::Cache {
+                cookies.lock().unwrap().clear();
+            }
+            let _ = done_tx.send(());
+        },
+    );
+}
+
+/// WebKitGTK lists cookies per URI, so enumerate the domains holding cookies
+/// first, then collect each domain's jar.
+fn read_cookies(privacy: &Privacy) {
+    let (Some(dm), Some(cm)) = (
+        privacy.ctx.website_data_manager(),
+        privacy.ctx.cookie_manager(),
+    ) else {
+        return;
+    };
+    let out = privacy.cookies.clone();
+    dm.fetch(
+        WebsiteDataTypes::COOKIES,
+        None::<&gtk::gio::Cancellable>,
+        move |res| {
+            let Ok(sites) = res else {
+                return;
+            };
+            let acc: Rc<RefCell<Vec<CookieInfo>>> = Rc::default();
+            out.lock().unwrap().clear();
+            for site in sites {
+                let Some(domain) = site.name() else {
+                    continue;
+                };
+                let acc = acc.clone();
+                let out = out.clone();
+                let uri = format!("https://{}/", domain.trim_start_matches('.'));
+                cm.cookies(&uri, None::<&gtk::gio::Cancellable>, move |res| {
+                    let Ok(list) = res else {
+                        return;
+                    };
+                    let mut acc = acc.borrow_mut();
+                    for mut c in list {
+                        let info = CookieInfo {
+                            domain: c.domain().map(|d| d.to_string()).unwrap_or_default(),
+                            name: c.name().map(|n| n.to_string()).unwrap_or_default(),
+                            secure: c.is_secure(),
+                            http_only: c.is_http_only(),
+                            session_only: c.expires().is_none(),
+                        };
+                        let dup = acc
+                            .iter()
+                            .any(|a| a.domain == info.domain && a.name == info.name);
+                        if !dup {
+                            acc.push(info);
+                        }
+                    }
+                    acc.sort_by(|a, b| a.domain.cmp(&b.domain).then(a.name.cmp(&b.name)));
+                    *out.lock().unwrap() = acc.clone();
+                });
+            }
+        },
+    );
 }
 
 fn surface_to_frame(surface: &gtk::cairo::Surface) -> Option<Frame> {

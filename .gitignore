@@ -18,9 +18,14 @@ vendor/*/target/
 Thumbs.db
 Desktop.ini
 
+# Python (screenshot script)
+__pycache__/
+*.pyc
+
 # Editor / IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~

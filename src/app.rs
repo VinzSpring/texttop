@@ -19,7 +19,7 @@ use crate::apps::{
     imageviewer::ImageViewer, launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
     pin::{PinEdit, PinEditor, PinPrompt, PinTo, PinnedApp},
     processes::Processes, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
-    sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer,
+    studio::Studio, sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer,
     wallpaper::{self, WallpaperChooser, THEMES}, webbrowser::WebBrowser,
     Action, AppWindow, Launch,
 };
@@ -106,6 +106,7 @@ enum MenuAction {
     Search,
     Processes,
     Calculator,
+    Studio,
     Clock,
     Calendar,
     Notes,
@@ -134,6 +135,7 @@ impl MenuAction {
             MenuAction::Search => "Search",
             MenuAction::Processes => "Processes",
             MenuAction::Calculator => "Calculator",
+            MenuAction::Studio => "Studio",
             MenuAction::Clock => "Clock",
             MenuAction::Calendar => "Calendar",
             MenuAction::Notes => "Notes",
@@ -162,6 +164,7 @@ impl MenuAction {
             "Search" => MenuAction::Search,
             "Processes" => MenuAction::Processes,
             "Calculator" => MenuAction::Calculator,
+            "Studio" => MenuAction::Studio,
             "Clock" => MenuAction::Clock,
             "Calendar" => MenuAction::Calendar,
             "Notes" => MenuAction::Notes,
@@ -194,6 +197,7 @@ const MENU: &[(&str, MenuAction, &str)] = &[
     ("🔢  Hex Viewer", MenuAction::Hex, "Development"),
     ("🌐  Web Browser", MenuAction::Web, "Internet"),
     ("🧮  Calculator", MenuAction::Calculator, "Tools"),
+    ("🎛  Studio", MenuAction::Studio, "Tools"),
     ("⏱  Clock & Timer", MenuAction::Clock, "Tools"),
     ("📅  Calendar", MenuAction::Calendar, "Tools"),
     ("📌  Notes", MenuAction::Notes, "Tools"),
@@ -218,6 +222,7 @@ const DEFAULT_ICONS: &[(&str, &str, MenuAction)] = &[
     ("⚙", "Procs", MenuAction::Processes),
     ("📌", "Notes", MenuAction::Notes),
     ("🧮", "Calc", MenuAction::Calculator),
+    ("🎛", "Studio", MenuAction::Studio),
     ("⏱", "Clock", MenuAction::Clock),
     ("📅", "Calendar", MenuAction::Calendar),
     ("💻", "System", MenuAction::SysInfo),
@@ -2338,6 +2343,7 @@ impl Desktop {
             MenuAction::Search => Launch::Search(self.active_git_root.clone()),
             MenuAction::Processes => Launch::Processes,
             MenuAction::Calculator => Launch::Calculator,
+            MenuAction::Studio => Launch::Studio(None),
             MenuAction::Clock => Launch::Clock,
             MenuAction::Calendar => Launch::Calendar,
             MenuAction::Notes => Launch::Notes,
@@ -2390,6 +2396,7 @@ impl Desktop {
             Launch::PinPrompt(pin) => (Box::new(PinPrompt::new(pin)), "🚀", 64, 18, 40, 10),
             Launch::About => (Box::new(About::new()), "✨", 78, 34, 48, 14),
             Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 26, 24, 14),
+            Launch::Studio(p) => (Box::new(Studio::new(p)), "🎛", 96, 34, 64, 18),
             Launch::Clock => (Box::new(ClockApp::new()), "⏱", 58, 18, 36, 10),
             Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 84, 28, 48, 12),
             Launch::Calendar => (Box::new(Calendar::new()), "📅", 52, 20, 36, 12),
@@ -3140,18 +3147,9 @@ impl Desktop {
         self.status_until = Some(Instant::now());
     }
 
-    /// Where the desktop layout and session live.
-    ///
-    /// `TEXTTOP_HOME` overrides it, which gives an isolated profile for tests
-    /// and for trying things without disturbing a real desktop. Note this
-    /// cannot go through `$HOME`: `dirs::home_dir` resolves the account's
-    /// home directly on macOS and ignores the variable, so tests that set
-    /// `HOME` would silently read the real desktop file.
+    /// Where the desktop layout and session live (see [`crate::apps::state_home`]).
     fn state_home() -> PathBuf {
-        if let Some(p) = std::env::var_os("TEXTTOP_HOME") {
-            return PathBuf::from(p);
-        }
-        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+        crate::apps::state_home()
     }
 
     fn desktop_path() -> PathBuf {
@@ -3323,7 +3321,8 @@ impl Desktop {
             .windows
             .iter()
             .filter_map(|w| {
-                launch_json(&w.launch).map(|l| {
+                let launch = w.app.session_launch();
+                launch_json(launch.as_ref().unwrap_or(&w.launch)).map(|l| {
                     serde_json::json!({
                         "launch": l,
                         "x": w.rect.x, "y": w.rect.y,
@@ -3521,6 +3520,7 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
         Launch::Terminal { cwd, .. } => json!({"t": "terminal", "cwd": so(cwd)}),
         Launch::About => json!({"t": "about"}),
         Launch::Calculator => json!({"t": "calculator"}),
+        Launch::Studio(p) => json!({"t": "studio", "p": so(p)}),
         Launch::Clock => json!({"t": "clock"}),
         Launch::Hex(p) => json!({"t": "hex", "p": so(p)}),
         Launch::Calendar => json!({"t": "calendar"}),
@@ -3572,6 +3572,7 @@ fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
         },
         "about" => Launch::About,
         "calculator" => Launch::Calculator,
+        "studio" => Launch::Studio(p().filter(|p| p.exists())),
         "clock" => Launch::Clock,
         "hex" => Launch::Hex(p().filter(|p| p.exists())),
         "calendar" => Launch::Calendar,

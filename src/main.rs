@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use ratatui::crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    Event, KeyCode, KeyEventKind, KeyModifiers,
+    Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
 use ratatui::crossterm::execute;
 
@@ -89,6 +89,7 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
             loop {
                 match event::read()? {
                     Event::Key(k) if k.kind != KeyEventKind::Release => {
+                        let k = altgr_as_text(k);
                         if k.code == KeyCode::Char('q')
                             && k.modifiers.contains(KeyModifiers::CONTROL)
                         {
@@ -113,5 +114,38 @@ fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
         if desktop.should_quit {
             return Ok(());
         }
+    }
+}
+
+/// Windows reports AltGr as Ctrl+Alt, so on layouts like German the keys for
+/// `\ @ { } [ ] | ~ €` arrive looking like shortcuts and every text field
+/// dropped them. A Ctrl+Alt chord that produced a symbol rather than a letter
+/// or digit is typed text: strip the two modifiers so apps see a plain char.
+fn altgr_as_text(mut k: KeyEvent) -> KeyEvent {
+    let altgr = KeyModifiers::CONTROL | KeyModifiers::ALT;
+    if let KeyCode::Char(c) = k.code {
+        if k.modifiers.contains(altgr) && !c.is_ascii_alphanumeric() && !c.is_control() {
+            k.modifiers.remove(altgr);
+        }
+    }
+    k
+}
+
+#[cfg(test)]
+mod altgr_tests {
+    use super::*;
+
+    #[test]
+    fn altgr_symbols_become_text_but_chords_stay() {
+        let ev = |c, m| altgr_as_text(KeyEvent::new(KeyCode::Char(c), m));
+        let ca = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        assert_eq!(ev('\\', ca).modifiers, KeyModifiers::NONE);
+        assert_eq!(ev('{', ca).modifiers, KeyModifiers::NONE);
+        assert_eq!(ev('€', ca).modifiers, KeyModifiers::NONE);
+        // real Ctrl+Alt shortcuts on letters and digits are untouched
+        assert_eq!(ev('t', ca).modifiers, ca);
+        assert_eq!(ev('7', ca).modifiers, ca);
+        // plain Ctrl chords are untouched
+        assert_eq!(ev('[', KeyModifiers::CONTROL).modifiers, KeyModifiers::CONTROL);
     }
 }

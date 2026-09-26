@@ -94,6 +94,10 @@ impl About {
                 "run apps: terminal, args form, or detached",
             ),
             kv("🎵 Audio", "mp3/wav/flac/ogg with visualizer"),
+            kv(
+                "🎛 Studio",
+                "electronic DAW — templates · clips · piano · export WAV",
+            ),
             kv("🖼 Images", "zoom · pan · gallery · slideshow · ? help"),
             kv("🎬 Video", "built-in engine playback with sound"),
             kv(
@@ -150,7 +154,7 @@ impl About {
                 dim,
             )),
             Line::from(Span::styled(
-                "   Drop files onto Editor · Hex · Image · Audio · Video · Web · Terminal",
+                "   Drop files onto Editor · Hex · Image · Audio · Video · Web · Terminal · Studio",
                 dim,
             )),
             Line::from(Span::styled(

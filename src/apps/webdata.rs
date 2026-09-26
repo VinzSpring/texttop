@@ -15,9 +15,7 @@ use serde_json::{json, Value};
 const HISTORY_CAP: usize = 2000;
 
 fn store_dir() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".texttop_browser")
+    super::state_home().join(".texttop_browser")
 }
 
 fn read(name: &str) -> Option<Value> {

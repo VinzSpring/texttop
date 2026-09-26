@@ -350,7 +350,11 @@ pub fn test_pattern(w: u32, h: u32) -> Vec<u8> {
 /// Write the test pattern out as a PNG so file-backed apps can open it.
 pub fn test_image_file(name: &str, w: u32, h: u32) -> PathBuf {
     let home = init_env();
-    let path = home.join(name);
+    // One directory per image: the viewer lists its folder as a gallery, and
+    // a sibling test writing into the same folder would race with it.
+    let dir = home.join(format!("img_{}", name.replace('.', "_")));
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join(name);
     let px = test_pattern(w, h);
     let img: image::RgbImage = image::ImageBuffer::from_raw(w, h, px).expect("image buffer");
     img.save(&path).expect("write test png");

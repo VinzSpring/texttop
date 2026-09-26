@@ -1341,7 +1341,7 @@ fn empty_note(panel: Panel, filtered: bool) -> &'static str {
     match panel {
         Panel::History => "no pages visited yet",
         Panel::Bookmarks => "no bookmarks yet — F2 bookmarks the current page",
-        Panel::Cookies => "no cookies stored (macOS only so far)",
+        Panel::Cookies => "no cookies stored",
         _ => "nothing here",
     }
 }

@@ -10,13 +10,18 @@ use std::time::{Duration, Instant};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2EnvironmentOptions, ICoreWebView2Settings2,
-    COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
+    ICoreWebView2CookieList, ICoreWebView2Environment10, ICoreWebView2EnvironmentOptions,
+    ICoreWebView2Profile2, ICoreWebView2Settings2, ICoreWebView2_13, ICoreWebView2_2,
+    COREWEBVIEW2_BROWSING_DATA_KINDS, COREWEBVIEW2_BROWSING_DATA_KINDS_ALL_SITE,
+    COREWEBVIEW2_BROWSING_DATA_KINDS_CACHE_STORAGE, COREWEBVIEW2_BROWSING_DATA_KINDS_COOKIES,
+    COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE, COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_JPEG,
 };
 use webview2_com::{
-    CapturePreviewCompletedHandler, CoreWebView2EnvironmentOptions,
-    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    ExecuteScriptCompletedHandler, NewWindowRequestedEventHandler,
+    AddScriptToExecuteOnDocumentCreatedCompletedHandler, CapturePreviewCompletedHandler,
+    ClearBrowsingDataCompletedHandler,
+    CoreWebView2EnvironmentOptions, CreateCoreWebView2ControllerCompletedHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
+    GetCookiesCompletedHandler, NavigationCompletedEventHandler, NewWindowRequestedEventHandler,
 };
 use windows::core::{Interface, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{HGLOBAL, HWND, LPARAM, LRESULT, RECT, WPARAM};
@@ -37,8 +42,8 @@ use windows_core::BOOL;
 const MK_LBUTTON: usize = 0x0001;
 
 use super::{
-    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, Frame, MouseKind, PageInfo, Status,
-    TextRun, CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS,
+    clear_page_state, mouse_sim_js, parse_text_runs, Cmd, CookieInfo, DataKind, Frame, MouseKind,
+    PageInfo, Status, TextRun, CHROME_UA, EXTRACT_JS, REMOVE_STYLE_JS, VISIBILITY_JS,
 };
 
 pub struct Engine {
@@ -47,22 +52,47 @@ pub struct Engine {
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
+}
+
+/// Cookie / site-data state owned by the engine thread.
+struct Privacy {
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
+    /// WebView2 has no "refuse cookies" switch, so a refusing policy is
+    /// enforced by wiping the jar after every navigation and periodically.
+    block: Rc<Cell<bool>>,
+    /// Async store operations still running; shutdown waits for them so a
+    /// clear-on-exit actually lands.
+    inflight: Rc<Cell<u32>>,
 }
 
 impl Engine {
-    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, _private: bool) -> Engine {
+    pub fn start(initial: Cmd, zoom: f64, w: i32, h: i32, private: bool) -> Engine {
         let (tx, rx) = mpsc::channel();
         let frame: Arc<Mutex<Option<Arc<Frame>>>> = Arc::new(Mutex::new(None));
         let info = Arc::new(Mutex::new(PageInfo::default()));
         let status = Arc::new(Mutex::new(Status::Starting));
         let texts: Arc<Mutex<Vec<TextRun>>> = Arc::new(Mutex::new(Vec::new()));
+        let cookies: Arc<Mutex<Vec<CookieInfo>>> = Arc::new(Mutex::new(Vec::new()));
         {
             let frame = frame.clone();
             let info = info.clone();
             let status = status.clone();
             let texts = texts.clone();
+            let cookies = cookies.clone();
             std::thread::spawn(move || {
-                run(rx, frame, info, status, texts, initial, zoom, (w, h))
+                run(
+                    rx,
+                    frame,
+                    info,
+                    status,
+                    texts,
+                    cookies,
+                    initial,
+                    zoom,
+                    (w, h),
+                    private,
+                )
             });
         }
         Engine {
@@ -71,6 +101,7 @@ impl Engine {
             info,
             status,
             texts,
+            cookies,
         }
     }
 
@@ -90,10 +121,10 @@ impl Engine {
         self.status.lock().unwrap().clone()
     }
 
-    /// WebView2 cookie management is not wired up here; the browser shows an
-    /// empty inventory rather than pretending.
-    pub fn cookies(&self) -> Vec<super::CookieInfo> {
-        Vec::new()
+    /// Cookies as of the last [`Cmd::RefreshCookies`] — the cookie manager
+    /// answers asynchronously on the engine thread.
+    pub fn cookies(&self) -> Vec<CookieInfo> {
+        self.cookies.lock().unwrap().clone()
     }
 
     pub fn texts(&self) -> Vec<TextRun> {
@@ -144,13 +175,20 @@ fn run(
     info: Arc<Mutex<PageInfo>>,
     status: Arc<Mutex<Status>>,
     texts: Arc<Mutex<Vec<TextRun>>>,
+    cookies: Arc<Mutex<Vec<CookieInfo>>>,
     initial: Cmd,
     zoom: f64,
     size0: (i32, i32),
+    private: bool,
 ) {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     }
+    let privacy = Privacy {
+        cookies,
+        block: Rc::new(Cell::new(false)),
+        inflight: Rc::new(Cell::new(0)),
+    };
     let set_err = |msg: String| {
         *status.lock().unwrap() = Status::Error(msg);
     };
@@ -238,6 +276,7 @@ fn run(
         let controller_slot = controller_slot.clone();
         let webview_slot = webview_slot.clone();
         let status_env = status.clone();
+        let block_env = privacy.block.clone();
         let mut initial = Some(initial);
         let env_handler = CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
             move |res: windows_core::Result<()>, env| {
@@ -259,6 +298,7 @@ fn run(
                 let status_ctrl = status_env.clone();
                 let controller_slot = controller_slot.clone();
                 let webview_slot = webview_slot.clone();
+                let block_ctrl = block_env.clone();
                 let mut initial = initial.take();
                 let ctrl_handler = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
                     move |res: windows_core::Result<()>, controller| {
@@ -317,6 +357,36 @@ fn run(
                                 &mut token,
                             );
                         }
+                        // The host window is off-screen; make pages treat
+                        // themselves as a visible, focused tab (see VISIBILITY_JS).
+                        unsafe {
+                            let js = wide(VISIBILITY_JS);
+                            let _ = webview.AddScriptToExecuteOnDocumentCreated(
+                                PCWSTR(js.as_ptr()),
+                                &AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(
+                                    Box::new(|_, _| Ok(())),
+                                ),
+                            );
+                        }
+                        // A refusing cookie policy: drop whatever the page
+                        // just stored once each navigation settles.
+                        unsafe {
+                            let block = block_ctrl.clone();
+                            let mut token: i64 = 0;
+                            let _ = webview.add_NavigationCompleted(
+                                &NavigationCompletedEventHandler::create(Box::new(
+                                    move |sender, _args| {
+                                        if block.get() {
+                                            if let Some(w) = sender {
+                                                delete_all_cookies(&w);
+                                            }
+                                        }
+                                        Ok(())
+                                    },
+                                )),
+                                &mut token,
+                            );
+                        }
                         if let Some(init) = initial.take() {
                             unsafe {
                                 match init {
@@ -338,7 +408,23 @@ fn run(
                         Ok(())
                     },
                 ));
-                unsafe { env.CreateCoreWebView2Controller(hwnd, &ctrl_handler) }?;
+                // Private windows get an InPrivate profile: cookies, cache and
+                // storage live in memory and die with the view.
+                let private_opts = if private {
+                    env.cast::<ICoreWebView2Environment10>().ok().and_then(|e10| unsafe {
+                        let o = e10.CreateCoreWebView2ControllerOptions().ok()?;
+                        o.SetIsInPrivateModeEnabled(true).ok()?;
+                        Some((e10, o))
+                    })
+                } else {
+                    None
+                };
+                match private_opts {
+                    Some((e10, o)) => unsafe {
+                        e10.CreateCoreWebView2ControllerWithOptions(hwnd, &o, &ctrl_handler)
+                    }?,
+                    None => unsafe { env.CreateCoreWebView2Controller(hwnd, &ctrl_handler) }?,
+                }
                 Ok(())
             },
         ));
@@ -372,6 +458,7 @@ fn run(
     let mut last_extract = Instant::now() - Duration::from_secs(1);
     let mut overlay = false;
     let mut pending: Vec<Cmd> = Vec::new();
+    let mut last_wipe = Instant::now();
     'outer: loop {
         unsafe {
             let mut msg = MSG::default();
@@ -393,6 +480,7 @@ fn run(
                     &texts,
                     &render_hwnd,
                     &mouse_down,
+                    &privacy,
                 );
             }
         }
@@ -410,6 +498,7 @@ fn run(
                             &texts,
                             &render_hwnd,
                             &mouse_down,
+                            &privacy,
                         );
                     } else {
                         pending.push(cmd);
@@ -449,6 +538,13 @@ fn run(
                 );
             }
         }
+        // Script-set cookies (after load) are caught by a periodic sweep.
+        if privacy.block.get() && last_wipe.elapsed() >= Duration::from_secs(2) {
+            last_wipe = Instant::now();
+            if let Some(webview) = webview_slot.borrow().clone() {
+                delete_all_cookies(&webview);
+            }
+        }
         if overlay && last_extract.elapsed() >= Duration::from_millis(300) {
             let webview = webview_slot.borrow().clone();
             if let Some(webview) = webview {
@@ -457,6 +553,19 @@ fn run(
             }
         }
         std::thread::sleep(Duration::from_millis(4));
+    }
+
+    // Let queued store operations (clear-on-exit) finish before the view goes.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while privacy.inflight.get() > 0 && Instant::now() < deadline {
+        unsafe {
+            let mut msg = MSG::default();
+            while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(5));
     }
 
     if let Some(c) = controller_slot.borrow_mut().take() {
@@ -481,6 +590,7 @@ fn handle_cmd(
     texts: &Arc<Mutex<Vec<TextRun>>>,
     render_hwnd: &Rc<Cell<HWND>>,
     mouse_down: &Rc<Cell<bool>>,
+    privacy: &Privacy,
 ) {
     let controller = controller.borrow();
     let webview = webview.borrow();
@@ -565,11 +675,136 @@ fn handle_cmd(
                     }
                 }
             }
-            // Cookie and site-data management are macOS-only so far. The
-            // browser reports that rather than silently doing nothing.
-            Cmd::ClearData(_) | Cmd::SetCookiePolicy(_) | Cmd::RefreshCookies => {}
+            Cmd::ClearData(kind) => {
+                if let Some(w) = &*webview {
+                    clear_data(w, kind, privacy);
+                }
+            }
+            Cmd::SetCookiePolicy(accept) => {
+                privacy.block.set(!accept);
+                if !accept {
+                    if let Some(w) = &*webview {
+                        delete_all_cookies(w);
+                    }
+                }
+            }
+            Cmd::RefreshCookies => {
+                if let Some(w) = &*webview {
+                    read_cookies(w, privacy);
+                }
+            }
         }
     }
+}
+
+fn delete_all_cookies(webview: &ICoreWebView2) {
+    unsafe {
+        if let Ok(cm) = webview.cast::<ICoreWebView2_2>().and_then(|w| w.CookieManager()) {
+            let _ = cm.DeleteAllCookies();
+        }
+    }
+}
+
+fn browsing_data_kinds(kind: DataKind) -> COREWEBVIEW2_BROWSING_DATA_KINDS {
+    match kind {
+        DataKind::Cookies => COREWEBVIEW2_BROWSING_DATA_KINDS_COOKIES,
+        DataKind::Cache => COREWEBVIEW2_BROWSING_DATA_KINDS(
+            COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE.0
+                | COREWEBVIEW2_BROWSING_DATA_KINDS_CACHE_STORAGE.0,
+        ),
+        // Cookies, DOM storage, IndexedDB, service workers… plus the HTTP cache.
+        DataKind::All => COREWEBVIEW2_BROWSING_DATA_KINDS(
+            COREWEBVIEW2_BROWSING_DATA_KINDS_ALL_SITE.0
+                | COREWEBVIEW2_BROWSING_DATA_KINDS_DISK_CACHE.0,
+        ),
+    }
+}
+
+fn clear_data(webview: &ICoreWebView2, kind: DataKind, privacy: &Privacy) {
+    let profile = unsafe {
+        webview
+            .cast::<ICoreWebView2_13>()
+            .and_then(|w| w.Profile())
+            .and_then(|p| p.cast::<ICoreWebView2Profile2>())
+    };
+    match profile {
+        Ok(profile) => {
+            let inflight = privacy.inflight.clone();
+            let cookies = privacy.cookies.clone();
+            inflight.set(inflight.get() + 1);
+            let done = inflight.clone();
+            let handler = ClearBrowsingDataCompletedHandler::create(Box::new(move |_res| {
+                done.set(done.get().saturating_sub(1));
+                if kind != DataKind::Cache {
+                    cookies.lock().unwrap().clear();
+                }
+                Ok(())
+            }));
+            let started =
+                unsafe { profile.ClearBrowsingData(browsing_data_kinds(kind), &handler) };
+            if let Err(e) = started {
+                log_engine(&format!("clear data err: {e}"));
+                inflight.set(inflight.get().saturating_sub(1));
+            }
+        }
+        // Older runtimes without the profile API can still drop cookies.
+        Err(_) if kind != DataKind::Cache => {
+            delete_all_cookies(webview);
+            privacy.cookies.lock().unwrap().clear();
+        }
+        Err(e) => log_engine(&format!("clear cache unsupported: {e}")),
+    }
+}
+
+fn read_cookies(webview: &ICoreWebView2, privacy: &Privacy) {
+    let Ok(cm) = (unsafe { webview.cast::<ICoreWebView2_2>().and_then(|w| w.CookieManager()) })
+    else {
+        return;
+    };
+    let out = privacy.cookies.clone();
+    let handler = GetCookiesCompletedHandler::create(Box::new(
+        move |res: windows_core::Result<()>, list: Option<ICoreWebView2CookieList>| {
+            if let (Ok(()), Some(list)) = (res, list) {
+                *out.lock().unwrap() = unsafe { cookie_infos(&list) };
+            }
+            Ok(())
+        },
+    ));
+    // An empty URI lists every cookie in the profile.
+    let empty = wide("");
+    unsafe {
+        let _ = cm.GetCookies(PCWSTR(empty.as_ptr()), &handler);
+    }
+}
+
+unsafe fn cookie_infos(list: &ICoreWebView2CookieList) -> Vec<CookieInfo> {
+    let mut n = 0u32;
+    if list.Count(&mut n).is_err() {
+        return Vec::new();
+    }
+    let mut v = Vec::with_capacity(n as usize);
+    for i in 0..n {
+        let Ok(c) = list.GetValueAtIndex(i) else {
+            continue;
+        };
+        let mut name = PWSTR::null();
+        let mut domain = PWSTR::null();
+        let _ = c.Name(&mut name);
+        let _ = c.Domain(&mut domain);
+        let (mut secure, mut http_only, mut session) = (BOOL(0), BOOL(0), BOOL(0));
+        let _ = c.IsSecure(&mut secure);
+        let _ = c.IsHttpOnly(&mut http_only);
+        let _ = c.IsSession(&mut session);
+        v.push(CookieInfo {
+            domain: take_pwstr(domain),
+            name: take_pwstr(name),
+            secure: secure.as_bool(),
+            http_only: http_only.as_bool(),
+            session_only: session.as_bool(),
+        });
+    }
+    v.sort_by(|a, b| a.domain.cmp(&b.domain).then(a.name.cmp(&b.name)));
+    v
 }
 
 /// Post a real mouse message into Chromium's render widget. Returns false when

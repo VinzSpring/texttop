@@ -2781,6 +2781,7 @@ dependencies = [
  "portable-pty",
  "ratatui",
  "rodio",
+ "serde",
  "serde_json",
  "unicode-width 0.2.0",
  "url",

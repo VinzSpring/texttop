@@ -48,8 +48,7 @@ pub struct DiffLine {
 }
 
 fn store_root() -> Option<PathBuf> {
-    let home = dirs::home_dir()?;
-    Some(home.join(".texttop_snap"))
+    Some(super::state_home().join(".texttop_snap"))
 }
 
 fn ensure_store() -> Result<PathBuf, String> {
@@ -213,7 +212,37 @@ pub fn count_for(path: &Path) -> usize {
 
 pub fn read_blob(id: &str) -> Result<Vec<u8>, String> {
     let root = store_root().ok_or_else(|| "no home directory".to_string())?;
-    fs::read(root.join(BLOBS_DIR).join(id)).map_err(|e| e.to_string())
+    fs::read(blob_path(&root, id)?).map_err(|e| e.to_string())
+}
+
+fn valid_blob_id(id: &str) -> bool {
+    let mut parts = id.split('_');
+    let Some(ts) = parts.next() else {
+        return false;
+    };
+    let Some(hash) = parts.next() else {
+        return false;
+    };
+    parts.next().is_none()
+        && !ts.is_empty()
+        && ts.chars().all(|c| c.is_ascii_digit())
+        && (1..=16).contains(&hash.len())
+        && hash.chars().all(|c| c.is_ascii_hexdigit())
+        && !id.contains('/')
+        && !id.contains('\\')
+        && !id.contains("..")
+}
+
+fn blob_path(root: &Path, id: &str) -> Result<PathBuf, String> {
+    if !valid_blob_id(id) {
+        return Err("invalid snapshot id".into());
+    }
+    let blobs = root.join(BLOBS_DIR);
+    let path = blobs.join(id);
+    if path.parent() != Some(blobs.as_path()) {
+        return Err("invalid snapshot id".into());
+    }
+    Ok(path)
 }
 
 pub fn read_blob_text(id: &str) -> Result<String, String> {
@@ -473,4 +502,22 @@ fn lcs_diff<'a>(a: &[&'a str], b: &[&'a str]) -> Vec<Edit<'a>> {
     }
     out.reverse();
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blob_ids_must_look_like_store_keys() {
+        assert!(valid_blob_id("1710000000_ab12cd34"));
+        assert!(!valid_blob_id("../secret"));
+        assert!(!valid_blob_id("..\\secret"));
+        assert!(!valid_blob_id("foo/bar"));
+        assert!(!valid_blob_id("-f"));
+        assert!(!valid_blob_id(""));
+        let root = Path::new("/tmp/snap");
+        assert!(blob_path(root, "../passwd").is_err());
+        assert!(blob_path(root, "1710000000_ab12cd34").is_ok());
+    }
 }

@@ -18,9 +18,7 @@ const WELCOME: &[&str] = &[
 ];
 
 fn notes_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".texttop_notes.txt")
+    super::state_home().join(".texttop_notes.txt")
 }
 
 pub struct Notes {

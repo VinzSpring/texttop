@@ -589,27 +589,27 @@ mod imp {
     }
 
     impl AppHost {
-        pub fn new() -> Self {
-            Self::with_cmd(None)
-        }
-
-        /// Open the picker, or immediately launch `cmd` and wait for its window.
+        /// Open the picker. A restored session command is shown in the launch
+        /// field so the user confirms before anything is spawned.
         pub fn with_cmd(cmd: Option<String>) -> Self {
-            let mut a = AppHost {
+            let (input, note) = match cmd {
+                Some(c) if !c.is_empty() => (
+                    Some(c),
+                    "session restore — press Enter to launch, or pick a window".into(),
+                ),
+                _ => (None, String::new()),
+            };
+            AppHost {
                 state: State::Pick {
                     list: list_windows(),
                     sel: 0,
                     off: 0,
-                    input: None,
+                    input,
                 },
                 t: 0,
                 cache: gfx::RgbCache::default(),
-                note: String::new(),
-            };
-            if let Some(c) = cmd {
-                a.launch(&c);
+                note,
             }
-            a
         }
 
         /// Spawn a program and start waiting for its window.
@@ -1195,10 +1195,6 @@ mod imp {
     pub struct AppHost;
 
     impl AppHost {
-        pub fn new() -> Self {
-            Self::with_cmd(None)
-        }
-
         pub fn with_cmd(_cmd: Option<String>) -> Self {
             AppHost
         }

@@ -90,6 +90,60 @@ pub mod videoplayer;
 pub mod wallpaper;
 pub mod webbrowser;
 pub mod webdata;
+#[cfg(feature = "audio")]
+pub mod studio;
+#[cfg(not(feature = "audio"))]
+pub mod studio {
+    //! Stub shown when texttop is built without audio support.
+    use std::path::PathBuf;
+
+    use ratatui::crossterm::event::{KeyCode, KeyEvent};
+    use ratatui::layout::Rect;
+    use ratatui::style::{Color, Style};
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::Paragraph;
+    use ratatui::Frame;
+
+    use super::{Action, AppWindow};
+
+    pub struct Studio;
+
+    impl Studio {
+        pub fn new(_path: Option<PathBuf>) -> Self {
+            Studio
+        }
+    }
+
+    impl AppWindow for Studio {
+        fn title(&self) -> String {
+            "Studio".into()
+        }
+
+        fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
+            f.render_widget(
+                Paragraph::new(vec![
+                    Line::default(),
+                    Line::from(Span::styled(
+                        "  ✗ audio support was not included in this build",
+                        Style::default().fg(Color::Rgb(255, 110, 110)),
+                    )),
+                    Line::from(Span::styled(
+                        "    rebuild with default features (Linux: install libasound2-dev / alsa-lib-devel)",
+                        Style::default().fg(Color::Rgb(150, 155, 175)),
+                    )),
+                ]),
+                area,
+            );
+        }
+
+        fn on_key(&mut self, k: KeyEvent) -> Action {
+            match k.code {
+                KeyCode::Char('q') | KeyCode::Esc => Action::Close,
+                _ => Action::None,
+            }
+        }
+    }
+}
 
 use std::path::{Path, PathBuf};
 
@@ -177,6 +231,8 @@ pub enum Launch {
     WallpaperPicker { start: PathBuf },
     /// Chooser for CLI tools found on PATH.
     DetectedApps,
+    /// Electronic music studio (session / arrange / piano).
+    Studio(Option<PathBuf>),
 }
 
 pub trait AppWindow {
@@ -205,6 +261,25 @@ pub trait AppWindow {
     }
     /// Desktop wallpaper changed — pickers can refresh their applied state.
     fn on_wallpaper_changed(&mut self, _image: Option<PathBuf>, _theme: usize) {}
+    /// How to reopen this window on the next start, when that has changed
+    /// since launch (e.g. a document saved under a new path).
+    fn session_launch(&self) -> Option<Launch> {
+        None
+    }
+}
+
+/// Where texttop keeps its own data: desktop layout, session, notes,
+/// snapshots, browser history and Studio projects.
+///
+/// `TEXTTOP_HOME` overrides it, which gives an isolated profile for tests,
+/// screenshots and trying things without disturbing a real desktop. Note this
+/// cannot go through `$HOME`: `dirs::home_dir` resolves the account's home
+/// directly on macOS and Windows and ignores the variable.
+pub fn state_home() -> PathBuf {
+    if let Some(p) = std::env::var_os("TEXTTOP_HOME") {
+        return PathBuf::from(p);
+    }
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// Apply a keypress to a single-line text field, returning true when the key
@@ -252,6 +327,7 @@ pub fn launch_for_path(p: &Path) -> Launch {
         .unwrap_or("")
         .to_ascii_lowercase();
     match ext.as_str() {
+        "ttstudio" => Launch::Studio(Some(p.to_path_buf())),
         "mp3" | "wav" | "flac" | "ogg" => Launch::Audio(p.to_path_buf()),
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tif" | "tiff" | "ico" => {
             Launch::Image(p.to_path_buf())
@@ -294,6 +370,7 @@ pub fn file_icon(name: &str, is_dir: bool) -> (&'static str, ratatui::style::Col
     }
     let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
+        "ttstudio" => ("🎛", Color::Rgb(255, 140, 200)),
         "mp3" | "wav" | "flac" | "ogg" => ("🎵", Color::Rgb(190, 140, 255)),
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tif" | "tiff" | "ico" => {
             ("🖼", Color::Rgb(120, 220, 160))

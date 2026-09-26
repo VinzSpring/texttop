@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.features }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            features: default
+          - os: ubuntu-latest
+            features: none
+          - os: windows-latest
+            features: default
+          - os: macos-latest
+            features: default
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux system deps
+        if: runner.os == 'Linux' && matrix.features == 'default'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libwebkit2gtk-4.1-dev
+      - name: Test (default features)
+        if: matrix.features == 'default'
+        run: cargo test --locked
+      - name: Test (no default features)
+        if: matrix.features == 'none'
+        run: cargo test --locked --no-default-features

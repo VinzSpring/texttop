@@ -2162,12 +2162,23 @@ mod tests {
             "\"/Users/dan/My Docs\"",
             "'/Users/dan/My Docs'",
             "file:///Users/dan/My%20Docs",
-            "/Users/dan/My\\ Docs",
             // multi-line clipboards (a file list) take the first entry
             "/Users/dan/My Docs\n/Users/dan/other",
         ] {
             assert_eq!(clean_pasted_path(pasted), want, "input: {pasted:?}");
         }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unescapes_terminal_drag_spaces() {
+        assert_eq!(clean_pasted_path("/Users/dan/My\\ Docs"), "/Users/dan/My Docs");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn keeps_windows_backslashes() {
+        assert_eq!(clean_pasted_path(r"C:\Users\dan\My Docs"), r"C:\Users\dan\My Docs");
     }
 
     #[test]

@@ -382,7 +382,6 @@ const CATALOG: &[Catalog] = &[
 
 #[derive(Clone, Debug)]
 pub struct DetectedApp {
-    pub id: &'static str,
     pub name: String,
     pub emoji: String,
     pub program: PathBuf,
@@ -472,7 +471,7 @@ fn pathext() -> Vec<String> {
     }
 }
 
-fn try_in_dir(dir: &Path, name: &str, exts: &[String]) -> Option<PathBuf> {
+fn try_in_dir(dir: &Path, name: &str, #[allow(unused_variables)] exts: &[String]) -> Option<PathBuf> {
     // Exact name as given (may already include extension).
     let candidate = dir.join(name);
     if is_runnable(&candidate) {
@@ -620,7 +619,6 @@ pub fn scan_known_apps(already: &HashSet<String>) -> Vec<DetectedApp> {
         }
         seen_ids.insert(entry.id);
         found.push(DetectedApp {
-            id: entry.id,
             name: entry.name.to_string(),
             emoji: entry.emoji.to_string(),
             program,

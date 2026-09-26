@@ -481,6 +481,7 @@ pub fn branches(root: &Path) -> Vec<(String, bool)> {
 }
 
 pub fn checkout(root: &Path, name: &str) -> Result<(), String> {
+    let name = validate_ref(name)?;
     if run_git_status(root, &["checkout", name]) {
         invalidate(root);
         Ok(())
@@ -490,13 +491,32 @@ pub fn checkout(root: &Path, name: &str) -> Result<(), String> {
 }
 
 pub fn create_branch(root: &Path, name: &str) -> Result<(), String> {
-    if name.trim().is_empty() {
-        return Err("empty branch name".into());
-    }
-    if run_git_status(root, &["checkout", "-b", name.trim()]) {
+    let name = validate_ref(name)?;
+    if run_git_status(root, &["checkout", "-b", name]) {
         invalidate(root);
         Ok(())
     } else {
         Err("create branch failed".into())
+    }
+}
+
+fn validate_ref(name: &str) -> Result<&str, String> {
+    let name = name.trim();
+    if name.is_empty() || name.starts_with('-') || name.contains("..") || name.contains('\0') {
+        return Err("invalid branch name".into());
+    }
+    Ok(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_dash_prefixed_refs() {
+        assert!(validate_ref("-f").is_err());
+        assert!(validate_ref("--force").is_err());
+        assert!(validate_ref("  ").is_err());
+        assert_eq!(validate_ref("main").unwrap(), "main");
     }
 }
