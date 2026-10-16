@@ -6,12 +6,33 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, Mo
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::gitutil::{self, ShortStat, StatusEntry};
 use super::scroll::{self, ScrollState};
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Tab(Tab),
+    Refresh,
+    Repo,
+    ToggleStage,
+    /// The checkbox on a Status row.
+    StageRow(usize),
+    StageAll,
+    DiffSel,
+    DiffAll,
+    Open,
+    Commit,
+    ShowCommit,
+    BackToLog,
+    Checkout,
+    NewBranch,
+    PromptOk,
+    PromptCancel,
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Tab {
@@ -44,7 +65,8 @@ pub struct GitApp {
     detail_lines: Vec<String>,
     prompt: Option<(Prompt, String)>,
     stat: ShortStat,
-    show_help: bool,
+    ui: Controls<Cmd>,
+    last_click: Option<(std::time::Instant, usize)>,
 }
 
 impl GitApp {
@@ -64,7 +86,8 @@ impl GitApp {
             detail_lines: Vec::new(),
             prompt: None,
             stat: ShortStat::default(),
-            show_help: false,
+            ui: Controls::new(),
+            last_click: None,
         };
         let start = path
             .or_else(dirs::home_dir)
@@ -208,12 +231,8 @@ impl GitApp {
                             .and_then(|r| e.path.strip_prefix(r).ok())
                             .map(|p| p.display().to_string())
                             .unwrap_or(name);
-                        let flag = format!(
-                            "{}{}{}",
-                            if e.staged { "S" } else { " " },
-                            if e.unstaged { "W" } else { " " },
-                            if e.untracked { "?" } else { " " }
-                        );
+                        // the box itself is a button drawn over this cell
+                        let flag = "    ";
                         let style = if i == self.sel {
                             Style::default()
                                 .fg(Color::White)
@@ -317,10 +336,6 @@ impl GitApp {
                     .collect()
             }
             Tab::Commit => vec![
-                Line::from(Span::styled(
-                    "  Type a commit message (Ctrl+Enter or open prompt with c)",
-                    dim,
-                )),
                 Line::default(),
                 Line::from(Span::styled(
                     format!("  staged: {}  ·  {}", self.stat.staged, self.stat.summary()),
@@ -328,10 +343,205 @@ impl GitApp {
                 )),
                 Line::default(),
                 Line::from(Span::styled(
-                    "  c  compose · Ctrl+Enter commit staged · F5 refresh",
+                    if self.stat.staged == 0 {
+                        "  Nothing staged yet — tick files in Status, or use Stage all."
+                    } else {
+                        "  Write a message below and click Commit."
+                    },
                     dim,
                 )),
             ],
+        }
+    }
+}
+
+impl GitApp {
+    fn switch(&mut self, t: Tab) {
+        self.tab = t;
+        self.sel = 0;
+        self.scroll.offset = 0;
+        self.detail_lines.clear();
+        match t {
+            Tab::Diff => self.load_diff_for_sel(),
+            Tab::Commit => self.begin_commit(),
+            _ => {}
+        }
+    }
+
+    fn begin_commit(&mut self) {
+        if !matches!(self.prompt, Some((Prompt::CommitMsg, _))) {
+            self.prompt = Some((Prompt::CommitMsg, String::new()));
+        }
+    }
+
+    fn finish_prompt(&mut self) {
+        let Some((prompt, input)) = self.prompt.take() else {
+            return;
+        };
+        match prompt {
+            Prompt::Goto => self.set_root(PathBuf::from(input.trim())),
+            Prompt::CommitMsg => {
+                if let Some(root) = self.root.clone() {
+                    match gitutil::commit(&root, &input) {
+                        Ok(()) => {
+                            self.status = "committed".into();
+                            self.refresh();
+                            self.tab = Tab::Log;
+                            self.sel = 0;
+                        }
+                        Err(e) => {
+                            self.status = e;
+                            // keep the message so a fix does not mean retyping
+                            self.prompt = Some((Prompt::CommitMsg, input));
+                        }
+                    }
+                }
+            }
+            Prompt::NewBranch => {
+                if let Some(root) = self.root.clone() {
+                    match gitutil::create_branch(&root, &input) {
+                        Ok(()) => {
+                            self.status = format!("branch {}", input.trim());
+                            self.refresh();
+                        }
+                        Err(e) => self.status = e,
+                    }
+                }
+            }
+        }
+    }
+
+    fn show_commit(&mut self) {
+        if let Some((h, _)) = self.log.get(self.sel).cloned() {
+            if let Some(root) = &self.root {
+                let text = gitutil::show_commit(root, &h);
+                self.detail_lines = text.lines().map(|l| l.to_string()).collect();
+                self.scroll.offset = 0;
+            }
+        }
+    }
+
+    fn checkout(&mut self) {
+        if let Some((name, _)) = self.branches.get(self.sel).cloned() {
+            if let Some(root) = self.root.clone() {
+                match gitutil::checkout(&root, &name) {
+                    Ok(()) => {
+                        self.status = format!("checked out {name}");
+                        self.refresh();
+                    }
+                    Err(e) => self.status = e,
+                }
+            }
+        }
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        match c {
+            Cmd::Tab(t) => self.switch(t),
+            Cmd::Refresh => self.refresh(),
+            Cmd::Repo => {
+                let initial = self
+                    .root
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                self.prompt = Some((Prompt::Goto, initial));
+            }
+            Cmd::ToggleStage => self.toggle_stage(),
+            Cmd::StageRow(i) => {
+                self.sel = i;
+                self.toggle_stage();
+            }
+            Cmd::StageAll => {
+                if let Some(root) = self.root.clone() {
+                    match gitutil::stage_all(&root) {
+                        Ok(()) => {
+                            self.status = "staged everything".into();
+                            self.refresh();
+                        }
+                        Err(e) => self.status = e,
+                    }
+                }
+            }
+            Cmd::DiffSel => {
+                self.tab = Tab::Diff;
+                self.load_diff_for_sel();
+            }
+            Cmd::DiffAll => {
+                if let Some(root) = self.root.clone() {
+                    self.diff_text = gitutil::diff(&root, None);
+                    self.scroll.offset = 0;
+                }
+            }
+            Cmd::Open => return self.open_selected(),
+            Cmd::Commit => {
+                self.tab = Tab::Commit;
+                self.begin_commit();
+            }
+            Cmd::ShowCommit => self.show_commit(),
+            Cmd::BackToLog => {
+                self.detail_lines.clear();
+                self.scroll.offset = 0;
+            }
+            Cmd::Checkout => self.checkout(),
+            Cmd::NewBranch => self.prompt = Some((Prompt::NewBranch, String::new())),
+            Cmd::PromptOk => self.finish_prompt(),
+            Cmd::PromptCancel => {
+                self.prompt = None;
+                self.status = "cancelled".into();
+            }
+        }
+        Action::None
+    }
+
+    fn body(area: Rect) -> Rect {
+        Rect::new(area.x, area.y + 2, area.width, area.height.saturating_sub(3))
+    }
+
+    /// The second row: what can be done in the current tab.
+    fn action_items(&self) -> (Vec<Item<Cmd>>, Vec<Item<Cmd>>) {
+        let repo = self.root.is_some();
+        let has = |b: bool| Look::enabled_if(repo && b);
+        match self.tab {
+            Tab::Status => {
+                let e = self.entries.get(self.sel);
+                let stage_label = match e {
+                    Some(e) if e.staged && !e.unstaged && !e.untracked => "− Unstage",
+                    _ => "+ Stage",
+                };
+                (
+                    vec![
+                        Item::with(stage_label, Cmd::ToggleStage, has(e.is_some())),
+                        Item::with("+ Stage all", Cmd::StageAll, has(!self.entries.is_empty())),
+                        Item::Sep,
+                        Item::with("Diff", Cmd::DiffSel, has(e.is_some())),
+                        Item::with("Open", Cmd::Open, has(e.is_some())),
+                    ],
+                    vec![Item::with("✔ Commit…", Cmd::Commit, if repo && self.stat.staged > 0 { Look::Primary } else { Look::Disabled })],
+                )
+            }
+            Tab::Log if !self.detail_lines.is_empty() => {
+                (vec![Item::btn("◀ Back to log", Cmd::BackToLog)], vec![])
+            }
+            Tab::Log => (
+                vec![Item::with("Show commit", Cmd::ShowCommit, has(!self.log.is_empty()))],
+                vec![],
+            ),
+            Tab::Diff => (vec![Item::with("All changes", Cmd::DiffAll, has(true))], vec![]),
+            Tab::Branches => {
+                let cur = self.branches.get(self.sel).is_some_and(|(_, c)| *c);
+                (
+                    vec![
+                        Item::with("Checkout", Cmd::Checkout, has(!self.branches.is_empty() && !cur)),
+                        Item::with("+ New branch…", Cmd::NewBranch, has(true)),
+                    ],
+                    vec![],
+                )
+            }
+            Tab::Commit => (
+                vec![Item::with("+ Stage all", Cmd::StageAll, has(!self.entries.is_empty()))],
+                vec![],
+            ),
         }
     }
 }
@@ -351,44 +561,38 @@ impl AppWindow for GitApp {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        if area.height < 3 {
+        if area.height < 4 {
             return;
         }
+        self.ui.begin();
         let tabs = [Tab::Status, Tab::Log, Tab::Diff, Tab::Branches, Tab::Commit];
-        let mut tab_spans = vec![Span::raw(" ")];
-        for t in tabs {
-            let on = t == self.tab;
-            tab_spans.push(Span::styled(
-                format!(" {} ", Self::tab_label(t)),
-                if on {
-                    Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Rgb(0, 190, 255))
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                        .fg(Color::Rgb(160, 170, 190))
-                        .bg(Color::Rgb(28, 34, 52))
-                },
-            ));
-            tab_spans.push(Span::raw(" "));
-        }
-        f.render_widget(
-            Paragraph::new(Line::from(tab_spans)).style(Style::default().bg(Color::Rgb(18, 22, 36))),
+        let left: Vec<Item<Cmd>> = tabs
+            .iter()
+            .map(|&t| Item::with(Self::tab_label(t), Cmd::Tab(t), Look::on_if(t == self.tab)))
+            .collect();
+        self.ui.toolbar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y, area.width, 1),
+            &left,
+            &[Item::btn("⟳", Cmd::Refresh), Item::btn("📂 Repo…", Cmd::Repo)],
+        );
+        let (l, r) = self.action_items();
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y + 1, area.width, 1),
+            &l,
+            &r,
         );
 
-        let body = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
-        );
+        let body = Self::body(area);
         let lines = self.content_lines();
         self.line_count = lines.len();
         self.view_h = body.height;
         // keep selection visible for list tabs
-        if matches!(self.tab, Tab::Status | Tab::Log | Tab::Branches) && self.list_len() > 0 {
+        if matches!(self.tab, Tab::Status | Tab::Log | Tab::Branches)
+            && self.list_len() > 0
+            && self.detail_lines.is_empty()
+        {
             let max_off = scroll::ScrollState::max(self.line_count, self.view_h);
             if self.sel < self.scroll.offset as usize {
                 self.scroll.offset = self.sel as u16;
@@ -400,101 +604,61 @@ impl AppWindow for GitApp {
         }
         scroll::render_scrollable(f, body, &lines, &mut self.scroll);
 
-        let root_s = self
-            .root
-            .as_ref()
-            .map(|r| r.display().to_string())
-            .unwrap_or_else(|| "(no repo)".into());
-        let footer = if let Some((p, input)) = &self.prompt {
-            let label = match p {
-                Prompt::Goto => "Repo path",
-                Prompt::CommitMsg => "Commit message",
-                Prompt::NewBranch => "New branch",
-            };
-            format!(" {label}: {input}█  Esc cancel ")
-        } else {
-            format!(
-                " {} │ {} │ Tab panes · Space stage · Ctrl+L path · ? help · q ",
-                self.status, root_s
-            )
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                footer,
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
-
-        if self.show_help {
-            crate::gfx::key_overlay(
-                f,
-                area,
-                "⌨ Git · any key closes",
-                &[
-                    ("Tab / 1-5", "switch panes"),
-                    ("↑↓ / jk", "move selection"),
-                    ("Space", "stage / unstage file"),
-                    ("d", "diff selected (Status)"),
-                    ("Enter", "open file / details"),
-                    ("c", "commit staged"),
-                    ("n", "new branch (Branches)"),
-                    ("Ctrl+L", "change repo path"),
-                    ("F5", "refresh"),
-                    ("q / Esc", "close"),
-                ],
-            );
+        // stage checkboxes on Status rows
+        if self.tab == Tab::Status {
+            let buf = f.buffer_mut();
+            let first = self.scroll.offset as usize;
+            for (row, i) in (first..self.entries.len()).enumerate().take(body.height as usize) {
+                let e = &self.entries[i];
+                let mark = if e.staged && !e.unstaged && !e.untracked {
+                    "☑"
+                } else if e.staged {
+                    "◩"
+                } else {
+                    "☐"
+                };
+                let r = Rect::new(body.x + 3, body.y + row as u16, 3, 1);
+                let hot = self.ui.hot(r);
+                let style = Style::default()
+                    .fg(if e.staged { Color::Rgb(110, 220, 140) } else { Color::Rgb(170, 178, 200) })
+                    .bg(if hot { ui::HOVER_BG } else if i == self.sel { Color::Rgb(0, 90, 140) } else { Color::Reset });
+                buf.set_string(r.x, r.y, format!(" {mark} "), style);
+                self.ui.add(r, Cmd::StageRow(i));
+            }
         }
+
+        let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        let buf = f.buffer_mut();
+        if let Some((p, input)) = &self.prompt {
+            let (label, ok) = match p {
+                Prompt::Goto => ("Repository folder", "Open"),
+                Prompt::CommitMsg => ("Commit message", "✔ Commit"),
+                Prompt::NewBranch => ("New branch", "Create"),
+            };
+            self.ui
+                .input_row(buf, footer, label, input, (ok, Cmd::PromptOk), Cmd::PromptCancel);
+        } else {
+            let root_s = self
+                .root
+                .as_ref()
+                .map(|r| r.display().to_string())
+                .unwrap_or_else(|| "(no repo — click 📂 Repo…)".into());
+            ui::status_bar(buf, footer, &format!("{} │ {}", self.status, root_s));
+        }
+        self.ui.render_menu(f.buffer_mut(), area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
-
-        if self.show_help {
-            self.show_help = false;
+        if self.ui.menu_open() && k.code == KeyCode::Esc {
+            self.ui.close_menu();
             return Action::None;
         }
 
-        if let Some((prompt, ref mut input)) = self.prompt.as_mut() {
-            let prompt = *prompt;
+        if let Some((_, ref mut input)) = self.prompt.as_mut() {
             match k.code {
-                KeyCode::Esc => {
-                    self.prompt = None;
-                    self.status = "cancelled".into();
-                }
-                KeyCode::Enter => {
-                    let input = input.clone();
-                    self.prompt = None;
-                    match prompt {
-                        Prompt::Goto => self.set_root(PathBuf::from(input.trim())),
-                        Prompt::CommitMsg => {
-                            if let Some(root) = self.root.clone() {
-                                match gitutil::commit(&root, &input) {
-                                    Ok(()) => {
-                                        self.status = "committed".into();
-                                        self.refresh();
-                                        self.tab = Tab::Log;
-                                    }
-                                    Err(e) => self.status = e,
-                                }
-                            }
-                        }
-                        Prompt::NewBranch => {
-                            if let Some(root) = self.root.clone() {
-                                match gitutil::create_branch(&root, &input) {
-                                    Ok(()) => {
-                                        self.status = format!("branch {}", input.trim());
-                                        self.refresh();
-                                    }
-                                    Err(e) => self.status = e,
-                                }
-                            }
-                        }
-                    }
-                }
+                KeyCode::Esc => return self.run(Cmd::PromptCancel),
+                KeyCode::Enter => self.finish_prompt(),
                 _ => {
                     super::text_edit(input, k);
                 }
@@ -503,66 +667,14 @@ impl AppWindow for GitApp {
         }
 
         match k.code {
-            KeyCode::Tab => {
-                self.tab = match self.tab {
-                    Tab::Status => Tab::Log,
-                    Tab::Log => Tab::Diff,
-                    Tab::Diff => Tab::Branches,
-                    Tab::Branches => Tab::Commit,
-                    Tab::Commit => Tab::Status,
-                };
-                self.sel = 0;
-                self.scroll.offset = 0;
-                self.detail_lines.clear();
-                if self.tab == Tab::Diff {
-                    self.load_diff_for_sel();
-                }
+            KeyCode::Tab | KeyCode::BackTab => {
+                let order = [Tab::Status, Tab::Log, Tab::Diff, Tab::Branches, Tab::Commit];
+                let i = order.iter().position(|t| *t == self.tab).unwrap_or(0);
+                let next = if k.code == KeyCode::Tab { (i + 1) % 5 } else { (i + 4) % 5 };
+                self.switch(order[next]);
             }
-            KeyCode::BackTab => {
-                self.tab = match self.tab {
-                    Tab::Status => Tab::Commit,
-                    Tab::Log => Tab::Status,
-                    Tab::Diff => Tab::Log,
-                    Tab::Branches => Tab::Diff,
-                    Tab::Commit => Tab::Branches,
-                };
-                self.sel = 0;
-                self.scroll.offset = 0;
-                self.detail_lines.clear();
-            }
-            KeyCode::Char('1') => {
-                self.tab = Tab::Status;
-                self.detail_lines.clear();
-            }
-            KeyCode::Char('2') => {
-                self.tab = Tab::Log;
-                self.detail_lines.clear();
-            }
-            KeyCode::Char('3') => {
-                self.tab = Tab::Diff;
-                self.load_diff_for_sel();
-            }
-            KeyCode::Char('4') => self.tab = Tab::Branches,
-            KeyCode::Char('5') => self.tab = Tab::Commit,
             KeyCode::F(5) => self.refresh(),
-            KeyCode::Char('l') if ctrl => {
-                let initial = self
-                    .root
-                    .as_ref()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                self.prompt = Some((Prompt::Goto, initial));
-            }
-            KeyCode::Char('c') if self.tab == Tab::Commit || (!ctrl && self.tab == Tab::Status) => {
-                self.prompt = Some((Prompt::CommitMsg, String::new()));
-                self.tab = Tab::Commit;
-            }
-            KeyCode::Enter if ctrl && self.tab == Tab::Commit => {
-                self.prompt = Some((Prompt::CommitMsg, String::new()));
-            }
-            KeyCode::Char('n') if self.tab == Tab::Branches => {
-                self.prompt = Some((Prompt::NewBranch, String::new()));
-            }
+            KeyCode::Char('l') if ctrl => return self.run(Cmd::Repo),
             KeyCode::Up | KeyCode::Char('k') => {
                 if matches!(self.tab, Tab::Diff) || !self.detail_lines.is_empty() {
                     self.scroll.by(-1, self.line_count, self.view_h);
@@ -582,34 +694,10 @@ impl AppWindow for GitApp {
             KeyCode::Char(' ') if self.tab == Tab::Status => self.toggle_stage(),
             KeyCode::Enter => match self.tab {
                 Tab::Status => return self.open_selected(),
-                Tab::Log => {
-                    if let Some((h, _)) = self.log.get(self.sel).cloned() {
-                        if let Some(root) = &self.root {
-                            let text = gitutil::show_commit(root, &h);
-                            self.detail_lines = text.lines().map(|l| l.to_string()).collect();
-                            self.scroll.offset = 0;
-                        }
-                    }
-                }
-                Tab::Branches => {
-                    if let Some((name, _)) = self.branches.get(self.sel).cloned() {
-                        if let Some(root) = self.root.clone() {
-                            match gitutil::checkout(&root, &name) {
-                                Ok(()) => {
-                                    self.status = format!("checked out {name}");
-                                    self.refresh();
-                                }
-                                Err(e) => self.status = e,
-                            }
-                        }
-                    }
-                }
-                Tab::Diff => {
-                    self.load_diff_for_sel();
-                }
-                Tab::Commit => {
-                    self.prompt = Some((Prompt::CommitMsg, String::new()));
-                }
+                Tab::Log => self.show_commit(),
+                Tab::Branches => self.checkout(),
+                Tab::Diff => self.load_diff_for_sel(),
+                Tab::Commit => self.begin_commit(),
             },
             KeyCode::Esc => {
                 if !self.detail_lines.is_empty() {
@@ -618,12 +706,6 @@ impl AppWindow for GitApp {
                 } else {
                     return Action::Close;
                 }
-            }
-            KeyCode::Char('?') => self.show_help = true,
-            KeyCode::Char('q') => return Action::Close,
-            KeyCode::Char('d') if self.tab == Tab::Status => {
-                self.tab = Tab::Diff;
-                self.load_diff_for_sel();
             }
             _ => {}
         }
@@ -638,47 +720,77 @@ impl AppWindow for GitApp {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
-        if area.height < 3 {
+        if area.height < 4 {
             return Action::None;
         }
-        let body = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
-        );
-        match m.kind {
-            MouseEventKind::Down(MouseButton::Left) if m.row == area.y => {
-                // rough tab hit: Status Log Diff Branches Commit
-                let rel = m.column.saturating_sub(area.x);
-                self.tab = if rel < 10 {
-                    Tab::Status
-                } else if rel < 18 {
-                    Tab::Log
-                } else if rel < 26 {
-                    Tab::Diff
-                } else if rel < 38 {
-                    Tab::Branches
-                } else {
-                    Tab::Commit
-                };
-                self.sel = 0;
-                self.detail_lines.clear();
-                if self.tab == Tab::Diff {
-                    self.load_diff_for_sel();
-                }
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
+        if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+            && self.scroll.on_mouse(m, self.line_count, self.view_h)
+        {
+            if self.list_len() > 0 && self.detail_lines.is_empty() {
+                let top = self.scroll.offset as usize;
+                let bottom = (top + self.view_h as usize).saturating_sub(1);
+                self.sel = self.sel.clamp(top, bottom.max(top)).min(self.list_len() - 1);
             }
-            MouseEventKind::Down(MouseButton::Left)
+            return Action::None;
+        }
+        let body = Self::body(area);
+        match m.kind {
+            MouseEventKind::Down(button)
                 if m.row >= body.y && m.row < body.y + body.height =>
             {
                 if matches!(self.tab, Tab::Status | Tab::Log | Tab::Branches)
                     && self.detail_lines.is_empty()
                 {
                     let idx = self.scroll.offset as usize + (m.row - body.y) as usize;
-                    if idx < self.list_len() {
-                        self.sel = idx;
+                    if idx >= self.list_len() {
+                        return Action::None;
+                    }
+                    self.sel = idx;
+                    if button == MouseButton::Right {
+                        let items = match self.tab {
+                            Tab::Status => {
+                                let staged = self.entries[idx].staged;
+                                vec![
+                                    (if staged { "− Unstage" } else { "+ Stage" }.into(), Some(Cmd::ToggleStage)),
+                                    ("Diff".into(), Some(Cmd::DiffSel)),
+                                    ("Open".into(), Some(Cmd::Open)),
+                                ]
+                            }
+                            Tab::Log => vec![("Show commit".into(), Some(Cmd::ShowCommit))],
+                            _ => vec![
+                                ("Checkout".into(), Some(Cmd::Checkout)),
+                                ("+ New branch…".into(), Some(Cmd::NewBranch)),
+                            ],
+                        };
+                        self.ui.open_menu(m.column, m.row, items);
+                        return Action::None;
+                    }
+                    // double-click: the tab's main action
+                    let now = std::time::Instant::now();
+                    let dbl = matches!(self.last_click, Some((t, li))
+                        if li == idx && now.duration_since(t).as_millis() < 450);
+                    self.last_click = if dbl { None } else { Some((now, idx)) };
+                    if dbl {
+                        return match self.tab {
+                            Tab::Status => self.open_selected(),
+                            Tab::Log => self.run(Cmd::ShowCommit),
+                            _ => self.run(Cmd::Checkout),
+                        };
                     }
                 }
+            }
+            // lists keep their selection in view, so the wheel moves it
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+                if self.list_len() > 0 && self.detail_lines.is_empty() =>
+            {
+                self.sel = if m.kind == MouseEventKind::ScrollUp {
+                    self.sel.saturating_sub(3)
+                } else {
+                    (self.sel + 3).min(self.list_len() - 1)
+                };
             }
             MouseEventKind::ScrollUp => self.scroll.by(-3, self.line_count, self.view_h),
             MouseEventKind::ScrollDown => self.scroll.by(3, self.line_count, self.view_h),

@@ -1,4 +1,4 @@
-//! Minesweeper — mouse-first (left reveal · right flag), keyboard fallback.
+//! Minesweeper — left click reveals, right click (or Flag mode) flags.
 //! Mines are placed after the first reveal so the opening click is always safe.
 
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -7,16 +7,19 @@ use ratatui::crossterm::event::{
     KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
+use ratatui::style::Color;
 use ratatui::Frame;
 
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow};
 use crate::gfx;
 
-const STATUS_FG: Color = Color::Rgb(140, 150, 175);
-const STATUS_BG: Color = Color::Rgb(18, 22, 36);
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    NewGame,
+    Preset(usize),
+    FlagMode,
+}
 const HIDDEN_BG: Color = Color::Rgb(46, 52, 74);
 const OPEN_BG: Color = Color::Rgb(20, 24, 36);
 
@@ -61,6 +64,9 @@ pub struct Minesweeper {
     /// Grid origin on screen from the last render, for mouse hit-testing.
     origin: (u16, u16),
     rng: u64,
+    ui: Controls<Cmd>,
+    /// Left click plants flags instead of revealing.
+    flag_mode: bool,
 }
 
 impl Minesweeper {
@@ -85,6 +91,8 @@ impl Minesweeper {
             final_secs: 0,
             origin: (0, 0),
             rng: seed,
+            ui: Controls::new(),
+            flag_mode: false,
         };
         m.new_game(1);
         m
@@ -296,6 +304,7 @@ impl AppWindow for Minesweeper {
             area.width,
             area.height.saturating_sub(2),
         );
+        self.ui.begin();
         let ox = avail.x + avail.width.saturating_sub(grid_w) / 2;
         let oy = avail.y + avail.height.saturating_sub(grid_h) / 2;
         self.origin = (ox, oy);
@@ -306,19 +315,20 @@ impl AppWindow for Minesweeper {
             State::Lost => "💥",
             _ => "🙂",
         };
-        let header = format!(
-            " {face}  💣 {:>2}   ⏱ {:>3}s   {}",
-            self.flags_left(),
-            self.elapsed_secs(),
-            PRESETS[self.preset].3,
-        );
-        f.buffer_mut().set_string(
-            area.x + 1,
-            area.y,
-            &header,
-            Style::default()
-                .fg(Color::Rgb(220, 224, 238))
-                .add_modifier(Modifier::BOLD),
+        let mut left = vec![Item::with(format!("{face} New"), Cmd::NewGame, Look::Raised), Item::Sep];
+        for (i, p) in PRESETS.iter().enumerate() {
+            left.push(Item::with(p.3, Cmd::Preset(i), Look::on_if(self.preset == i)));
+        }
+        left.push(Item::Sep);
+        left.push(Item::with("⚑ Flag mode", Cmd::FlagMode, Look::on_if(self.flag_mode)));
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &left,
+            &[Item::Label(
+                format!("💣 {:>2}  ⏱ {:>3}s", self.flags_left(), self.elapsed_secs()),
+                Color::Rgb(220, 224, 238),
+            )],
         );
 
         let buf = f.buffer_mut();
@@ -363,17 +373,15 @@ impl AppWindow for Minesweeper {
         }
 
         let msg = match self.state {
-            State::Won => format!(" solved in {}s! 🎉 · r replay · 1/2/3 difficulty · q ", self.final_secs),
-            State::Lost => " boom · r replay · 1/2/3 difficulty · q ".into(),
-            _ => " click reveal · right-click flag · arrows+Enter/f · 1/2/3 difficulty · q ".into(),
+            State::Won => format!("solved in {}s! 🎉", self.final_secs),
+            State::Lost => "boom 💥 — click New for another round".into(),
+            _ if self.flag_mode => "flag mode: clicks plant flags".into(),
+            _ => "click to reveal · right-click to flag · click a number to open around it".into(),
         };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                msg,
-                Style::default().fg(STATUS_FG).bg(STATUS_BG),
-            ))
-            .style(Style::default().bg(STATUS_BG)),
+        ui::status_bar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            &msg,
         );
     }
 
@@ -402,11 +410,30 @@ impl AppWindow for Minesweeper {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            match hit {
+                Some(Cmd::NewGame) => self.new_game(self.preset),
+                Some(Cmd::Preset(p)) => self.new_game(p),
+                Some(Cmd::FlagMode) => self.flag_mode = !self.flag_mode,
+                None => {}
+            }
+            return Action::None;
+        }
         match m.kind {
+            // the highlight follows the pointer
+            MouseEventKind::Moved => {
+                if let Some(c) = self.cell_at(m.column, m.row) {
+                    self.cursor = c;
+                }
+            }
             MouseEventKind::Down(MouseButton::Left) => {
                 if let Some((x, y)) = self.cell_at(m.column, m.row) {
                     self.cursor = (x, y);
-                    self.reveal(x, y);
+                    if self.flag_mode && !self.open[self.idx(x, y)] {
+                        self.toggle_flag(x, y);
+                    } else {
+                        self.reveal(x, y);
+                    }
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {

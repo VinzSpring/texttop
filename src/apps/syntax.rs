@@ -397,9 +397,8 @@ pub fn highlight_line<'a>(lang: Lang, line: &'a str, state: &mut HlState) -> Vec
             || rest.starts_with(">>=")
         {
             (3, true)
-        } else if rest.len() >= 2
-            && matches!(
-                &rest[..2],
+        } else if matches!(
+                rest.get(..2).unwrap_or(""),
                 "==" | "!="
                     | "<=" | ">="
                     | "&&" | "||"
@@ -422,7 +421,8 @@ pub fn highlight_line<'a>(lang: Lang, line: &'a str, state: &mut HlState) -> Vec
         ) {
             (1, true)
         } else {
-            (1, false)
+            // Whole char, so a stray non-ASCII symbol never splits a code point.
+            (rest.chars().next().map_or(1, char::len_utf8), false)
         };
         i += len;
         let tok = &line[start..i];
@@ -556,7 +556,7 @@ fn highlight_markdown(line: &str) -> Vec<Span<'_>> {
         i += 1;
         while i < n
             && bytes[i] != b'`'
-            && !(line[i..].starts_with("**") || line[i..].starts_with("__"))
+            && !(bytes[i..].starts_with(b"**") || bytes[i..].starts_with(b"__"))
             && bytes[i] != b'['
         {
             i += 1;
@@ -689,8 +689,10 @@ fn scan_quoted(
             if seg < j {
                 parts.push((seg, j, Kind::String));
             }
-            parts.push((j, j + 2, Kind::Escape));
-            j += 2;
+            // The escaped char may be multi-byte (`"\ä"`); never split it.
+            let esc = 1 + line[j + 1..].chars().next().map_or(1, char::len_utf8);
+            parts.push((j, j + esc, Kind::Escape));
+            j += esc;
             seg = j;
             continue;
         }
@@ -1395,4 +1397,38 @@ pub fn state_before(lang: Lang, lines: &[String], upto: usize) -> HlState {
         let _ = highlight_line(lang, line, &mut state);
     }
     state
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tokenizer walks bytes; every span it cuts must still land on a char
+    /// boundary, or opening a file with an umlaut or emoji panics the editor.
+    #[test]
+    fn non_ascii_lines_never_split_a_char() {
+        let langs = [
+            Lang::Plain, Lang::Rust, Lang::Python, Lang::JavaScript, Lang::TypeScript,
+            Lang::Json, Lang::Toml, Lang::Yaml, Lang::Markdown, Lang::C, Lang::Cpp,
+            Lang::Go, Lang::Java, Lang::Shell, Lang::Html, Lang::Css, Lang::Sql, Lang::Ini,
+        ];
+        let atoms = [
+            "ä", "€", "😀", "\"", "'", "`", "/*", "*/", "//", "#", "<!--", "-->", "<", "=",
+            ":", "r#\"", "\"#", "\\", "**", "__", "[", "](", ")", "1", ".", "a", " ", "-",
+            "$", "{", "}", "'''", "\"\"\"",
+        ];
+        let mut seed: u64 = 12345;
+        for _ in 0..50_000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let line: String = (0..(seed % 8) as usize)
+                .map(|k| atoms[(seed >> (k * 6)) as usize % atoms.len()])
+                .collect();
+            let lang = langs[(seed >> 50) as usize % langs.len()];
+            let spans = highlight_line(lang, &line, &mut HlState::default());
+            let joined: String = spans.iter().map(|s| s.content.as_ref()).collect();
+            assert_eq!(joined, line, "{}", lang.label());
+        }
+    }
 }

@@ -14,11 +14,12 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::apps::{
     about::About, apphost::AppHost, audioplayer::AudioPlayer, calculator::Calculator, calendar::Calendar,
-    clock::ClockApp, compare::CompareApp, detect::DetectedAppsChooser, editor::Editor,
-    filebrowser::FileBrowser, game2048::Game2048, git::GitApp, hexviewer::HexViewer,
+    clock::ClockApp, compare::CompareApp, contribute::Contribute, detect::DetectedAppsChooser, editor::Editor,
+    filebrowser::FileBrowser, game2048::Game2048, git::GitApp, group::{self, AppGroup},
+    groupedit::GroupEditor, hexviewer::HexViewer,
     imageviewer::ImageViewer, launcher::AppLauncher, minesweeper::Minesweeper, notes::Notes,
     pin::{PinEdit, PinEditor, PinPrompt, PinTo, PinnedApp},
-    processes::Processes, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
+    processes::Processes, runhere::RunHere, search::SearchApp, snake::Snake, snapshots::SnapshotsApp,
     studio::Studio, sysinfo::SysInfo, terminal::Terminal, videoplayer::VideoPlayer,
     wallpaper::{self, WallpaperChooser, THEMES}, webbrowser::WebBrowser,
     Action, AppWindow, Launch,
@@ -32,6 +33,10 @@ const TASKBAR_BG: Color = Color::Rgb(14, 16, 28);
 const ACCENT: Color = Color::Rgb(0, 190, 255);
 const MENU_BG: Color = Color::Rgb(18, 22, 38);
 const WIN_BG: Color = Color::Rgb(12, 14, 22);
+
+/// Smallest terminal the desktop draws on; below it only a hint is shown.
+const MIN_SCREEN_W: u16 = 30;
+const MIN_SCREEN_H: u16 = 8;
 
 const ICON_W: u16 = 12;
 const ICON_H: u16 = 3;
@@ -120,6 +125,15 @@ enum MenuAction {
     Keys,
     About,
     Quit,
+    /// The IDE app group (desktop icon; the start menu lists it with the
+    /// other groups).
+    Ide,
+    /// Download the source and open it in the IDE.
+    Contribute,
+    /// App Groups settings.
+    Groups,
+    /// A saved app group, by its index in `group::all()`.
+    Group(usize),
 }
 
 impl MenuAction {
@@ -149,6 +163,11 @@ impl MenuAction {
             MenuAction::Keys => "Keys",
             MenuAction::About => "About",
             MenuAction::Quit => "Quit",
+            MenuAction::Ide => "Ide",
+            MenuAction::Contribute => "Contribute",
+            MenuAction::Groups => "AppGroups",
+            // Groups are listed live from their definitions, never saved.
+            MenuAction::Group(_) => "Group",
         }
     }
 
@@ -178,6 +197,9 @@ impl MenuAction {
             "Keys" => MenuAction::Keys,
             "About" => MenuAction::About,
             "Quit" => MenuAction::Quit,
+            "Ide" => MenuAction::Ide,
+            "Contribute" => MenuAction::Contribute,
+            "AppGroups" => MenuAction::Groups,
             _ => return None,
         })
     }
@@ -195,6 +217,7 @@ const MENU: &[(&str, MenuAction, &str)] = &[
     ("🔎  Project Search", MenuAction::Search, "Development"),
     ("📝  Text Editor", MenuAction::Editor, "Development"),
     ("🔢  Hex Viewer", MenuAction::Hex, "Development"),
+    ("🤝  Contribute / Customize", MenuAction::Contribute, "Development"),
     ("🌐  Web Browser", MenuAction::Web, "Internet"),
     ("🧮  Calculator", MenuAction::Calculator, "Tools"),
     ("🎛  Studio", MenuAction::Studio, "Tools"),
@@ -206,6 +229,7 @@ const MENU: &[(&str, MenuAction, &str)] = &[
     ("🎮  2048", MenuAction::Game2048, "Games"),
     ("🎨  Wallpaper", MenuAction::Wallpaper, "Settings"),
     ("🧩  Detected Apps", MenuAction::DetectedApps, "Settings"),
+    ("🧱  App Groups", MenuAction::Groups, "Settings"),
     ("⌨  Shortcut Keys", MenuAction::Keys, "Settings"),
     ("✨  About & Help", MenuAction::About, "Settings"),
     ("⏻  Exit texttop", MenuAction::Quit, "Settings"),
@@ -217,6 +241,7 @@ const DEFAULT_ICONS: &[(&str, &str, MenuAction)] = &[
     ("🖥", "Terminal", MenuAction::Terminal),
     ("💙", "VS Code", MenuAction::VsCode),
     ("📝", "Editor", MenuAction::Editor),
+    ("🛠", "IDE", MenuAction::Ide),
     ("🌿", "Git", MenuAction::Git),
     ("🔎", "Search", MenuAction::Search),
     ("⚙", "Procs", MenuAction::Processes),
@@ -317,9 +342,9 @@ pub struct Desktop {
     icons_auto: bool,
     /// Screen size the auto-grid was last packed for. `(0, 0)` means never.
     icon_layout_size: (u16, u16),
-    /// True when this session opened the default About window rather than
-    /// restoring a saved one — used to nudge that window off the icon gutter
-    /// once the real terminal size is known.
+    /// True when this run opened the first-launch welcome window — used to
+    /// nudge that window off the icon gutter once the real terminal size is
+    /// known.
     fresh_session: bool,
     icon_sel: usize,
     last_click: Option<(Instant, i32)>,
@@ -361,13 +386,28 @@ pub struct Desktop {
 impl Desktop {
     pub fn new() -> Self {
         let mut d = Self::blank();
+        // Welcome only the very first time this profile is opened. A later
+        // start with no windows (the welcome was closed, or nothing else was
+        // left open) must not bring it back.
+        let first_run = !Self::desktop_path().exists() && !Self::session_path().exists();
         d.load_desktop();
         d.add_missing_default_apps();
-        if !d.load_session() {
+        let restored = d.load_session();
+        if !restored && first_run {
             d.spawn(Launch::About);
             d.fresh_session = true;
+            // Record the profile immediately. Closing the terminal without
+            // Quit would otherwise look like another first launch.
+            d.save_desktop();
         }
         d
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_about(&self) -> bool {
+        self.windows
+            .iter()
+            .any(|w| matches!(w.launch, Launch::About))
     }
 
     fn blank() -> Self {
@@ -442,6 +482,18 @@ impl Desktop {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
         self.screen = area;
+        // Below this, sanitize() stops fitting windows to the screen, and
+        // drawing one that hangs off the frame panics inside ratatui.
+        if area.width < MIN_SCREEN_W || area.height < MIN_SCREEN_H {
+            let msg = format!("texttop needs {MIN_SCREEN_W}×{MIN_SCREEN_H}");
+            f.render_widget(
+                ratatui::widgets::Paragraph::new(msg)
+                    .style(Style::default().fg(Color::White).bg(TASKBAR_BG))
+                    .wrap(ratatui::widgets::Wrap { trim: true }),
+                area,
+            );
+            return;
+        }
         self.apply_icon_layout();
         self.sanitize();
         if self.fresh_session && self.icons_auto && self.icon_layout_size != (0, 0) {
@@ -995,15 +1047,36 @@ impl Desktop {
         }
     }
 
+    /// The start menu: the fixed entries plus every app group, each group
+    /// filed under its own section (new sections go before Settings).
+    fn menu(&self) -> Vec<(String, MenuAction, String)> {
+        let mut items: Vec<(String, MenuAction, String)> = MENU
+            .iter()
+            .map(|(l, a, g)| (l.to_string(), *a, g.to_string()))
+            .collect();
+        for (i, g) in group::all().into_iter().enumerate() {
+            let entry = (format!("{}  {}", g.emoji, g.name), MenuAction::Group(i), g.section.clone());
+            let at = items
+                .iter()
+                .rposition(|it| it.2 == g.section)
+                .map(|p| p + 1)
+                .or_else(|| items.iter().position(|it| it.2 == "Settings"))
+                .unwrap_or(items.len());
+            items.insert(at, entry);
+        }
+        items
+    }
+
     /// Start-menu entries matching the current typed filter (label or group).
     fn filtered_menu(&self) -> Vec<usize> {
+        let menu = self.menu();
         if self.start_filter.is_empty() {
-            return (0..MENU.len()).collect();
+            return (0..menu.len()).collect();
         }
         let q = self.start_filter.to_lowercase();
-        (0..MENU.len())
+        (0..menu.len())
             .filter(|&i| {
-                MENU[i].0.to_lowercase().contains(&q) || MENU[i].2.to_lowercase().contains(&q)
+                menu[i].0.to_lowercase().contains(&q) || menu[i].2.to_lowercase().contains(&q)
             })
             .collect()
     }
@@ -1013,10 +1086,12 @@ impl Desktop {
     /// text filter is active so results stay compact.
     fn start_rows(&self, filtered: &[usize]) -> Vec<(Option<usize>, String)> {
         let show_headers = self.start_filter.is_empty();
+        let menu = self.menu();
         let mut rows = Vec::new();
         let mut last_group = "";
         for (fi, &mi) in filtered.iter().enumerate() {
-            let (label, action, group) = MENU[mi];
+            let (label, action, group) = &menu[mi];
+            let action = *action;
             if show_headers && group != last_group {
                 rows.push((None, format!(" {group}")));
                 last_group = group;
@@ -1312,7 +1387,7 @@ impl Desktop {
                 }
                 KeyCode::Enter => {
                     if let Some(&mi) = filtered.get(self.start_sel) {
-                        self.activate_menu(MENU[mi].1);
+                        self.activate_menu(self.menu()[mi].1);
                     }
                 }
                 _ => {
@@ -1625,7 +1700,7 @@ impl Desktop {
                             if let Some((Some(fi), _)) = rows.get(idx) {
                                 if let Some(&mi) = filtered.get(*fi) {
                                     self.start_sel = *fi;
-                                    self.activate_menu(MENU[mi].1);
+                                    self.activate_menu(self.menu()[mi].1);
                                 }
                             }
                         }
@@ -2257,8 +2332,16 @@ impl Desktop {
     }
 
     pub fn on_tick(&mut self) {
+        let mut pending = Vec::new();
         for w in &mut self.windows {
             w.app.on_tick();
+            let a = w.app.take_action();
+            if !matches!(a, Action::None) {
+                pending.push((w.id, a));
+            }
+        }
+        for (id, a) in pending {
+            self.process(id, a);
         }
         self.sync_git_indicator();
     }
@@ -2355,6 +2438,21 @@ impl Desktop {
             MenuAction::About => Launch::About,
             MenuAction::Wallpaper => Launch::Wallpaper,
             MenuAction::DetectedApps => Launch::DetectedApps,
+            MenuAction::Ide => Launch::Group {
+                id: group::IDE.into(),
+                cwd: self.active_git_root.clone(),
+                open: Vec::new(),
+            },
+            MenuAction::Contribute => Launch::Contribute,
+            MenuAction::Groups => Launch::GroupEditor(None),
+            MenuAction::Group(i) => match group::all().into_iter().nth(i) {
+                Some(g) => Launch::Group {
+                    id: g.id,
+                    cwd: None,
+                    open: Vec::new(),
+                },
+                None => return,
+            },
             MenuAction::Keys => {
                 self.show_keys = true;
                 self.start_open = false;
@@ -2372,55 +2470,10 @@ impl Desktop {
 
     fn spawn(&mut self, launch: Launch) {
         let saved = launch.clone();
-        let (app, icon, prefer_w, prefer_h, min_w, min_h): (
-            Box<dyn AppWindow>,
-            &'static str,
-            u16,
-            u16,
-            u16,
-            u16,
-        ) = match launch {
-            Launch::Files(p) => (Box::new(FileBrowser::new(p)), "🗂", 78, 28, 40, 12),
-            Launch::Web(u) => (Box::new(WebBrowser::new(u)), "🌐", 96, 34, 48, 14),
-            Launch::Audio(p) => (Box::new(AudioPlayer::new(p)), "🎵", 60, 18, 36, 10),
-            Launch::Image(p) => (Box::new(ImageViewer::new(p)), "🖼", 80, 32, 40, 12),
-            Launch::Video(p) => (Box::new(VideoPlayer::new(p)), "🎬", 88, 32, 48, 12),
-            Launch::Editor(p) => (Box::new(Editor::new(p)), "📝", 80, 28, 40, 12),
-            Launch::Terminal { program, args, cwd } => {
-                (Box::new(Terminal::new(program, args, cwd)), "🖥", 86, 28, 48, 12)
-            }
-            Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 72, 22, 40, 12),
+        let (app, icon, prefer_w, prefer_h, min_w, min_h): Built = match launch {
             Launch::PinEditor { pin, to, edit } => {
                 (Box::new(PinEditor::new(pin, to, edit)), "📌", 66, 20, 44, 14)
             }
-            Launch::PinPrompt(pin) => (Box::new(PinPrompt::new(pin)), "🚀", 64, 18, 40, 10),
-            Launch::About => (Box::new(About::new()), "✨", 78, 34, 48, 14),
-            Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 26, 24, 14),
-            Launch::Studio(p) => (Box::new(Studio::new(p)), "🎛", 96, 34, 64, 18),
-            Launch::Clock => (Box::new(ClockApp::new()), "⏱", 58, 18, 36, 10),
-            Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 84, 28, 48, 12),
-            Launch::Calendar => (Box::new(Calendar::new()), "📅", 52, 20, 36, 12),
-            Launch::SysInfo => (Box::new(SysInfo::new()), "💻", 76, 28, 40, 12),
-            Launch::Notes => (Box::new(Notes::new()), "📌", 68, 24, 36, 10),
-            Launch::Git(p) => (Box::new(GitApp::new(p)), "🌿", 84, 28, 48, 12),
-            Launch::Search(p) => (Box::new(SearchApp::new(p)), "🔎", 80, 26, 40, 12),
-            Launch::Processes => (Box::new(Processes::new()), "⚙", 72, 26, 40, 12),
-            Launch::Snapshots(p) => (Box::new(SnapshotsApp::new(p)), "⏱", 84, 28, 48, 12),
-            Launch::Compare(paths) => (Box::new(CompareApp::new(paths)), "↔", 90, 30, 48, 12),
-            Launch::AppHost { cmd } => {
-                let icon = if cmd
-                    .as_deref()
-                    .is_some_and(|c| c.to_ascii_lowercase().contains("code.exe"))
-                {
-                    "💙"
-                } else {
-                    "🪟"
-                };
-                (Box::new(AppHost::with_cmd(cmd)), icon, 96, 34, 48, 14)
-            }
-            Launch::Snake => (Box::new(Snake::new()), "🐍", 64, 24, 30, 10),
-            Launch::Minesweeper => (Box::new(Minesweeper::new()), "💣", 56, 22, 30, 12),
-            Launch::Game2048 => (Box::new(Game2048::new()), "🎮", 44, 22, 28, 12),
             Launch::Wallpaper => (
                 Box::new(WallpaperChooser::new(
                     self.theme,
@@ -2440,6 +2493,14 @@ impl Desktop {
                 40,
                 12,
             ),
+            Launch::RunHere { dir, files } => (
+                Box::new(RunHere::new(dir, files, self.user_apps())),
+                "▶",
+                66,
+                26,
+                44,
+                12,
+            ),
             Launch::DetectedApps => {
                 let already = self.pinned_stems();
                 (
@@ -2451,6 +2512,10 @@ impl Desktop {
                     14,
                 )
             }
+            other => match build_app(other) {
+                Ok(b) => b,
+                Err(_) => return,
+            },
         };
         let scr = self.screen;
         let taskbar = 1u16;
@@ -2814,9 +2879,12 @@ impl Desktop {
     /// pointer rather than the window rect so that a window too wide to move
     /// sideways doesn't count as "dragged to the edge".
     fn snap_zone_at(&self, col: u16, row: u16) -> Option<SnapZone> {
+        // Columns run 0..width-1, so the right edge is `width - 1`, not `width`.
+        // `col + SNAP_EDGE >= width` never matches when SNAP_EDGE is 0.
+        let from_right = self.screen.width.saturating_sub(col);
         if col <= SNAP_EDGE {
             Some(SnapZone::Left)
-        } else if col + SNAP_EDGE >= self.screen.width {
+        } else if from_right > 0 && from_right <= SNAP_EDGE.saturating_add(1) {
             Some(SnapZone::Right)
         } else if row <= SNAP_EDGE {
             Some(SnapZone::Max)
@@ -2930,6 +2998,14 @@ impl Desktop {
                 self.close_id(id);
                 self.spawn(l);
             }
+            Action::LaunchManyAndClose(ls) => {
+                self.close_id(id);
+                for l in ls {
+                    self.spawn(l);
+                }
+            }
+            // Pickers live inside the window that asked for them.
+            Action::PickPath(_) => {}
             Action::BeginFileDrag { path, cut } => {
                 // seed ghost near the focused window rather than screen center
                 let (gx, gy) = self
@@ -2994,6 +3070,27 @@ impl Desktop {
     }
 
     /// Stems / ids already on the desktop or taskbar (to hide from the chooser).
+    /// Desktop pins, executable shortcuts and taskbar pins, once each.
+    fn user_apps(&self) -> Vec<PinnedApp> {
+        let mut out: Vec<PinnedApp> = Vec::new();
+        let icons = self.icons.iter().filter_map(|icon| match &icon.kind {
+            DeskKind::Pin(pin) => Some(pin.clone()),
+            DeskKind::Shortcut(p) if crate::apps::pin::is_executable(p) => {
+                let mut pin = PinnedApp::from_path(p.clone());
+                pin.name = icon.label.clone();
+                pin.emoji = icon.emoji.clone();
+                Some(pin)
+            }
+            _ => None,
+        });
+        for pin in icons.chain(self.taskbar_pins.iter().cloned()) {
+            if !out.iter().any(|o| o.program == pin.program && o.args == pin.args) {
+                out.push(pin);
+            }
+        }
+        out
+    }
+
     fn pinned_stems(&self) -> std::collections::HashSet<String> {
         let mut set = std::collections::HashSet::new();
         let add = |set: &mut std::collections::HashSet<String>, p: &PathBuf| {
@@ -3352,6 +3449,11 @@ impl Desktop {
             let Some(launch) = item.get("launch").and_then(launch_from_json) else {
                 continue;
             };
+            // The welcome window is first-run only. Leaving it open should
+            // not reopen it on the next start.
+            if matches!(launch, Launch::About) {
+                continue;
+            }
             self.spawn(launch);
             restored = true;
             if let Some(w) = self.windows.last_mut() {
@@ -3369,7 +3471,7 @@ impl Desktop {
 
     fn sanitize(&mut self) {
         let scr = self.screen;
-        if scr.width < 30 || scr.height < 8 {
+        if scr.width < MIN_SCREEN_W || scr.height < MIN_SCREEN_H {
             return;
         }
         let taskbar_y = scr.height.saturating_sub(1);
@@ -3543,6 +3645,10 @@ fn launch_json(l: &Launch) -> Option<serde_json::Value> {
         Launch::Wallpaper => json!({"t": "wallpaper"}),
         Launch::WallpaperPicker { .. } => return None,
         Launch::DetectedApps => return None,
+        Launch::RunHere { .. } => return None,
+        Launch::Group { id, cwd, .. } => json!({"t": "group", "id": id, "cwd": so(cwd)}),
+        Launch::GroupEditor(_) => return None,
+        Launch::Contribute => json!({"t": "contribute"}),
         Launch::AppLauncher(_) => return None,
         // one-shot pin dialogs are not restored
         Launch::PinEditor { .. } | Launch::PinPrompt(_) => return None,
@@ -3598,7 +3704,75 @@ fn launch_from_json(v: &serde_json::Value) -> Option<Launch> {
         "mines" => Launch::Minesweeper,
         "2048" => Launch::Game2048,
         "wallpaper" => Launch::Wallpaper,
+        "group" => Launch::Group {
+            id: v.get("id")?.as_str()?.to_string(),
+            cwd: v
+                .get("cwd")
+                .and_then(|p| p.as_str())
+                .map(PathBuf::from)
+                .filter(|p| p.is_dir()),
+            open: Vec::new(),
+        },
+        "contribute" => Launch::Contribute,
         _ => return None,
+    })
+}
+
+/// A freshly built window: the app, its taskbar icon, and its preferred and
+/// minimum (width, height).
+pub type Built = (Box<dyn AppWindow>, &'static str, u16, u16, u16, u16);
+
+/// Build the window for a launch that needs nothing from the desktop.
+/// Launches that do (wallpaper chooser, pin dialogs, Run app here, …) come
+/// back as `Err` so the caller can hand them to the desktop instead.
+pub fn build_app(launch: Launch) -> Result<Built, Launch> {
+    Ok(match launch {
+        Launch::Files(p) => (Box::new(FileBrowser::new(p)), "🗂", 78, 28, 40, 12),
+        Launch::Web(u) => (Box::new(WebBrowser::new(u)), "🌐", 96, 34, 48, 14),
+        Launch::Audio(p) => (Box::new(AudioPlayer::new(p)), "🎵", 60, 18, 36, 10),
+        Launch::Image(p) => (Box::new(ImageViewer::new(p)), "🖼", 80, 32, 40, 12),
+        Launch::Video(p) => (Box::new(VideoPlayer::new(p)), "🎬", 88, 32, 48, 12),
+        Launch::Editor(p) => (Box::new(Editor::new(p)), "📝", 80, 28, 40, 12),
+        Launch::Terminal { program, args, cwd } => {
+            (Box::new(Terminal::new(program, args, cwd)), "🖥", 86, 28, 48, 12)
+        }
+        Launch::AppLauncher(p) => (Box::new(AppLauncher::new(p)), "🧩", 72, 22, 40, 12),
+        Launch::PinPrompt(pin) => (Box::new(PinPrompt::new(pin)), "🚀", 64, 18, 40, 10),
+        Launch::About => (Box::new(About::new()), "✨", 78, 34, 48, 14),
+        Launch::Calculator => (Box::new(Calculator::new()), "🧮", 32, 26, 24, 14),
+        Launch::Studio(p) => (Box::new(Studio::new(p)), "🎛", 96, 34, 64, 18),
+        Launch::Clock => (Box::new(ClockApp::new()), "⏱", 58, 18, 36, 10),
+        Launch::Hex(p) => (Box::new(HexViewer::new(p)), "🔢", 84, 28, 48, 12),
+        Launch::Calendar => (Box::new(Calendar::new()), "📅", 52, 20, 36, 12),
+        Launch::SysInfo => (Box::new(SysInfo::new()), "💻", 76, 28, 40, 12),
+        Launch::Notes => (Box::new(Notes::new()), "📌", 68, 24, 36, 10),
+        Launch::Git(p) => (Box::new(GitApp::new(p)), "🌿", 84, 28, 48, 12),
+        Launch::Search(p) => (Box::new(SearchApp::new(p)), "🔎", 80, 26, 40, 12),
+        Launch::Processes => (Box::new(Processes::new()), "⚙", 72, 26, 40, 12),
+        Launch::Snapshots(p) => (Box::new(SnapshotsApp::new(p)), "⏱", 84, 28, 48, 12),
+        Launch::Compare(paths) => (Box::new(CompareApp::new(paths)), "↔", 90, 30, 48, 12),
+        Launch::AppHost { cmd } => {
+            let icon = if cmd
+                .as_deref()
+                .is_some_and(|c| c.to_ascii_lowercase().contains("code.exe"))
+            {
+                "💙"
+            } else {
+                "🪟"
+            };
+            (Box::new(AppHost::with_cmd(cmd)), icon, 96, 34, 48, 14)
+        }
+        Launch::Snake => (Box::new(Snake::new()), "🐍", 64, 24, 30, 10),
+        Launch::Minesweeper => (Box::new(Minesweeper::new()), "💣", 56, 22, 30, 12),
+        Launch::Game2048 => (Box::new(Game2048::new()), "🎮", 44, 22, 28, 12),
+        Launch::Group { id, cwd, open } => {
+            let g = AppGroup::new(id, cwd, open);
+            let icon = g.icon();
+            (Box::new(g), icon, 132, 42, 60, 16)
+        }
+        Launch::GroupEditor(sel) => (Box::new(GroupEditor::new(sel)), "🧱", 112, 30, 64, 16),
+        Launch::Contribute => (Box::new(Contribute::new()), "🛠", 80, 28, 50, 16),
+        other => return Err(other),
     })
 }
 
@@ -3844,6 +4018,13 @@ mod window_drag_tests {
 
         let mut d = fresh(150, 45);
         let r = d.windows[0].rect;
+        drag_title(&mut d, (r.x + 5, r.y), (149, r.y));
+        assert_eq!(d.windows[0].rect.x, 75);
+        assert_eq!(d.windows[0].rect.width, 75);
+        assert!(d.windows[0].restore.is_some(), "right snap should be undoable");
+
+        let mut d = fresh(150, 45);
+        let r = d.windows[0].rect;
         drag_title(&mut d, (r.x + 5, r.y), (60, 0));
         assert_eq!(d.windows[0].rect, Rect::new(0, 0, 150, 44));
     }
@@ -3862,3 +4043,4 @@ mod window_drag_tests {
         assert!(d.windows[0].restore.is_none());
     }
 }
+

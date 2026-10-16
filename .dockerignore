@@ -1,0 +1,7 @@
+target/
+target-test/
+vendor/*/target/
+.git/
+.claude/
+**/__pycache__/
+docs/screenshots/

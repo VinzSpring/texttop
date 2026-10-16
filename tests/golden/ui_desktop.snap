@@ -1,96 +1,96 @@
 size: 150x45
 --- chars ---
                                         ╭ ✨  Welcome ─────────────────────────────────────────────────────────── □ ✕ ╮                                
-       🗂            ⏱                   │                                                                           █│                                
+       🗂            🎛                   │                                                                           ▴│                                
                                         │   ▀█▀ █▀▀ ▀▄▀ ▀█▀ ▀█▀ █▀█ █▀█                                             █│                                
-     Files        Clock                 │    █  ██▄ █ █  █   █  █▄█ █▀                                              █│                                
+     Files        Studio                │    █  ██▄ █ █  █   █  █▄█ █▀                                              █│                                
                                         │   a desktop environment for your terminal                                 █│                                
-       🌐            📅                   │                                                                           █│                                
-                                        │   Desktop                                                                 █│                                
-      Web        Calendar               │   F1                start menu — just type to search apps                 █│                                
-                                        │   F12               shortcut key overlay                                  █│                                
-       🖥            💻                   │   F6 / Alt+Tab      window switcher                                       █│                                
-                                        │   F11               maximize / restore window                             █│                                
-    Terminal      System                │   Ctrl+W            close window                                          █│                                
-                                        │   Ctrl+D            show / restore desktop                                █│                                
-       💙            🔢                   │   Ctrl+Shift+←/→    snap window left / right                              ││                                
-                                        │   Ctrl+Shift+↑      maximize window                                       ││                                
-    VS Code        Hex                  │   Ctrl+arrows       nudge window                                          ││                                
-                                        │   Ctrl+Q            quit texttop                                          ││                                
-       📝            🐍                   │   F5                prune dead desktop shortcuts                          ││                                
-                                        │   Delete            remove selected desktop shortcut                      ││                                
-     Editor       Snake                 │   Esc               cancel drag / close menus                             ││                                
-                                        │                                                                           ││                                
-       🌿            💣                   │   Mouse                                                                   ││                                
-                                        │   right-click       context menus (desktop · icons · windows · files)     ││                                
-      Git         Mines                 │   drag title bar    move · edge snap · top = maximize                     ││                                
-                                        │   double-click titlemaximize / restore                                    ││                                
-       🔎            🎮                   │   drag ◢ corner     resize window                                         ││                                
-                                        │   ─ □ ✕             minimize · maximize · close                           ││                                
-     Search        2048                 │   drag icons        custom placement · right-click Arrange to pack        ││                                
-                                        │   drag files        drop on desktop / apps · Shift=cut                    ││                                
-       ⚙            ✨                   │   taskbar »N        overflow window list                                  ││                                
-                                        │   middle-click taskbarclose window                                        ││                                
-     Procs        About                 │   double-click      open desktop icons & files                            ││                                
-                                        │   mouse wheel       scroll overflow content in apps                       ││                                
-       📌                                ╰────────────────────────────────────────────────────────────────────────────◢                                
+       🌐            ⏱                   │                                                                           █│                                
+                                        │   Getting around                                                          █│                                
+      Web         Clock                 │   Start button        every app, plus search                              █│                                
+                                        │   right-click         menus on the desktop, icons, windows and files      █│                                
+       🖥            📅                   │   drag a title bar    move · drop on an edge to snap · top to maximize    █│                                
+                                        │   double-click title  maximize / restore                                  █│                                
+    Terminal     Calendar               │   drag ◢ corner       resize                                              █│                                
+                                        │   ─ □ ✕               minimize · maximize · close                         █│                                
+       💙            💻                   │   drag files          onto the desktop or into apps                       █│                                
+                                        │   taskbar             click to switch · middle-click to close             █│                                
+    VS Code       System                │   toolbars            each app keeps its actions in buttons up top        █│                                
+                                        │                                                                           █│                                
+       📝            🔢                   │   Apps — click one to open it                                             █│                                
+                                        │   🗂 Files             browse, preview, copy / move, snapshots, compare    █│                                
+     Editor        Hex                  │   🌐  Web              real browser with JavaScript and media              █│                                
+                                        │   🖥 Terminal          full shell inside a window                          █│                                
+       🛠            🐍                   │   📝  Editor           syntax colors by file type                          █│                                
+                                        │   🛠 IDE               explorer, terminal and tabs in one window           █│                                
+      IDE         Snake                 │   📌  Notes            a sticky pad that keeps what you write              ││                                
+                                        │   🎛 Studio            electronic music: clips, piano roll, export WAV     ││                                
+       🌿            💣                   │   🧮  Calculator       expressions and a history tape                      ││                                
+                                        │   ⏱ Clock             clock, stopwatch and countdown timer                ││                                
+      Git         Mines                 │   📅  Calendar         month view                                          ││                                
+                                        │   🌿  Git              status · log · diff · branches · commit             ││                                
+       🔎            🎮                   │   🔎  Search           find text across a folder                           ││                                
+                                        │   ⚙ Processes         list, filter and end processes                      ││                                
+     Search        2048                 │   💻  System           OS, paths, folders, environment                     ││                                
+                                        │   🔢  Hex              binary view of any file                             ▾│                                
+       ⚙            ✨                   ╰────────────────────────────────────────────────────────────────────────────◢                                
+                                                                                                                                                      
+     Procs        About                                                                                                                               
+                                                                                                                                                      
+       📌                                                                                                                                              
                                                                                                                                                       
      Notes                                                                                                                                            
                                                                                                                                                       
        🧮                                                                                                                                              
                                                                                                                                                       
       Calc                                                                                                                                            
-                                                                                                                                                      
-       🎛                                                                                                                                              
-                                                                                                                                                      
-     Studio                                                                                                                                           
  ⊞ Start   ✨  Welcome                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --- colors ---
-ccccccccccccccccccccccccccccccccccccccccbVVSVVVVVVVVVbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbObKbNbbcccccccccccccccccccccccccccccccc
-cccccccUccccccccccccUcccccccccccccccccccbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboocccccccccccccccccccccccccccccc
-ddddddddddddddddddddddddddddddddddddddddbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboodddddddddddddddddddddddddddddd
-eeeeeWWWWWeeeeeeeeWWWWWeeeeeeeeeeeeeeeeebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-fffffffXSfffffffffffXSffffffffffffffffffbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooffffffffffffffffffffffffffffff
-ggggggggggggggggggggggggggggggggggggggggbbbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboogggggggggggggggggggggggggggggg
-hhhhhhYYYhhhhhhhhYYYYYYYYhhhhhhhhhhhhhhhbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
-hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
-iiiiiiiZiiiiiiiiiiiiZSiiiiiiiiiiiiiiiiiibPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabooiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
-jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
-jjjj00000000jjjjjj000000jjjjjjjjjjjjjjjjbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
-kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQabookkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
-lllllll1Slllllllllll1SllllllllllllllllllbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboollllllllllllllllllllllllllllll
-mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboommmmmmmmmmmmmmmmmmmmmmmmmmmmmm
-mmmm2222222mmmmmmmm222mmmmmmmmmmmmmmmmmmbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboommmmmmmmmmmmmmmmmmmmmmmmmmmmmm
-nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboonnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
-ppppppp3Sppppppppppp3SppppppppppppppppppbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQuboopppppppppppppppppppppppppppppp
-ppppppppppppppppppppppppppppppppppppppppbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQuboopppppppppppppppppppppppppppppp
-qqqqq444444qqqqqqq44444qqqqqqqqqqqqqqqqqbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
-rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboorrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
-sssssss5Ssssssssssss5SssssssssssssssssssbbbbbbbbbQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboossssssssssssssssssssssssssssss
-ssssssssssssssssssssssssssssssssssssssssbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQuboossssssssssssssssssssssssssssss
-tttttt666ttttttttt66666tttttttttttttttttbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQubootttttttttttttttttttttttttttttt
-vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboovvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-wwwwwww8Swwwwwwwwwww8SwwwwwwwwwwwwwwwwwwbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwww
-wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwww
-xxxxx999999xxxxxxxx9999xxxxxxxxxxxxxxxxxbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQubooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyybPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-yyyyyyy+yyyyyyyyyyyy+SyyyyyyyyyyyyyyyyyybPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzbPPPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQuboozzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-AAAAA/////AAAAAAAA/////AAAAAAAAAAAAAAAAAbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQQQQQQubooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBbPPPPPPPPPPPPPPPPPPPPPMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMQQQQQQQQQQQQQQQQQQQQQQQubooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
-BBBBBBB=SBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+ccccccccccccccccccccccccccccccccccccccccbWWTWWWWWWWWWbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbPbKbObbcccccccccccccccccccccccccccccccc
+cccccccVccccccccccccVcccccccccccccccccccbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRMboocccccccccccccccccccccccccccccc
+ddddddddddddddddddddddddddddddddddddddddbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboodddddddddddddddddddddddddddddd
+eeeeeXXXXXeeeeeeeeXXXXXXeeeeeeeeeeeeeeeebbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeebLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRabooeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+fffffffYTfffffffffffYfffffffffffffffffffbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRabooffffffffffffffffffffffffffffff
+ggggggggggggggggggggggggggggggggggggggggbbbbbbbbbbbbbbbbbbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboogggggggggggggggggggggggggggggg
+hhhhhhZZZhhhhhhhhhZZZZZhhhhhhhhhhhhhhhhhbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRaboohhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+iiiiiii0iiiiiiiiiiii0TiiiiiiiiiiiiiiiiiibQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRabooiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+jjjj11111111jjjjj11111111jjjjjjjjjjjjjjjbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboojjjjjjjjjjjjjjjjjjjjjjjjjjjjjj
+kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRabookkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+lllllll2Tlllllllllll2TllllllllllllllllllbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRaboollllllllllllllllllllllllllllll
+mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRaboommmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+mmmm3333333mmmmmmm333333mmmmmmmmmmmmmmmmbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRaboommmmmmmmmmmmmmmmmmmmmmmmmmmmmm
+nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboonnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+ppppppp4Tppppppppppp4TppppppppppppppppppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRaboopppppppppppppppppppppppppppppp
+ppppppppppppppppppppppppppppppppppppppppbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRaboopppppppppppppppppppppppppppppp
+qqqqq555555qqqqqqqq555qqqqqqqqqqqqqqqqqqbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRabooqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRaboorrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+sssssss6ssssssssssss6TssssssssssssssssssbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRaboossssssssssssssssssssssssssssss
+ssssssssssssssssssssssssssssssssssssssssbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRaboossssssssssssssssssssssssssssss
+tttttt777ttttttttt77777tttttttttttttttttbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRubootttttttttttttttttttttttttttttt
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRuboovvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+wwwwwww9Twwwwwwwwwww9TwwwwwwwwwwwwwwwwwwbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRuboowwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+xxxxxx+++xxxxxxxxx+++++xxxxxxxxxxxxxxxxxbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRubooxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyybQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+yyyyyyy/Tyyyyyyyyyyy/TyyyyyyyyyyyyyyyyyybQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRubooyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzbQQQQQQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRuboozzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+AAAAA======AAAAAAAA====AAAAAAAAAAAAAAAAAbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRubooAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBbQQQQTQQQQQQQQQQQQQQQQQQNNNNNNNNNNNNNNNNNNNNNNNRRRRRRRRRRRRRRRRRRRRRRRRRRRRRMbooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+BBBBBBB<BBBBBBBBBBBB<TBBBBBBBBBBBBBBBBBBbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-DDDDD<<<<<DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+DDDDD>>>>>DDDDDDDD>>>>>DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
 DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
-EEEEEEE>SEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+EEEEEEE[TEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
 FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-GGGGGG[[[[GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+GGGGG]]]]]GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
 GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
-HHHHHHH]HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+HHHHHHH{THHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-JJJJJ{{{{{{JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
-TTTTTTTTTR77S777777777RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+JJJJJJ}}}}JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+UUUUUUUUUS88T888888888SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 --- legend ---
 a fg=#00aadc bg=#0c0e16
 b fg=#00beff bg=#0c0e16
@@ -130,35 +130,36 @@ I fg=#400e4d bg=#400e4d
 J fg=#420e4e bg=#420e4e
 K fg=#78dc82 bg=#0c0e16
 L fg=#969baf bg=#0c0e16
-M fg=#d7dae6 bg=#0c0e16
-N fg=#ff5f5f bg=#0c0e16
-O fg=#ffc850 bg=#0c0e16
-P fg=#ffd264 bg=#0c0e16
-Q fg=Reset bg=#0c0e16
-R fg=Reset bg=#0e101c
-S fg=Reset bg=Reset
-T fg=White bg=#0060a0
-U fg=White bg=#0a0e2c
-V fg=White bg=#0c0e16
-W fg=White bg=#0e0e2e
-X fg=White bg=#0f0e2f
-Y fg=White bg=#130e31
-Z fg=White bg=#150e33
-0 fg=White bg=#170e34
-1 fg=White bg=#1a0e36
-2 fg=White bg=#1c0e37
-3 fg=White bg=#200e39
-4 fg=White bg=#210e3a
-5 fg=White bg=#250e3c
-6 fg=White bg=#270e3e
-7 fg=White bg=#2a4670
-8 fg=White bg=#2b0e40
-9 fg=White bg=#2c0e41
-+ fg=White bg=#2e0e42
-/ fg=White bg=#320e44
-= fg=White bg=#340e45
-< fg=White bg=#370e47
-> fg=White bg=#390e49
-[ fg=White bg=#3d0e4b
-] fg=White bg=#3e0e4c
-{ fg=White bg=#420e4e
+M fg=#c8d2eb bg=#2c3658
+N fg=#d7dae6 bg=#0c0e16
+O fg=#ff5f5f bg=#0c0e16
+P fg=#ffc850 bg=#0c0e16
+Q fg=#ffd264 bg=#0c0e16
+R fg=Reset bg=#0c0e16
+S fg=Reset bg=#0e101c
+T fg=Reset bg=Reset
+U fg=White bg=#0060a0
+V fg=White bg=#0a0e2c
+W fg=White bg=#0c0e16
+X fg=White bg=#0e0e2e
+Y fg=White bg=#0f0e2f
+Z fg=White bg=#130e31
+0 fg=White bg=#150e33
+1 fg=White bg=#170e34
+2 fg=White bg=#1a0e36
+3 fg=White bg=#1c0e37
+4 fg=White bg=#200e39
+5 fg=White bg=#210e3a
+6 fg=White bg=#250e3c
+7 fg=White bg=#270e3e
+8 fg=White bg=#2a4670
+9 fg=White bg=#2b0e40
++ fg=White bg=#2c0e41
+/ fg=White bg=#2e0e42
+= fg=White bg=#320e44
+< fg=White bg=#340e45
+> fg=White bg=#370e47
+[ fg=White bg=#390e49
+] fg=White bg=#3d0e4b
+{ fg=White bg=#3e0e4c
+} fg=White bg=#420e4e

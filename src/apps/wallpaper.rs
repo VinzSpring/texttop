@@ -13,8 +13,15 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
 use crate::gfx;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Btn {
+    Image,
+    Done,
+}
 
 /// `(top_rgb, bottom_rgb, name)` — shared by the desktop and this chooser.
 pub type Theme = ((u8, u8, u8), (u8, u8, u8), &'static str);
@@ -137,6 +144,7 @@ pub struct WallpaperChooser {
     thumb_for: Option<PathBuf>,
     thumb_seq: usize,
     thumb_cache: gfx::RgbCache,
+    ui: Controls<Btn>,
 }
 
 impl WallpaperChooser {
@@ -153,6 +161,7 @@ impl WallpaperChooser {
             applied_theme: theme,
             applied_image: image,
             last_click: None,
+            ui: Controls::new(),
             thumb: None,
             thumb_for: None,
             thumb_seq: 0,
@@ -465,15 +474,16 @@ impl AppWindow for WallpaperChooser {
             }
         }
 
-        let hint = Line::from(vec![
-            Span::styled(" ↑↓←→ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("select  ", Style::default().fg(DIM)),
-            Span::styled("Enter ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("apply  ", Style::default().fg(DIM)),
-            Span::styled("image… ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("opens Files", Style::default().fg(DIM)),
-        ]);
-        f.render_widget(Paragraph::new(hint), Rect::new(area.x, area.y, area.width, 1));
+        self.ui.begin();
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &[Item::Label(" Click a theme to try it".into(), FG)],
+            &[
+                Item::btn("🖼 Image…", Btn::Image),
+                Item::with("✓ Done", Btn::Done, Look::Primary),
+            ],
+        );
 
         let tiles = self.tile_rects(area);
         if let Some((_, grad, _)) = tiles.iter().find(|(i, _, _)| self.is_custom(*i)) {
@@ -603,6 +613,12 @@ impl AppWindow for WallpaperChooser {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        match self.ui.route(&m) {
+            Some(Some(Btn::Image)) => return self.open_files_picker(),
+            Some(Some(Btn::Done)) => return Action::Close,
+            Some(None) => return Action::None,
+            None => {}
+        }
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let Some(i) = self.hit_test(area, m.column, m.row) else {

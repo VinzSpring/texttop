@@ -8,8 +8,20 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-use super::{Action, AppWindow};
+use super::ui::{self, Controls, Item, Look};
+use super::{Action, AppWindow, Launch};
 use crate::gfx;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Open,
+    Top,
+    PageUp,
+    PageDown,
+    End,
+    Narrower,
+    Wider,
+}
 
 pub struct HexViewer {
     path: Option<PathBuf>,
@@ -17,6 +29,9 @@ pub struct HexViewer {
     offset: usize,
     status: String,
     cols: usize,
+    /// Visible data rows at the last render, for paging.
+    rows: usize,
+    ui: Controls<Cmd>,
 }
 
 impl HexViewer {
@@ -25,8 +40,10 @@ impl HexViewer {
             path: None,
             data: Vec::new(),
             offset: 0,
-            status: "open a file from Files (F3) or drop a path".into(),
+            status: "no file".into(),
             cols: 16,
+            rows: 20,
+            ui: Controls::new(),
         };
         if let Some(p) = path {
             hv.load(p);
@@ -55,6 +72,37 @@ impl HexViewer {
         let per = self.cols * rows.max(1);
         self.data.len().saturating_sub(per)
     }
+
+    fn scroll_by(&mut self, rows: isize) {
+        let step = self.cols as isize * rows;
+        let max = self.max_offset(self.rows) as isize;
+        self.offset = (self.offset as isize + step).clamp(0, max.max(0)) as usize;
+        self.offset -= self.offset % self.cols;
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        let page = self.rows.max(1) as isize;
+        match c {
+            Cmd::Open => {
+                let dir = self
+                    .path
+                    .as_ref()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                    .unwrap_or_else(super::state_home);
+                return Action::Launch(Launch::Files(dir));
+            }
+            Cmd::Top => self.offset = 0,
+            Cmd::PageUp => self.scroll_by(-page),
+            Cmd::PageDown => self.scroll_by(page),
+            Cmd::End => {
+                self.offset = self.max_offset(self.rows);
+                self.scroll_by(1);
+            }
+            Cmd::Narrower => self.cols = self.cols.saturating_sub(4).max(8),
+            Cmd::Wider => self.cols = (self.cols + 4).min(32),
+        }
+        Action::None
+    }
 }
 
 impl AppWindow for HexViewer {
@@ -66,14 +114,36 @@ impl AppWindow for HexViewer {
             .unwrap_or_else(|| "Hex Viewer".into())
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        if area.height < 2 {
+    fn render(&mut self, f: &mut Frame, full: Rect, _focused: bool) {
+        if full.height < 3 {
             return;
         }
+        self.ui.begin();
+        let loaded = !self.data.is_empty();
+        let nav = Look::enabled_if(loaded);
+        // never wider than the window can show: " XXXXXXXX  " + 3*cols + 2 + cols
+        let fit = (full.width.saturating_sub(14) as usize / 4).max(8);
+        self.cols = self.cols.min(fit).max(8);
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(full.x, full.y, full.width, 1),
+            &[
+                Item::btn("📂 Open…", Cmd::Open),
+                Item::Sep,
+                Item::with("⤒", Cmd::Top, nav),
+                Item::with("▲ Page", Cmd::PageUp, nav),
+                Item::with("▼ Page", Cmd::PageDown, nav),
+                Item::with("⤓", Cmd::End, nav),
+            ],
+            &[
+                Item::Label(format!("{} bytes/row", self.cols), ui::DIM),
+                Item::with("−", Cmd::Narrower, Look::enabled_if(self.cols > 8)),
+                Item::with("+", Cmd::Wider, Look::enabled_if(self.cols < 32.min(fit))),
+            ],
+        );
+        let area = Rect::new(full.x, full.y + 1, full.width, full.height - 1);
         let rows = area.height.saturating_sub(1) as usize;
-        // fit columns to width: " XXXXXXXX  " + 3*cols + 2 + cols
-        let avail = area.width.saturating_sub(14) as usize;
-        self.cols = (avail / 4).clamp(8, 32);
+        self.rows = rows;
 
         let addr = Style::default().fg(Color::Rgb(100, 180, 255));
         let hex = Style::default().fg(Color::Rgb(210, 215, 230));
@@ -82,8 +152,9 @@ impl AppWindow for HexViewer {
 
         let mut lines = Vec::new();
         if self.data.is_empty() {
+            lines.push(Line::default());
             lines.push(Line::from(Span::styled(
-                "  No file loaded. In Files, select a file and press F3.",
+                "  No file loaded — click Open…, or drop a file onto this window.",
                 dim,
             )));
         } else {
@@ -127,7 +198,13 @@ impl AppWindow for HexViewer {
         f.render_widget(Paragraph::new(lines), Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)));
         f.render_widget(
             Paragraph::new(Span::styled(
-                format!(" {}  │ ↑↓ PgUp/PgDn · Home/End · +/- width ", self.status),
+                if loaded {
+                    let pct = (self.offset + self.cols * rows).min(self.data.len()) * 100
+                        / self.data.len().max(1);
+                    format!(" {}  │ offset {:08x} · {pct}% ", self.status, self.offset)
+                } else {
+                    format!(" {} ", self.status)
+                },
                 Style::default()
                     .fg(Color::Rgb(140, 150, 175))
                     .bg(Color::Rgb(18, 22, 36)),
@@ -135,28 +212,19 @@ impl AppWindow for HexViewer {
             .style(Style::default().bg(Color::Rgb(18, 22, 36))),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
         );
+        self.ui.render_menu(f.buffer_mut(), full);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
-        let rows = 20usize;
-        let step = self.cols;
         match k.code {
-            KeyCode::Up => self.offset = self.offset.saturating_sub(step),
-            KeyCode::Down => {
-                self.offset = (self.offset + step).min(self.max_offset(rows));
-            }
-            KeyCode::PageUp => self.offset = self.offset.saturating_sub(step * 16),
-            KeyCode::PageDown => {
-                self.offset = (self.offset + step * 16).min(self.max_offset(rows));
-            }
-            KeyCode::Home => self.offset = 0,
-            KeyCode::End => self.offset = self.max_offset(rows),
-            KeyCode::Char('+') | KeyCode::Char('=') => {
-                self.cols = (self.cols + 4).min(32);
-            }
-            KeyCode::Char('-') => {
-                self.cols = self.cols.saturating_sub(4).max(8);
-            }
+            KeyCode::Up => self.scroll_by(-1),
+            KeyCode::Down => self.scroll_by(1),
+            KeyCode::PageUp => return self.run(Cmd::PageUp),
+            KeyCode::PageDown => return self.run(Cmd::PageDown),
+            KeyCode::Home => return self.run(Cmd::Top),
+            KeyCode::End => return self.run(Cmd::End),
+            KeyCode::Char('+') | KeyCode::Char('=') => return self.run(Cmd::Wider),
+            KeyCode::Char('-') => return self.run(Cmd::Narrower),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             KeyCode::Char('g') if k.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.offset = 0;
@@ -167,11 +235,12 @@ impl AppWindow for HexViewer {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
         match m.kind {
-            MouseEventKind::ScrollUp => self.offset = self.offset.saturating_sub(self.cols),
-            MouseEventKind::ScrollDown => {
-                self.offset = (self.offset + self.cols).min(self.data.len().saturating_sub(1));
-            }
+            MouseEventKind::ScrollUp => self.scroll_by(-3),
+            MouseEventKind::ScrollDown => self.scroll_by(3),
             _ => {}
         }
         Action::None

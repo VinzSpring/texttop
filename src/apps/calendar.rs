@@ -1,27 +1,32 @@
 use chrono::{Datelike, Duration, Local, NaiveDate};
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
-use super::scroll::{self, ScrollState};
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    PrevYear,
+    PrevMonth,
+    Today,
+    NextMonth,
+    NextYear,
+    Day(NaiveDate),
+}
 
 pub struct Calendar {
     cursor: NaiveDate,
-    scroll: ScrollState,
-    line_count: usize,
-    view_h: u16,
+    ui: Controls<Cmd>,
 }
 
 impl Calendar {
     pub fn new() -> Self {
         Calendar {
             cursor: Local::now().date_naive(),
-            scroll: ScrollState::default(),
-            line_count: 0,
-            view_h: 16,
+            ui: Controls::new(),
         }
     }
 
@@ -46,6 +51,25 @@ impl Calendar {
         }
         weeks
     }
+
+    /// Move by whole months, clamping the day to the target month's length.
+    fn shift_months(&mut self, delta: i32) {
+        let total = self.cursor.year() * 12 + self.cursor.month0() as i32 + delta;
+        let (y, m) = (total.div_euclid(12), total.rem_euclid(12) as u32 + 1);
+        let day = self.cursor.day().min(days_in_month(y, m));
+        self.cursor = NaiveDate::from_ymd_opt(y, m, day).unwrap();
+    }
+
+    fn run(&mut self, c: Cmd) {
+        match c {
+            Cmd::PrevYear => self.shift_months(-12),
+            Cmd::PrevMonth => self.shift_months(-1),
+            Cmd::Today => self.cursor = Local::now().date_naive(),
+            Cmd::NextMonth => self.shift_months(1),
+            Cmd::NextYear => self.shift_months(12),
+            Cmd::Day(d) => self.cursor = d,
+        }
+    }
 }
 
 fn days_in_month(year: i32, month: u32) -> u32 {
@@ -65,15 +89,36 @@ impl AppWindow for Calendar {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
+        if area.height < 2 || area.width < 10 {
+            return;
+        }
+        self.ui.begin();
         let today = Local::now().date_naive();
         let year = self.cursor.year();
         let month = self.cursor.month();
         let weeks = Self::month_matrix(year, month);
 
+        let buf = f.buffer_mut();
+        self.ui.toolbar(
+            buf,
+            Rect::new(area.x, area.y, area.width, 1),
+            &[
+                Item::btn("◀◀", Cmd::PrevYear),
+                Item::btn("◀", Cmd::PrevMonth),
+                Item::Label(
+                    format!(" {} ", self.cursor.format("%B %Y")),
+                    Color::Rgb(120, 200, 255),
+                ),
+                Item::btn("▶", Cmd::NextMonth),
+                Item::btn("▶▶", Cmd::NextYear),
+            ],
+            &[Item::with("Today", Cmd::Today, Look::on_if(self.cursor == today))],
+        );
+
+        let dim = Style::default().fg(Color::Rgb(120, 130, 155));
         let accent = Style::default()
             .fg(Color::Rgb(120, 200, 255))
             .add_modifier(Modifier::BOLD);
-        let dim = Style::default().fg(Color::Rgb(120, 130, 155));
         let day_s = Style::default().fg(Color::Rgb(210, 215, 230));
         let today_s = Style::default()
             .fg(Color::Black)
@@ -83,128 +128,74 @@ impl AppWindow for Calendar {
             .fg(Color::White)
             .bg(Color::Rgb(60, 80, 140))
             .add_modifier(Modifier::BOLD);
+        let hover_s = Style::default().fg(Color::White).bg(Color::Rgb(0, 90, 140));
         let weekend = Style::default().fg(Color::Rgb(255, 160, 140));
 
-        let mut lines = vec![
-            Line::from(Span::styled(
-                format!("  {}", self.cursor.format("%B %Y")),
-                accent,
-            )),
-            Line::default(),
-            Line::from(Span::styled(
-                "     Su  Mo  Tu  We  Th  Fr  Sa",
-                dim,
-            )),
-        ];
-
-        for week in &weeks {
-            let mut spans = vec![Span::raw("    ")];
-            for (i, day) in week.iter().enumerate() {
-                match day {
-                    None => spans.push(Span::raw("    ")),
-                    Some(d) => {
-                        let date = NaiveDate::from_ymd_opt(year, month, *d).unwrap();
-                        let style = if date == today {
-                            today_s
-                        } else if date == self.cursor {
-                            sel_s
-                        } else if i == 0 || i == 6 {
-                            weekend
-                        } else {
-                            day_s
-                        };
-                        spans.push(Span::styled(format!(" {d:2} "), style));
-                    }
-                }
+        // Day cells are 4 wide; center the 28-cell grid.
+        let gx = area.x + area.width.saturating_sub(28) / 2;
+        let bottom = area.y + area.height;
+        let mut y = area.y + 2;
+        let put = |buf: &mut ratatui::buffer::Buffer, x: u16, y: u16, s: &str, st: Style| {
+            if y < bottom {
+                buf.set_string(x, y, s, st);
             }
-            lines.push(Line::from(spans));
+        };
+        put(buf, gx, y, " Su  Mo  Tu  We  Th  Fr  Sa", dim);
+        y += 1;
+        for week in &weeks {
+            if y >= bottom {
+                break;
+            }
+            for (i, day) in week.iter().enumerate() {
+                let Some(d) = day else { continue };
+                let date = NaiveDate::from_ymd_opt(year, month, *d).unwrap();
+                let cell = Rect::new(gx + i as u16 * 4, y, 4, 1);
+                let style = if date == today {
+                    today_s
+                } else if date == self.cursor {
+                    sel_s
+                } else if self.ui.hot(cell) {
+                    hover_s
+                } else if i == 0 || i == 6 {
+                    weekend
+                } else {
+                    day_s
+                };
+                buf.set_string(cell.x, y, format!(" {d:2} "), style);
+                self.ui.add(cell, Cmd::Day(date));
+            }
+            y += 1;
         }
 
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            format!("  Selected: {}", self.cursor.format("%A, %Y-%m-%d")),
+        y += 1;
+        put(
+            buf,
+            gx,
+            y,
+            &self.cursor.format("%A, %Y-%m-%d").to_string(),
             accent,
-        )));
-        if self.cursor == today {
-            lines.push(Line::from(Span::styled("  (today)", dim)));
-        } else {
-            let delta = (self.cursor - today).num_days();
-            let label = if delta > 0 {
-                format!("  ({delta} days ahead)")
-            } else {
-                format!("  ({} days ago)", -delta)
-            };
-            lines.push(Line::from(Span::styled(label, dim)));
-        }
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            "  ←→ day · ↑↓ week · [/] month · T today · PgUp/PgDn year",
-            dim,
-        )));
-        lines.push(Line::from(Span::styled(
-            "  mouse wheel / Ctrl+↑↓ scroll if clipped",
-            dim,
-        )));
-
-        self.line_count = lines.len();
-        self.view_h = area.height;
-        scroll::render_scrollable(f, area, &lines, &mut self.scroll);
+        );
+        let rel = match (self.cursor - today).num_days() {
+            0 => "today".to_string(),
+            1 => "tomorrow".to_string(),
+            -1 => "yesterday".to_string(),
+            d if d > 0 => format!("in {d} days"),
+            d => format!("{} days ago", -d),
+        };
+        put(buf, gx, y + 1, &rel, dim);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
-        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
-        if ctrl
-            && matches!(k.code, KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown)
-        {
-            self.scroll.on_key(
-                KeyEvent::new(
-                    match k.code {
-                        KeyCode::Up => KeyCode::Up,
-                        KeyCode::Down => KeyCode::Down,
-                        KeyCode::PageUp => KeyCode::PageUp,
-                        _ => KeyCode::PageDown,
-                    },
-                    KeyModifiers::NONE,
-                ),
-                self.line_count,
-                self.view_h,
-            );
-            return Action::None;
-        }
         match k.code {
             KeyCode::Left => self.cursor -= Duration::days(1),
             KeyCode::Right => self.cursor += Duration::days(1),
             KeyCode::Up => self.cursor -= Duration::days(7),
             KeyCode::Down => self.cursor += Duration::days(7),
-            KeyCode::Char('[') => {
-                let m = self.cursor.month();
-                let y = self.cursor.year();
-                let (ny, nm) = if m == 1 { (y - 1, 12) } else { (y, m - 1) };
-                let day = self.cursor.day().min(days_in_month(ny, nm));
-                self.cursor = NaiveDate::from_ymd_opt(ny, nm, day).unwrap();
-            }
-            KeyCode::Char(']') => {
-                let m = self.cursor.month();
-                let y = self.cursor.year();
-                let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
-                let day = self.cursor.day().min(days_in_month(ny, nm));
-                self.cursor = NaiveDate::from_ymd_opt(ny, nm, day).unwrap();
-            }
-            KeyCode::PageUp => {
-                let y = self.cursor.year() - 1;
-                let m = self.cursor.month();
-                let day = self.cursor.day().min(days_in_month(y, m));
-                self.cursor = NaiveDate::from_ymd_opt(y, m, day).unwrap();
-            }
-            KeyCode::PageDown => {
-                let y = self.cursor.year() + 1;
-                let m = self.cursor.month();
-                let day = self.cursor.day().min(days_in_month(y, m));
-                self.cursor = NaiveDate::from_ymd_opt(y, m, day).unwrap();
-            }
-            KeyCode::Char('t') | KeyCode::Char('T') => {
-                self.cursor = Local::now().date_naive();
-            }
+            KeyCode::Char('[') => self.run(Cmd::PrevMonth),
+            KeyCode::Char(']') => self.run(Cmd::NextMonth),
+            KeyCode::PageUp => self.run(Cmd::PrevYear),
+            KeyCode::PageDown => self.run(Cmd::NextYear),
+            KeyCode::Char('t') | KeyCode::Char('T') => self.run(Cmd::Today),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
         }
@@ -212,7 +203,15 @@ impl AppWindow for Calendar {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
-        self.scroll.on_mouse(m, self.line_count, self.view_h);
+        match m.kind {
+            MouseEventKind::ScrollUp => self.run(Cmd::PrevMonth),
+            MouseEventKind::ScrollDown => self.run(Cmd::NextMonth),
+            _ => {
+                if let Some(Some(c)) = self.ui.route(&m) {
+                    self.run(c);
+                }
+            }
+        }
         Action::None
     }
 }

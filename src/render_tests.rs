@@ -11,7 +11,8 @@ use crate::apps::imageviewer::ImageViewer;
 use crate::apps::AppWindow;
 use crate::gfx;
 use crate::snapshot::{
-    assert_snapshot, assert_snapshot_masked, init_env, render_mode, test_image_file, test_pattern,
+    assert_snapshot, assert_snapshot_masked, render_mode, test_image_file, test_pattern,
+    with_profile,
 };
 
 const DESK_W: u16 = 150;
@@ -33,10 +34,10 @@ fn volatile_taskbar() -> [Rect; 1] {
 /// icons, the window that opens on a fresh profile, and the taskbar.
 #[test]
 fn ui_desktop() {
-    // Redirect the profile *before* constructing: Desktop::new() reads the
-    // saved desktop and session from disk in its constructor.
-    init_env();
-    let mut desktop = Desktop::new();
+    // Desktop::new() reads the saved desktop and session, and a first launch
+    // writes the profile. Start from an empty one so the welcome window is
+    // the one a new user sees.
+    let mut desktop = with_profile(true, |_| Desktop::new());
     let buf = render_mode(true, DESK_W, DESK_H, |f| desktop.render(f));
     assert_snapshot_masked("ui_desktop", &buf, &volatile_taskbar(), 0.999, 0.999);
 }
@@ -45,10 +46,46 @@ fn ui_desktop() {
 /// that looked wrong in Apple Terminal, so it gets its own golden.
 #[test]
 fn ui_desktop_256() {
-    init_env();
-    let mut desktop = Desktop::new();
+    let mut desktop = with_profile(true, |_| Desktop::new());
     let buf = render_mode(false, DESK_W, DESK_H, |f| desktop.render(f));
     assert_snapshot_masked("ui_desktop_256", &buf, &volatile_taskbar(), 0.999, 0.999);
+}
+
+/// Welcome is the About window, and only a profile with no saved desktop and
+/// no saved session gets it. Closing it (or quitting with it still open) must
+/// not bring it back.
+#[test]
+fn welcome_opens_only_on_a_fresh_profile() {
+    with_profile(true, |home| {
+        let first = Desktop::new();
+        assert!(first.has_about(), "a fresh profile should open the welcome window");
+        assert!(home.join(".texttop_desktop.json").is_file());
+
+        let second = Desktop::new();
+        assert!(
+            !second.has_about(),
+            "an existing profile should not open the welcome window"
+        );
+
+        std::fs::remove_file(home.join(".texttop_desktop.json")).unwrap();
+        std::fs::write(home.join(".texttop_session.json"), r#"{"windows":[]}"#).unwrap();
+        let empty = Desktop::new();
+        assert!(
+            !empty.has_about(),
+            "an empty session is not a first launch"
+        );
+
+        std::fs::write(
+            home.join(".texttop_session.json"),
+            r#"{"windows":[{"launch":{"t":"about"},"x":2,"y":1,"w":60,"h":20,"min":false}]}"#,
+        )
+        .unwrap();
+        let restored = Desktop::new();
+        assert!(
+            !restored.has_about(),
+            "a saved welcome window should not be restored"
+        );
+    });
 }
 
 // ── wallpaper gradient ───────────────────────────────────────────────────────

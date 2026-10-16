@@ -65,12 +65,15 @@ pub mod calculator;
 pub mod calendar;
 pub mod clock;
 pub mod compare;
+pub mod contribute;
 pub mod detect;
 pub mod editor;
 pub mod filebrowser;
 pub mod game2048;
 pub mod git;
 pub mod gitutil;
+pub mod group;
+pub mod groupedit;
 pub mod hexviewer;
 pub mod imageviewer;
 pub mod launcher;
@@ -78,6 +81,7 @@ pub mod minesweeper;
 pub mod notes;
 pub mod pin;
 pub mod processes;
+pub mod runhere;
 pub mod scroll;
 pub mod search;
 pub mod snake;
@@ -86,6 +90,7 @@ pub mod snapshots;
 pub mod syntax;
 pub mod sysinfo;
 pub mod terminal;
+pub mod ui;
 pub mod videoplayer;
 pub mod wallpaper;
 pub mod webbrowser;
@@ -158,6 +163,10 @@ pub enum Action {
     Launch(Launch),
     /// Launch something and close the requesting window (one-shot dialogs).
     LaunchAndClose(Launch),
+    /// Open several windows and close the requesting one (Run app here).
+    LaunchManyAndClose(Vec<Launch>),
+    /// A picker (File browser in path-picking mode) chose this folder or file.
+    PickPath(PathBuf),
     /// Start dragging a file; desktop shows a ghost and handles drop targets.
     BeginFileDrag { path: PathBuf, cut: bool },
     /// Add a desktop shortcut for this path.
@@ -233,6 +242,18 @@ pub enum Launch {
     DetectedApps,
     /// Electronic music studio (session / arrange / piano).
     Studio(Option<PathBuf>),
+    /// Chooser that runs any app in `dir`, or opens `files` with it.
+    RunHere { dir: PathBuf, files: Vec<PathBuf> },
+    /// An app group ("virtual app") started in `cwd`, with `open` as tabs.
+    Group {
+        id: String,
+        cwd: Option<PathBuf>,
+        open: Vec<PathBuf>,
+    },
+    /// App Groups settings, optionally with one group selected.
+    GroupEditor(Option<String>),
+    /// Download texttop's source and open it in the IDE.
+    Contribute,
 }
 
 pub trait AppWindow {
@@ -243,6 +264,11 @@ pub trait AppWindow {
         Action::None
     }
     fn on_tick(&mut self) {}
+    /// Something the app wants done that did not come from input (a
+    /// background job finished). Polled after every tick.
+    fn take_action(&mut self) -> Action {
+        Action::None
+    }
     /// Text pasted into this window as a single clipboard event.
     fn on_paste(&mut self, _text: &str) -> Action {
         Action::None

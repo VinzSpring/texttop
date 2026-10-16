@@ -11,7 +11,19 @@ use ratatui::Frame;
 
 use super::scroll::{self, ScrollState};
 use super::snaputil::{self, DiffKind, DiffLine, SnapMeta};
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Tab(Tab),
+    New,
+    Restore,
+    Mark,
+    OpenFile,
+    PromptOk,
+    PromptCancel,
+}
 
 #[derive(Clone, Copy, PartialEq)]
 enum Tab {
@@ -38,6 +50,7 @@ pub struct SnapshotsApp {
     status: String,
     prompt: Option<(Prompt, String)>,
     view_h: u16,
+    ui: Controls<Cmd>,
 }
 
 impl SnapshotsApp {
@@ -54,6 +67,7 @@ impl SnapshotsApp {
             status: String::new(),
             prompt: None,
             view_h: 20,
+            ui: Controls::new(),
         };
         app.reload();
         app
@@ -70,7 +84,7 @@ impl SnapshotsApp {
             }
         }
         self.status = if self.snaps.is_empty() {
-            "no snapshots yet · press n / Create from Files".into()
+            "no snapshots yet".into()
         } else {
             format!("{} snapshot(s)", self.snaps.len())
         };
@@ -146,6 +160,68 @@ impl SnapshotsApp {
         self.status = format!("diff · {} lines", self.diff.len());
     }
 
+    fn show(&mut self, tab: Tab) {
+        match tab {
+            Tab::Diff => self.load_diff(),
+            Tab::Preview => self.load_preview(),
+            Tab::History => {}
+        }
+        self.tab = tab;
+        self.scroll.offset = 0;
+    }
+
+    fn toggle_mark(&mut self) {
+        if self.mark == Some(self.sel) {
+            self.mark = None;
+            self.status = "unmarked".into();
+        } else if !self.snaps.is_empty() {
+            self.mark = Some(self.sel);
+            self.status = "marked — Diff now compares the selected snapshot with this one".into();
+        }
+    }
+
+    fn restore(&mut self) {
+        if let Some(id) = self.selected_id().map(|s| s.to_string()) {
+            match snaputil::restore(&self.path, &id) {
+                Ok(()) => {
+                    self.status = "restored (pre-restore snap saved)".into();
+                    self.reload();
+                }
+                Err(e) => self.status = e,
+            }
+        }
+    }
+
+    fn finish_prompt(&mut self) {
+        let Some((prompt, input)) = self.prompt.take() else {
+            return;
+        };
+        match prompt {
+            Prompt::RestoreConfirm => self.restore(),
+            Prompt::Note => self.create_now(&input),
+        }
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        match c {
+            Cmd::Tab(t) => self.show(t),
+            Cmd::New => self.prompt = Some((Prompt::Note, String::new())),
+            Cmd::Restore => {
+                if !self.snaps.is_empty() {
+                    self.prompt = Some((Prompt::RestoreConfirm, String::new()));
+                }
+            }
+            Cmd::Mark => self.toggle_mark(),
+            Cmd::OpenFile => return Action::Launch(Launch::Editor(Some(self.path.clone()))),
+            Cmd::PromptOk => self.finish_prompt(),
+            Cmd::PromptCancel => {
+                self.prompt = None;
+                self.status = "cancelled".into();
+            }
+        }
+        Action::None
+    }
+
     fn create_now(&mut self, note: &str) {
         match snaputil::create_snapshot(&self.path, note) {
             Ok(m) => {
@@ -190,21 +266,27 @@ impl AppWindow for SnapshotsApp {
         if area.height < 3 {
             return;
         }
-        let tabs = match self.tab {
-            Tab::History => " [History]  Diff  Preview ",
-            Tab::Diff => " History  [Diff]  Preview ",
-            Tab::Preview => " History  Diff  [Preview] ",
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                format!(" ⏱ {tabs}"),
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(40, 36, 60))
-                    .add_modifier(Modifier::BOLD),
-            )))
-            .style(Style::default().bg(Color::Rgb(40, 36, 60))),
+        self.ui.begin();
+        let any = !self.snaps.is_empty();
+        let tab = |label: &str, t: Tab, cur: Tab| Item::with(label, Cmd::Tab(t), Look::on_if(t == cur));
+        self.ui.toolbar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y, area.width, 1),
+            &[
+                tab("History", Tab::History, self.tab),
+                tab("Diff", Tab::Diff, self.tab),
+                tab("Preview", Tab::Preview, self.tab),
+            ],
+            &[
+                Item::with("📸 New", Cmd::New, Look::Primary),
+                Item::with(
+                    if self.mark.is_some() { "● Marked" } else { "○ Mark" },
+                    Cmd::Mark,
+                    if any { Look::on_if(self.mark.is_some()) } else { Look::Disabled },
+                ),
+                Item::with("↺ Restore", Cmd::Restore, Look::enabled_if(any)),
+                Item::btn("✎ Open", Cmd::OpenFile),
+            ],
         );
 
         let body = Rect::new(
@@ -224,12 +306,12 @@ impl AppWindow for SnapshotsApp {
                         Style::default().fg(Color::Rgb(150, 155, 175)),
                     )));
                     lines.push(Line::from(Span::styled(
-                        "  Press n to snapshot the working copy.",
+                        "  Click 📸 New to snapshot the working copy.",
                         Style::default().fg(Color::Rgb(150, 155, 175)),
                     )));
                 }
                 for (i, s) in self.snaps.iter().enumerate() {
-                    let mark = if Some(i) == self.mark { "●" } else { " " };
+                    let mark = if Some(i) == self.mark { "●" } else { "○" };
                     let selected = i == self.sel;
                     let base = if selected && focused {
                         Style::default().fg(Color::White).bg(Color::Rgb(0, 96, 150))
@@ -275,65 +357,60 @@ impl AppWindow for SnapshotsApp {
             }
         }
 
-        let footer = if let Some((p, input)) = &self.prompt {
-            let label = match p {
-                Prompt::RestoreConfirm => "Restore? type y",
-                Prompt::Note => "Snapshot note",
-            };
-            format!(" {label}: {input}█  Esc cancel ")
-        } else {
-            format!(
-                " {} │ Tab panes · n new · Space mark · d diff · r restore · Enter edit · q ",
-                self.status
-            )
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
+        let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        let buf = f.buffer_mut();
+        match &self.prompt {
+            Some((Prompt::Note, input)) => self.ui.input_row(
+                buf,
                 footer,
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
+                "Note (optional)",
+                input,
+                ("Create", Cmd::PromptOk),
+                Cmd::PromptCancel,
+            ),
+            Some((Prompt::RestoreConfirm, _)) => {
+                let when = self
+                    .snaps
+                    .get(self.sel)
+                    .map(|s| s.when_local())
+                    .unwrap_or_default();
+                self.ui.toolbar(
+                    buf,
+                    footer,
+                    &[Item::Label(
+                        format!(" Overwrite the file with the snapshot from {when}?"),
+                        Color::White,
+                    )],
+                    &[
+                        Item::with("↺ Restore", Cmd::PromptOk, Look::Danger),
+                        Item::with("Cancel", Cmd::PromptCancel, Look::Raised),
+                    ],
+                );
+            }
+            None => ui::status_bar(buf, footer, &self.status),
+        }
+        self.ui.render_menu(f.buffer_mut(), area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
 
+        if self.ui.menu_open() && k.code == KeyCode::Esc {
+            self.ui.close_menu();
+            return Action::None;
+        }
         if let Some((prompt, ref mut input)) = self.prompt.as_mut() {
-            let prompt = *prompt;
-            match k.code {
-                KeyCode::Esc => {
-                    self.prompt = None;
-                    self.status = "cancelled".into();
+            match (k.code, *prompt) {
+                (KeyCode::Esc, _) | (KeyCode::Char('n'), Prompt::RestoreConfirm) => {
+                    return self.run(Cmd::PromptCancel);
                 }
-                KeyCode::Enter => {
-                    let input = input.clone();
-                    self.prompt = None;
-                    match prompt {
-                        Prompt::RestoreConfirm => {
-                            if input.trim().eq_ignore_ascii_case("y") {
-                                if let Some(id) = self.selected_id().map(|s| s.to_string()) {
-                                    match snaputil::restore(&self.path, &id) {
-                                        Ok(()) => {
-                                            self.status = "restored (pre-restore snap saved)".into();
-                                            self.reload();
-                                        }
-                                        Err(e) => self.status = e,
-                                    }
-                                }
-                            } else {
-                                self.status = "restore cancelled".into();
-                            }
-                        }
-                        Prompt::Note => self.create_now(&input),
-                    }
+                (KeyCode::Enter, _) | (KeyCode::Char('y'), Prompt::RestoreConfirm) => {
+                    self.finish_prompt();
                 }
-                _ => {
+                (_, Prompt::Note) => {
                     super::text_edit(input, k);
                 }
+                _ => {}
             }
             return Action::None;
         }
@@ -366,27 +443,12 @@ impl AppWindow for SnapshotsApp {
             KeyCode::Char('n') if !ctrl => {
                 self.prompt = Some((Prompt::Note, String::new()));
             }
-            KeyCode::Char(' ') if self.tab == Tab::History => {
-                if self.mark == Some(self.sel) {
-                    self.mark = None;
-                    self.status = "unmarked".into();
-                } else {
-                    self.mark = Some(self.sel);
-                    self.status = "marked for version diff (d)".into();
-                }
-            }
+            KeyCode::Char(' ') if self.tab == Tab::History => self.toggle_mark(),
             KeyCode::Char('d') if !ctrl => {
                 self.load_diff();
                 self.tab = Tab::Diff;
             }
-            KeyCode::Char('r') if !ctrl => {
-                if self.snaps.is_empty() {
-                    self.status = "nothing to restore".into();
-                } else {
-                    self.prompt = Some((Prompt::RestoreConfirm, String::new()));
-                    self.status = "restore overwrites working file".into();
-                }
-            }
+            KeyCode::Char('r') if !ctrl => return self.run(Cmd::Restore),
             KeyCode::F(5) => self.reload(),
             KeyCode::Enter if self.tab == Tab::History => {
                 return Action::Launch(Launch::Editor(Some(self.path.clone())));
@@ -439,6 +501,9 @@ impl AppWindow for SnapshotsApp {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
         let body = Rect::new(
             area.x,
             area.y + 1,
@@ -446,13 +511,30 @@ impl AppWindow for SnapshotsApp {
             area.height.saturating_sub(2),
         );
         if self.tab == Tab::History
-            && matches!(m.kind, MouseEventKind::Down(MouseButton::Left))
+            && matches!(m.kind, MouseEventKind::Down(_))
             && m.row >= body.y
             && m.row < body.y + body.height
         {
             let idx = (m.row - body.y) as usize;
             if idx < self.snaps.len() {
                 self.sel = idx;
+                if m.kind == MouseEventKind::Down(MouseButton::Right) {
+                    let mark = if self.mark == Some(idx) { "Unmark" } else { "Mark for compare" };
+                    self.ui.open_menu(
+                        m.column,
+                        m.row,
+                        vec![
+                            ("Diff".into(), Some(Cmd::Tab(Tab::Diff))),
+                            ("Preview".into(), Some(Cmd::Tab(Tab::Preview))),
+                            (mark.into(), Some(Cmd::Mark)),
+                            (String::new(), None),
+                            ("↺ Restore this version…".into(), Some(Cmd::Restore)),
+                        ],
+                    );
+                } else if m.column < body.x + 3 {
+                    // the ● column toggles the compare mark
+                    self.toggle_mark();
+                }
             }
             return Action::None;
         }

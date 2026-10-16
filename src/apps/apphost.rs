@@ -42,6 +42,7 @@ mod imp {
     };
     use windows_core::BOOL;
 
+    use crate::apps::ui::{Controls, Item, Look};
     use crate::apps::{Action, AppWindow};
     use crate::engine::{next_seq, Frame as PixFrame, MouseKind};
     use crate::gfx;
@@ -581,11 +582,28 @@ mod imp {
         },
     }
 
+    #[derive(Clone, Copy, PartialEq)]
+    enum Btn {
+        Rescan,
+        LaunchPrompt,
+        LaunchOk,
+        LaunchCancel,
+        Adopt,
+        Close,
+        StopWaiting,
+        Windows,
+        Park,
+        Autosize,
+        ZoomOut,
+        ZoomIn,
+    }
+
     pub struct AppHost {
         state: State,
         t: u64,
         cache: gfx::RgbCache,
         note: String,
+        ui: Controls<Btn>,
     }
 
     impl AppHost {
@@ -595,7 +613,7 @@ mod imp {
             let (input, note) = match cmd {
                 Some(c) if !c.is_empty() => (
                     Some(c),
-                    "session restore — press Enter to launch, or pick a window".into(),
+                    "session restore — click Launch, or pick a window".into(),
                 ),
                 _ => (None, String::new()),
             };
@@ -609,7 +627,60 @@ mod imp {
                 t: 0,
                 cache: gfx::RgbCache::default(),
                 note,
+                ui: Controls::new(),
             }
+        }
+
+        fn run(&mut self, b: Btn) -> Action {
+            match (&mut self.state, b) {
+                (State::Pick { list, sel, .. }, Btn::Rescan) => {
+                    *list = list_windows();
+                    *sel = (*sel).min(list.len().saturating_sub(1));
+                }
+                (State::Pick { input, .. }, Btn::LaunchPrompt) => *input = Some(String::new()),
+                (State::Pick { input, .. }, Btn::LaunchOk) => {
+                    if let Some(cmd) = input.take() {
+                        self.launch(&cmd);
+                    }
+                }
+                (State::Pick { input, .. }, Btn::LaunchCancel) => *input = None,
+                (State::Pick { list, sel, .. }, Btn::Adopt) => {
+                    if let Some(e) = list.get(*sel).cloned() {
+                        self.adopt(&e);
+                    }
+                }
+                (_, Btn::Close) => return Action::Close,
+                (State::Wait { .. }, Btn::StopWaiting) | (State::Host { .. }, Btn::Windows) => {
+                    self.release()
+                }
+                (State::Host { host, .. }, Btn::Park) => {
+                    let want = !host.parked;
+                    host.set_parked(want);
+                    self.note = if want {
+                        "window hidden from desktop".into()
+                    } else {
+                        "window shown on desktop (capture continues)".into()
+                    };
+                }
+                (State::Host { autosize, .. }, Btn::Autosize) => {
+                    *autosize = !*autosize;
+                    self.note = if *autosize {
+                        "auto-resize ON".into()
+                    } else {
+                        "auto-resize OFF (native size, letterboxed)".into()
+                    };
+                }
+                (State::Host { zoom, .. }, Btn::ZoomOut) => {
+                    *zoom = (*zoom - 0.5).max(1.0);
+                    self.cache.clear();
+                }
+                (State::Host { zoom, .. }, Btn::ZoomIn) => {
+                    *zoom = (*zoom + 0.5).min(6.0);
+                    self.cache.clear();
+                }
+                _ => {}
+            }
+            Action::None
         }
 
         /// Spawn a program and start waiting for its window.
@@ -728,6 +799,7 @@ mod imp {
             if area.height < 2 {
                 return;
             }
+            self.ui.begin();
             let content = Rect::new(area.x, area.y, area.width, area.height - 1);
             let status = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
             let dim = if focused {
@@ -740,14 +812,14 @@ mod imp {
                 State::Pick { list, sel, off, input } => {
                     gfx::fill(f.buffer_mut(), content, Color::Rgb(12, 14, 22));
                     let buf = f.buffer_mut();
-                    buf.set_string(
-                        content.x + 2,
-                        content.y,
-                        "Adopt a desktop window",
-                        Style::default()
-                            .fg(Color::Rgb(150, 200, 255))
-                            .bg(Color::Rgb(12, 14, 22))
-                            .add_modifier(Modifier::BOLD),
+                    self.ui.toolbar(
+                        buf,
+                        Rect::new(content.x, content.y, content.width, 1),
+                        &[Item::Label(" Click a desktop window to show it here".into(), Color::Rgb(150, 200, 255))],
+                        &[
+                            Item::btn("⟳ Rescan", Btn::Rescan),
+                            Item::btn("▶ Launch program…", Btn::LaunchPrompt),
+                        ],
                     );
                     let rows = content.height.saturating_sub(2) as usize;
                     if *sel < *off {
@@ -784,32 +856,31 @@ mod imp {
                         buf.set_string(
                             content.x + 2,
                             content.y + 2,
-                            "no capturable windows found — press r to rescan",
+                            "no capturable windows found — click ⟳ Rescan",
                             Style::default().fg(Color::Rgb(255, 170, 90)).bg(Color::Rgb(12, 14, 22)),
                         );
                     }
-                    let (text, bg) = match input {
-                        Some(cmd) => (format!(" ▶ {cmd}▏"), Color::Rgb(0, 70, 110)),
+                    match input {
+                        Some(cmd) => self.ui.input_row(
+                            buf,
+                            status,
+                            "Program",
+                            cmd,
+                            ("Launch", Btn::LaunchOk),
+                            Btn::LaunchCancel,
+                        ),
                         None => {
-                            let hint =
-                                " ↑/↓ select · Enter adopt · l launch program · r rescan · q close "
-                                    .to_string();
-                            let text = if self.note.is_empty() {
-                                hint
-                            } else {
-                                format!(" {} │{hint}", self.note)
-                            };
-                            (text, Color::Rgb(18, 22, 36))
+                            self.ui.toolbar(
+                                buf,
+                                status,
+                                &[Item::Label(format!(" {}", self.note), dim)],
+                                &[
+                                    Item::with("Show here", Btn::Adopt, if list.is_empty() { Look::Disabled } else { Look::Primary }),
+                                    Item::with("Close", Btn::Close, Look::Raised),
+                                ],
+                            );
                         }
-                    };
-                    f.render_widget(
-                        Paragraph::new(Span::styled(
-                            text,
-                            Style::default().fg(Color::Rgb(220, 225, 240)).bg(bg),
-                        ))
-                        .style(Style::default().bg(bg)),
-                        status,
-                    );
+                    }
                 }
                 State::Wait { exe_base, .. } => {
                     gfx::fill(f.buffer_mut(), content, Color::Rgb(12, 14, 22));
@@ -827,13 +898,11 @@ mod imp {
                         )),
                         Rect::new(x, y, content.width.saturating_sub(x - content.x), 1),
                     );
-                    f.render_widget(
-                        Paragraph::new(Span::styled(
-                            " Esc cancel ",
-                            Style::default().fg(dim).bg(Color::Rgb(18, 22, 36)),
-                        ))
-                        .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+                    self.ui.toolbar(
+                        f.buffer_mut(),
                         status,
+                        &[],
+                        &[Item::with("Cancel", Btn::StopWaiting, Look::Raised)],
                     );
                 }
                 State::Host {
@@ -855,7 +924,7 @@ mod imp {
                                     Style::default().fg(Color::Rgb(255, 110, 110)),
                                 )),
                                 Line::from(Span::styled(
-                                    "    press F2 to pick another window",
+                                    "    click 🪟 Windows below to pick another one",
                                     Style::default().fg(Color::Rgb(150, 155, 175)),
                                 )),
                             ]),
@@ -941,19 +1010,23 @@ mod imp {
                     } else {
                         host.title()
                     };
-                    let hint = format!(
-                        " zoom {:.1} │ F2 windows · F3 {} · F8 autosize {} · F9/F10 zoom · click & type ",
-                        zoom,
-                        if host.parked { "show on desktop" } else { "hide from desktop" },
-                        if *autosize { "on" } else { "off" },
-                    );
-                    f.render_widget(
-                        Paragraph::new(Span::styled(
-                            format!(" {}  │{}", left.chars().take(32).collect::<String>(), hint),
-                            Style::default().fg(dim).bg(Color::Rgb(18, 22, 36)),
-                        ))
-                        .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+                    self.ui.toolbar(
+                        f.buffer_mut(),
                         status,
+                        &[
+                            Item::btn("🪟 Windows", Btn::Windows),
+                            Item::with(
+                                if host.parked { "👁 Show on desktop" } else { "👁 Hide from desktop" },
+                                Btn::Park,
+                                Look::on_if(!host.parked),
+                            ),
+                            Item::with("⤢ Auto-size", Btn::Autosize, Look::on_if(*autosize)),
+                            Item::Sep,
+                            Item::with("−", Btn::ZoomOut, Look::enabled_if(*zoom > 1.0)),
+                            Item::Label(format!("{:.0}%", *zoom * 100.0), dim),
+                            Item::with("+", Btn::ZoomIn, Look::enabled_if(*zoom < 6.0)),
+                        ],
+                        &[Item::Label(left.chars().take(32).collect::<String>(), dim)],
                     );
                 }
             }
@@ -1065,9 +1138,22 @@ mod imp {
         }
 
         fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+            if let Some(hit) = self.ui.route(&m) {
+                return hit.map_or(Action::None, |b| self.run(b));
+            }
             match &mut self.state {
                 State::Wait { .. } => {}
                 State::Pick { list, sel, off, .. } => match m.kind {
+                    // the highlight follows the pointer
+                    MouseEventKind::Moved => {
+                        let content_y = area.y + 2;
+                        if m.row >= content_y && m.row + 1 < area.y + area.height {
+                            let idx = *off + (m.row - content_y) as usize;
+                            if idx < list.len() {
+                                *sel = idx;
+                            }
+                        }
+                    }
                     MouseEventKind::ScrollUp => *sel = sel.saturating_sub(1),
                     MouseEventKind::ScrollDown => {
                         if *sel + 1 < list.len() {
@@ -1078,13 +1164,9 @@ mod imp {
                         let content_y = area.y + 2;
                         if m.row >= content_y {
                             let idx = *off + (m.row - content_y) as usize;
-                            if idx < list.len() {
-                                if idx == *sel {
-                                    if let Some(e) = list.get(idx).cloned() {
-                                        self.adopt(&e);
-                                    }
-                                } else {
-                                    *sel = idx;
+                            if m.row + 1 < area.y + area.height {
+                                if let Some(e) = list.get(idx).cloned() {
+                                    self.adopt(&e);
                                 }
                             }
                         }

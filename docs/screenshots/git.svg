@@ -9,86 +9,195 @@
 <rect width="1260" height="756" fill="#0b0d14"/>
 <rect x="0" y="0" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="18" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="18" width="9" height="18" fill="#121624"/>
-<rect x="18" y="18" width="72" height="18" fill="#00beff"/>
-<rect x="90" y="18" width="9" height="18" fill="#121624"/>
-<rect x="99" y="18" width="45" height="18" fill="#1c2234"/>
-<rect x="144" y="18" width="9" height="18" fill="#121624"/>
-<rect x="153" y="18" width="54" height="18" fill="#1c2234"/>
-<rect x="207" y="18" width="9" height="18" fill="#121624"/>
-<rect x="216" y="18" width="90" height="18" fill="#1c2234"/>
-<rect x="306" y="18" width="9" height="18" fill="#121624"/>
-<rect x="315" y="18" width="72" height="18" fill="#1c2234"/>
-<rect x="387" y="18" width="864" height="18" fill="#121624"/>
+<rect x="9" y="18" width="72" height="18" fill="#006eaa"/>
+<rect x="81" y="18" width="1170" height="18" fill="#1c243e"/>
 <rect x="1251" y="18" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="36" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="36" width="153" height="18" fill="#005a8c"/>
-<rect x="162" y="36" width="1098" height="18" fill="#0c0e16"/>
+<rect x="9" y="36" width="1242" height="18" fill="#1c243e"/>
+<rect x="1251" y="36" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="54" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="54" width="1224" height="18" fill="#0c0e16"/>
+<rect x="9" y="54" width="324" height="18" fill="#005a8c"/>
+<rect x="333" y="54" width="909" height="18" fill="#0c0e16"/>
+<rect x="1242" y="54" width="9" height="18" fill="#2c3658"/>
+<rect x="1251" y="54" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="72" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="72" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="72" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="72.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="72.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="81.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="81.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="90" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="90" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="90" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="90.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="90.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="99.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="99.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="108" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="108" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="108" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="108.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="108.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="117.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="117.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="126" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="126" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="126" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="126.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="126.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="135.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="135.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="144" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="144" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="144" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="144.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="144.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="153.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="153.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="162" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="162" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="162" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="162.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="162.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="171.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="171.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="180" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="180" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="180" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="180.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="180.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="189.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="189.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="198" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="198" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="198" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="198.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="198.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="207.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="207.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="216" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="216" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="216" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="216.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="216.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="225.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="225.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="234" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="234" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="234" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="234.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="234.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="243.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="243.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="252" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="252" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="252" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="252.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="252.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="261.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="261.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="270" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="270" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="270" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="270.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="270.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="279.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="279.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="288" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="288" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="288" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="288.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="288.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="297.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="297.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="306" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="306" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="306" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="306.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="306.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="315.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="315.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="324" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="324" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="324" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="324.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="324.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="333.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="333.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="342" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="342" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="342" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="342.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="342.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="351.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="351.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="360" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="360" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="360" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="360.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="360.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="369.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="369.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="378" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="378" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="378" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="378.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="378.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="387.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="387.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="396" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="396" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="396" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="396.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="396.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="405.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="405.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="414" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="414" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="414" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="414.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="414.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="423.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="423.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="432" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="432" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="432" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="432.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="432.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="441.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="441.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="450" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="450" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="450" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="450.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="450.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="459.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="459.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="468" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="468" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="468" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="468.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="468.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="477.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="477.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="486" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="486" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="486" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="486.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="486.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="495.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="495.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="504" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="504" width="1224" height="18" fill="#0c0e16"/>
+<rect x="63" y="504" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="504.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="504.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="513.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="513.0" width="4.5" height="9.0" fill="#00aadc"/>
 <rect x="0" y="522" width="9" height="18" fill="#0c0e16"/>
-<rect x="36" y="522" width="1224" height="18" fill="#0c0e16"/>
-<rect x="0" y="540" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="558" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="576" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="594" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="612" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="630" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="648" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="666" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="684" width="1260" height="18" fill="#0c0e16"/>
+<rect x="63" y="522" width="1197" height="18" fill="#0c0e16"/>
+<rect x="1242.0" y="522.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="522.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1242.0" y="531.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="1246.5" y="531.0" width="4.5" height="9.0" fill="#00aadc"/>
+<rect x="0" y="540" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="540" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="558" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="558" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="576" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="576" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="594" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="594" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="612" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="612" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="630" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="630" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="648" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="648" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="666" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="666" width="1197" height="18" fill="#0c0e16"/>
+<rect x="0" y="684" width="9" height="18" fill="#0c0e16"/>
+<rect x="63" y="684" width="1179" height="18" fill="#0c0e16"/>
+<rect x="1242" y="684" width="9" height="18" fill="#2c3658"/>
+<rect x="1251" y="684" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="702" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="702" width="1242" height="18" fill="#121624"/>
+<rect x="9" y="702" width="1242" height="18" fill="#141828"/>
 <rect x="1251" y="702" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="720" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="738" width="81" height="18" fill="#0060a0"/>
@@ -219,6 +328,7 @@
 <path d="M4.5,27.0 L4.5,18.0 M4.5,27.0 L4.5,36.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,27.0 L1255.5,18.0 M1255.5,27.0 L1255.5,36.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,45.0 L4.5,36.0 M4.5,45.0 L4.5,54.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M211.5,45.0 L211.5,36.0 M211.5,45.0 L211.5,54.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,45.0 L1255.5,36.0 M1255.5,45.0 L1255.5,54.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,63.0 L4.5,54.0 M4.5,63.0 L4.5,72.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,63.0 L1255.5,54.0 M1255.5,63.0 L1255.5,72.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
@@ -275,26 +385,33 @@
 <path d="M4.5,531.0 L4.5,522.0 M4.5,531.0 L4.5,540.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,531.0 L1255.5,522.0 M1255.5,531.0 L1255.5,540.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,549.0 L4.5,540.0 M4.5,549.0 L4.5,558.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,549.0 L1246.5,540.0 M1246.5,549.0 L1246.5,558.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,549.0 L1255.5,540.0 M1255.5,549.0 L1255.5,558.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,567.0 L4.5,558.0 M4.5,567.0 L4.5,576.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,567.0 L1246.5,558.0 M1246.5,567.0 L1246.5,576.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,567.0 L1255.5,558.0 M1255.5,567.0 L1255.5,576.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,585.0 L4.5,576.0 M4.5,585.0 L4.5,594.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,585.0 L1246.5,576.0 M1246.5,585.0 L1246.5,594.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,585.0 L1255.5,576.0 M1255.5,585.0 L1255.5,594.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,603.0 L4.5,594.0 M4.5,603.0 L4.5,612.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,603.0 L1246.5,594.0 M1246.5,603.0 L1246.5,612.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,603.0 L1255.5,594.0 M1255.5,603.0 L1255.5,612.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,621.0 L4.5,612.0 M4.5,621.0 L4.5,630.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,621.0 L1246.5,612.0 M1246.5,621.0 L1246.5,630.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,621.0 L1255.5,612.0 M1255.5,621.0 L1255.5,630.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,639.0 L4.5,630.0 M4.5,639.0 L4.5,648.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,639.0 L1246.5,630.0 M1246.5,639.0 L1246.5,648.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,639.0 L1255.5,630.0 M1255.5,639.0 L1255.5,648.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,657.0 L4.5,648.0 M4.5,657.0 L4.5,666.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,657.0 L1246.5,648.0 M1246.5,657.0 L1246.5,666.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,657.0 L1255.5,648.0 M1255.5,657.0 L1255.5,666.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,675.0 L4.5,666.0 M4.5,675.0 L4.5,684.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M1246.5,675.0 L1246.5,666.0 M1246.5,675.0 L1246.5,684.0" stroke="#283046" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,675.0 L1255.5,666.0 M1255.5,675.0 L1255.5,684.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,693.0 L4.5,684.0 M4.5,693.0 L4.5,702.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,693.0 L1255.5,684.0 M1255.5,693.0 L1255.5,702.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,711.0 L4.5,702.0 M4.5,711.0 L4.5,720.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
-<path d="M184.5,711.0 L184.5,702.0 M184.5,711.0 L184.5,720.0" stroke="#8c96af" stroke-width="1.3" fill="none"/>
-<path d="M364.5,711.0 L364.5,702.0 M364.5,711.0 L364.5,720.0" stroke="#8c96af" stroke-width="1.3" fill="none"/>
+<path d="M184.5,711.0 L184.5,702.0 M184.5,711.0 L184.5,720.0" stroke="#969eb9" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,711.0 L1255.5,702.0 M1255.5,711.0 L1255.5,720.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,720.0 Q4.5,729.0 9.0,729.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M13.5,729.0 L9.0,729.0 M13.5,729.0 L18.0,729.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
@@ -443,114 +560,139 @@
 <text x="99" y="13.7" fill="#ffffff" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs">texttop</text>
 <text x="1215" y="13.7" fill="#78dc82" textLength="9" lengthAdjust="spacingAndGlyphs">□</text>
 <text x="1233" y="13.7" fill="#ff5f5f" textLength="9" lengthAdjust="spacingAndGlyphs">✕</text>
-<text x="27" y="31.7" fill="#000000" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">Status</text>
-<text x="108" y="31.7" fill="#a0aabe" textLength="27" lengthAdjust="spacingAndGlyphs">Log</text>
-<text x="162" y="31.7" fill="#a0aabe" textLength="36" lengthAdjust="spacingAndGlyphs">Diff</text>
-<text x="225" y="31.7" fill="#a0aabe" textLength="72" lengthAdjust="spacingAndGlyphs">Branches</text>
-<text x="324" y="31.7" fill="#a0aabe" textLength="54" lengthAdjust="spacingAndGlyphs">Commit</text>
-<text x="18" y="49.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="49.7" fill="#ffffff" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="49.7" fill="#ffffff" font-weight="bold" textLength="90" lengthAdjust="spacingAndGlyphs">.gitignore</text>
+<text x="18" y="31.7" fill="#ffffff" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">Status</text>
+<text x="90" y="31.7" fill="#d2daf0" textLength="27" lengthAdjust="spacingAndGlyphs">Log</text>
+<text x="135" y="31.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">Diff</text>
+<text x="189" y="31.7" fill="#d2daf0" textLength="72" lengthAdjust="spacingAndGlyphs">Branches</text>
+<text x="279" y="31.7" fill="#d2daf0" textLength="54" lengthAdjust="spacingAndGlyphs">Commit</text>
+<text x="1143" y="31.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">⟳</text>
+<text x="1170" y="31.7" fill="#d2daf0" textLength="18" lengthAdjust="spacingAndGlyphs">📂</text>
+<text x="1197" y="31.7" fill="#d2daf0" textLength="45" lengthAdjust="spacingAndGlyphs">Repo…</text>
+<text x="18" y="49.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="36" y="49.7" fill="#d2daf0" textLength="45" lengthAdjust="spacingAndGlyphs">Stage</text>
+<text x="99" y="49.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="117" y="49.7" fill="#d2daf0" textLength="45" lengthAdjust="spacingAndGlyphs">Stage</text>
+<text x="171" y="49.7" fill="#d2daf0" textLength="27" lengthAdjust="spacingAndGlyphs">all</text>
+<text x="225" y="49.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">Diff</text>
+<text x="279" y="49.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">Open</text>
+<text x="1161" y="49.7" fill="#5a6482" textLength="9" lengthAdjust="spacingAndGlyphs">✔</text>
+<text x="1179" y="49.7" fill="#5a6482" textLength="63" lengthAdjust="spacingAndGlyphs">Commit…</text>
 <text x="18" y="67.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="67.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="67.7" fill="#d2d7e6" textLength="90" lengthAdjust="spacingAndGlyphs">Cargo.lock</text>
+<text x="45" y="67.7" fill="#aab2c8" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="67.7" fill="#ffffff" font-weight="bold" textLength="252" lengthAdjust="spacingAndGlyphs">docs/screenshots/desktop.svg</text>
+<text x="1242" y="67.7" fill="#c8d2eb" textLength="9" lengthAdjust="spacingAndGlyphs">▴</text>
 <text x="18" y="85.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="85.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="85.7" fill="#d2d7e6" textLength="90" lengthAdjust="spacingAndGlyphs">Cargo.toml</text>
+<text x="45" y="85.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="85.7" fill="#d2d7e6" textLength="243" lengthAdjust="spacingAndGlyphs">docs/screenshots/editor.svg</text>
 <text x="18" y="103.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="103.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="103.7" fill="#d2d7e6" textLength="81" lengthAdjust="spacingAndGlyphs">README.md</text>
+<text x="45" y="103.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="103.7" fill="#d2d7e6" textLength="234" lengthAdjust="spacingAndGlyphs">docs/screenshots/files.svg</text>
 <text x="18" y="121.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="121.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="121.7" fill="#d2d7e6" textLength="90" lengthAdjust="spacingAndGlyphs">src/app.rs</text>
+<text x="45" y="121.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="121.7" fill="#d2d7e6" textLength="279" lengthAdjust="spacingAndGlyphs">docs/screenshots/start_menu.svg</text>
 <text x="18" y="139.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="139.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="139.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/apps/about.rs</text>
+<text x="45" y="139.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="139.7" fill="#d2d7e6" textLength="198" lengthAdjust="spacingAndGlyphs">scripts/screenshots.py</text>
 <text x="18" y="157.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="157.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="157.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/apphost.rs</text>
+<text x="45" y="157.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="157.7" fill="#d2d7e6" textLength="90" lengthAdjust="spacingAndGlyphs">src/app.rs</text>
 <text x="18" y="175.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="175.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="175.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/detect.rs</text>
+<text x="45" y="175.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="175.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/apps/about.rs</text>
 <text x="18" y="193.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="193.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="193.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/filebrowser.rs</text>
+<text x="45" y="193.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="193.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/apphost.rs</text>
 <text x="18" y="211.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="211.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="211.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/gitutil.rs</text>
+<text x="45" y="211.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="211.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/audioplayer.rs</text>
 <text x="18" y="229.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="229.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="229.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/apps/mod.rs</text>
+<text x="45" y="229.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="229.7" fill="#d2d7e6" textLength="198" lengthAdjust="spacingAndGlyphs">src/apps/calculator.rs</text>
 <text x="18" y="247.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="247.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="247.7" fill="#d2d7e6" textLength="180" lengthAdjust="spacingAndGlyphs">src/apps/snaputil.rs</text>
+<text x="45" y="247.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="247.7" fill="#d2d7e6" textLength="180" lengthAdjust="spacingAndGlyphs">src/apps/calendar.rs</text>
 <text x="18" y="265.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="265.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="265.7" fill="#d2d7e6" textLength="198" lengthAdjust="spacingAndGlyphs">src/apps/webbrowser.rs</text>
+<text x="45" y="265.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="265.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/apps/clock.rs</text>
 <text x="18" y="283.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="283.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="283.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/engine/linux.rs</text>
+<text x="45" y="283.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="283.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/compare.rs</text>
 <text x="18" y="301.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="301.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="301.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/engine/win.rs</text>
+<text x="45" y="301.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="301.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/detect.rs</text>
 <text x="18" y="319.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="319.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="319.7" fill="#d2d7e6" textLength="99" lengthAdjust="spacingAndGlyphs">src/main.rs</text>
+<text x="45" y="319.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="319.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/editor.rs</text>
 <text x="18" y="337.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="337.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="337.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/snapshot.rs</text>
+<text x="45" y="337.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="337.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/filebrowser.rs</text>
 <text x="18" y="355.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="355.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="355.7" fill="#d2d7e6" textLength="270" lengthAdjust="spacingAndGlyphs">tests/golden/image_viewer.snap</text>
+<text x="45" y="355.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="355.7" fill="#d2d7e6" textLength="180" lengthAdjust="spacingAndGlyphs">src/apps/game2048.rs</text>
 <text x="18" y="373.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="373.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="373.7" fill="#d2d7e6" textLength="306" lengthAdjust="spacingAndGlyphs">tests/golden/image_viewer_256.snap</text>
+<text x="45" y="373.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="373.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/apps/git.rs</text>
 <text x="18" y="391.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="391.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="391.7" fill="#d2d7e6" textLength="252" lengthAdjust="spacingAndGlyphs">tests/golden/ui_desktop.snap</text>
+<text x="45" y="391.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="391.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/gitutil.rs</text>
 <text x="18" y="409.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
-<text x="45" y="409.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">W</text>
-<text x="72" y="409.7" fill="#d2d7e6" textLength="288" lengthAdjust="spacingAndGlyphs">tests/golden/ui_desktop_256.snap</text>
-<text x="18" y="427.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="427.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="427.7" fill="#d2d7e6" textLength="63" lengthAdjust="spacingAndGlyphs">.github</text>
-<text x="18" y="445.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="445.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="445.7" fill="#d2d7e6" textLength="108" lengthAdjust="spacingAndGlyphs">CHANGELOG.md</text>
-<text x="18" y="463.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="463.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="463.7" fill="#d2d7e6" textLength="126" lengthAdjust="spacingAndGlyphs">LICENSE-APACHE</text>
-<text x="18" y="481.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="481.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="481.7" fill="#d2d7e6" textLength="99" lengthAdjust="spacingAndGlyphs">LICENSE-MIT</text>
-<text x="18" y="499.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="499.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="499.7" fill="#d2d7e6" textLength="36" lengthAdjust="spacingAndGlyphs">docs</text>
-<text x="18" y="517.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="517.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="517.7" fill="#d2d7e6" textLength="63" lengthAdjust="spacingAndGlyphs">scripts</text>
-<text x="18" y="535.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="54" y="535.7" fill="#d2d7e6" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="72" y="535.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/apps/studio</text>
-<text x="18" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
-<text x="36" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="90" y="715.7" fill="#8c96af" textLength="18" lengthAdjust="spacingAndGlyphs">+0</text>
-<text x="117" y="715.7" fill="#8c96af" textLength="27" lengthAdjust="spacingAndGlyphs">~21</text>
-<text x="153" y="715.7" fill="#8c96af" textLength="18" lengthAdjust="spacingAndGlyphs">?7</text>
-<text x="198" y="715.7" fill="#8c96af" textLength="153" lengthAdjust="spacingAndGlyphs">E:/Python/texttop</text>
-<text x="378" y="715.7" fill="#8c96af" textLength="27" lengthAdjust="spacingAndGlyphs">Tab</text>
-<text x="414" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">panes</text>
-<text x="468" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="486" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">Space</text>
-<text x="540" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">stage</text>
-<text x="594" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="612" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">Ctrl+L</text>
-<text x="675" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">path</text>
-<text x="720" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="738" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="756" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">help</text>
-<text x="801" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="819" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">q</text>
+<text x="45" y="409.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="409.7" fill="#d2d7e6" textLength="189" lengthAdjust="spacingAndGlyphs">src/apps/hexviewer.rs</text>
+<text x="18" y="427.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="427.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="427.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/imageviewer.rs</text>
+<text x="18" y="445.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="445.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="445.7" fill="#d2d7e6" textLength="180" lengthAdjust="spacingAndGlyphs">src/apps/launcher.rs</text>
+<text x="18" y="463.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="463.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="463.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/minesweeper.rs</text>
+<text x="18" y="481.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="481.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="481.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/apps/mod.rs</text>
+<text x="18" y="499.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="499.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="499.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/apps/notes.rs</text>
+<text x="18" y="517.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="517.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="517.7" fill="#d2d7e6" textLength="135" lengthAdjust="spacingAndGlyphs">src/apps/pin.rs</text>
+<text x="18" y="535.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="535.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="535.7" fill="#d2d7e6" textLength="189" lengthAdjust="spacingAndGlyphs">src/apps/processes.rs</text>
+<text x="18" y="553.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="553.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="553.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/scroll.rs</text>
+<text x="18" y="571.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="571.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="571.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/search.rs</text>
+<text x="18" y="589.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="589.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="589.7" fill="#d2d7e6" textLength="153" lengthAdjust="spacingAndGlyphs">src/apps/snake.rs</text>
+<text x="18" y="607.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="607.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="607.7" fill="#d2d7e6" textLength="189" lengthAdjust="spacingAndGlyphs">src/apps/snapshots.rs</text>
+<text x="18" y="625.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="625.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="625.7" fill="#d2d7e6" textLength="198" lengthAdjust="spacingAndGlyphs">src/apps/studio/mod.rs</text>
+<text x="18" y="643.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="643.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="643.7" fill="#d2d7e6" textLength="162" lengthAdjust="spacingAndGlyphs">src/apps/syntax.rs</text>
+<text x="18" y="661.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="661.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="661.7" fill="#d2d7e6" textLength="171" lengthAdjust="spacingAndGlyphs">src/apps/sysinfo.rs</text>
+<text x="18" y="679.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="679.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="679.7" fill="#d2d7e6" textLength="180" lengthAdjust="spacingAndGlyphs">src/apps/terminal.rs</text>
+<text x="18" y="697.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
+<text x="45" y="697.7" fill="#aab2c8" textLength="9" lengthAdjust="spacingAndGlyphs">☐</text>
+<text x="81" y="697.7" fill="#d2d7e6" textLength="207" lengthAdjust="spacingAndGlyphs">src/apps/videoplayer.rs</text>
+<text x="1242" y="697.7" fill="#c8d2eb" textLength="9" lengthAdjust="spacingAndGlyphs">▾</text>
+<text x="18" y="715.7" fill="#969eb9" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
+<text x="36" y="715.7" fill="#969eb9" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
+<text x="90" y="715.7" fill="#969eb9" textLength="18" lengthAdjust="spacingAndGlyphs">+0</text>
+<text x="117" y="715.7" fill="#969eb9" textLength="27" lengthAdjust="spacingAndGlyphs">~45</text>
+<text x="153" y="715.7" fill="#969eb9" textLength="18" lengthAdjust="spacingAndGlyphs">?1</text>
+<text x="198" y="715.7" fill="#969eb9" textLength="153" lengthAdjust="spacingAndGlyphs">E:/Python/texttop</text>
 <text x="1251" y="733.7" fill="#00beff" textLength="9" lengthAdjust="spacingAndGlyphs">◢</text>
 <text x="9" y="751.7" fill="#ffffff" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⊞</text>
 <text x="27" y="751.7" fill="#ffffff" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">Start</text>
@@ -564,8 +706,8 @@
 <text x="468" y="751.7" fill="#ffffff" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs">texttop</text>
 <text x="1017" y="751.7" fill="#ffc85a" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
 <text x="1035" y="751.7" fill="#ffc85a" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">22:53</text>
-<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sat</text>
-<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
-<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sep</text>
+<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">23:21</text>
+<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Wed</text>
+<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
 </g></svg>

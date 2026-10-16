@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -11,8 +11,22 @@ use ratatui::widgets::{Gauge, Paragraph};
 use ratatui::Frame;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 
+use super::ui::{Controls, Look};
 use super::{Action, AppWindow};
 use crate::gfx;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    PlayPause,
+    Back,
+    Forward,
+    Replay,
+    Quieter,
+    Louder,
+    /// The progress / volume gauges: the click column decides the value.
+    Seek,
+    Volume,
+}
 
 pub struct AudioPlayer {
     path: PathBuf,
@@ -22,6 +36,11 @@ pub struct AudioPlayer {
     duration: Option<Duration>,
     error: Option<String>,
     t: u64,
+    ui: Controls<Cmd>,
+    seek_bar: Rect,
+    vol_bar: Rect,
+    /// Which gauge a held button is dragging.
+    dragging: Option<Cmd>,
 }
 
 impl AudioPlayer {
@@ -34,6 +53,10 @@ impl AudioPlayer {
             duration: None,
             error: None,
             t: 0,
+            ui: Controls::new(),
+            seek_bar: Rect::default(),
+            vol_bar: Rect::default(),
+            dragging: None,
         };
         p.start();
         p
@@ -76,6 +99,53 @@ impl AudioPlayer {
         self.sink = Some(sink);
     }
 
+    fn run(&mut self, c: Cmd) {
+        if c == Cmd::Replay || (c == Cmd::PlayPause && self.sink.as_ref().is_some_and(|s| s.empty())) {
+            if let Some(s) = &self.sink {
+                s.stop();
+            }
+            self.start();
+            return;
+        }
+        let Some(s) = &self.sink else { return };
+        match c {
+            Cmd::PlayPause => {
+                if s.is_paused() {
+                    s.play();
+                } else {
+                    s.pause();
+                }
+            }
+            Cmd::Back => {
+                let _ = s.try_seek(s.get_pos().saturating_sub(Duration::from_secs(5)));
+            }
+            Cmd::Forward => {
+                let _ = s.try_seek(s.get_pos() + Duration::from_secs(5));
+            }
+            Cmd::Quieter => s.set_volume((s.volume() - 0.1).max(0.0)),
+            Cmd::Louder => s.set_volume((s.volume() + 0.1).min(1.5)),
+            Cmd::Replay | Cmd::Seek | Cmd::Volume => {}
+        }
+    }
+
+    /// Set position or volume from a click / drag column on a gauge.
+    fn drag_to(&mut self, which: Cmd, col: u16) {
+        let bar = if which == Cmd::Seek { self.seek_bar } else { self.vol_bar };
+        if bar.width == 0 {
+            return;
+        }
+        let frac = (col.saturating_sub(bar.x) as f64 / bar.width.max(1) as f64).clamp(0.0, 1.0);
+        let Some(s) = &self.sink else { return };
+        match which {
+            Cmd::Seek => {
+                if let Some(d) = self.duration {
+                    let _ = s.try_seek(d.mul_f64(frac));
+                }
+            }
+            _ => s.set_volume((frac * 1.5) as f32),
+        }
+    }
+
     fn playing(&self) -> bool {
         self.sink
             .as_ref()
@@ -93,9 +163,10 @@ impl AppWindow for AudioPlayer {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        if area.height < 4 {
+        if area.height < 5 {
             return;
         }
+        self.ui.begin();
         if let Some(err) = &self.error {
             f.render_widget(
                 Paragraph::new(vec![
@@ -117,7 +188,7 @@ impl AppWindow for AudioPlayer {
 
         // header
         let state = if finished {
-            ("⏹ finished — press r to replay", Color::Rgb(160, 165, 185))
+            ("⏹ finished", Color::Rgb(160, 165, 185))
         } else if paused {
             ("⏸ paused", Color::Rgb(255, 200, 90))
         } else {
@@ -137,7 +208,7 @@ impl AppWindow for AudioPlayer {
         );
 
         // visualizer
-        let viz_h = area.height.saturating_sub(5);
+        let viz_h = area.height.saturating_sub(6);
         if viz_h > 0 {
             let viz = Rect::new(area.x + 1, area.y + 1, area.width.saturating_sub(2), viz_h);
             let buf = f.buffer_mut();
@@ -182,72 +253,95 @@ impl AppWindow for AudioPlayer {
             .duration
             .map(|d| (pos.as_secs_f64() / d.as_secs_f64().max(0.001)).clamp(0.0, 1.0))
             .unwrap_or(0.0);
+        self.seek_bar = Rect::new(area.x + 1, area.y + area.height - 5, area.width.saturating_sub(2), 1);
         f.render_widget(
             Gauge::default()
                 .ratio(ratio)
                 .label(label)
                 .gauge_style(Style::default().fg(Color::Rgb(0, 170, 230)).bg(Color::Rgb(30, 34, 54))),
-            Rect::new(area.x + 1, area.y + area.height - 4, area.width.saturating_sub(2), 1),
+            self.seek_bar,
         );
+        if self.duration.is_some() {
+            self.ui.add(self.seek_bar, Cmd::Seek);
+        }
 
-        // volume
+        // volume: − [gauge] +
+        let vy = area.y + area.height - 4;
+        let buf = f.buffer_mut();
+        let minus = self.ui.button(buf, area.x + 1, vy, "🔉", Cmd::Quieter, Look::Raised);
+        let plus_w = 4;
+        self.vol_bar = Rect::new(
+            area.x + 2 + minus,
+            vy,
+            area.width.saturating_sub(4 + minus + plus_w),
+            1,
+        );
+        self.ui.button(buf, self.vol_bar.x + self.vol_bar.width + 1, vy, "🔊", Cmd::Louder, Look::Raised);
         f.render_widget(
             Gauge::default()
                 .ratio((vol as f64 / 1.5).clamp(0.0, 1.0))
-                .label(format!("vol {:>3}%", (vol * 100.0) as u32))
+                .label(format!("volume {:>3}%", (vol * 100.0) as u32))
                 .gauge_style(Style::default().fg(Color::Rgb(190, 140, 255)).bg(Color::Rgb(30, 34, 54))),
-            Rect::new(area.x + 1, area.y + area.height - 3, area.width.saturating_sub(2), 1),
+            self.vol_bar,
         );
+        self.ui.add(self.vol_bar, Cmd::Volume);
 
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                " Space pause · ←→ seek 5s · ↑↓ volume · r replay · q close ",
-                Style::default().fg(Color::Rgb(140, 150, 175)),
-            )),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+        // transport
+        let play = if finished {
+            ("▶ Play again", Look::Primary)
+        } else if paused {
+            ("▶ Play", Look::Primary)
+        } else {
+            ("❚❚ Pause", Look::Raised)
+        };
+        let w = area.width.saturating_sub(2).min(64);
+        let x = area.x + area.width.saturating_sub(w) / 2;
+        self.ui.button_row(
+            f.buffer_mut(),
+            Rect::new(x, area.y + area.height - 3, w, 3),
+            &[
+                ("⏪ 5s", Cmd::Back, Look::Raised),
+                (play.0, Cmd::PlayPause, play.1),
+                ("5s ⏩", Cmd::Forward, Look::Raised),
+                ("↺ Restart", Cmd::Replay, Look::Raised),
+            ],
         );
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         match k.code {
-            KeyCode::Char(' ') => {
-                if let Some(s) = &self.sink {
-                    if s.is_paused() {
-                        s.play();
-                    } else {
-                        s.pause();
-                    }
-                }
-            }
-            KeyCode::Up | KeyCode::Char('+') => {
-                if let Some(s) = &self.sink {
-                    s.set_volume((s.volume() + 0.1).min(1.5));
-                }
-            }
-            KeyCode::Down | KeyCode::Char('-') => {
-                if let Some(s) = &self.sink {
-                    s.set_volume((s.volume() - 0.1).max(0.0));
-                }
-            }
-            KeyCode::Right => {
-                if let Some(s) = &self.sink {
-                    let _ = s.try_seek(s.get_pos() + Duration::from_secs(5));
-                }
-            }
-            KeyCode::Left => {
-                if let Some(s) = &self.sink {
-                    let target = s.get_pos().saturating_sub(Duration::from_secs(5));
-                    let _ = s.try_seek(target);
-                }
-            }
-            KeyCode::Char('r') => {
-                if let Some(s) = &self.sink {
-                    s.stop();
-                }
-                self.start();
-            }
+            KeyCode::Char(' ') => self.run(Cmd::PlayPause),
+            KeyCode::Up | KeyCode::Char('+') => self.run(Cmd::Louder),
+            KeyCode::Down | KeyCode::Char('-') => self.run(Cmd::Quieter),
+            KeyCode::Right => self.run(Cmd::Forward),
+            KeyCode::Left => self.run(Cmd::Back),
+            KeyCode::Char('r') => self.run(Cmd::Replay),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
+        }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        match m.kind {
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some(which) = self.dragging {
+                    self.drag_to(which, m.column);
+                }
+                return Action::None;
+            }
+            MouseEventKind::Up(_) => self.dragging = None,
+            MouseEventKind::ScrollUp => self.run(Cmd::Louder),
+            MouseEventKind::ScrollDown => self.run(Cmd::Quieter),
+            _ => {}
+        }
+        if let Some(Some(c)) = self.ui.route(&m) {
+            if matches!(c, Cmd::Seek | Cmd::Volume) {
+                self.dragging = Some(c);
+                self.drag_to(c, m.column);
+            } else {
+                self.run(c);
+            }
         }
         Action::None
     }

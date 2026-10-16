@@ -1,16 +1,22 @@
-use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 use super::scroll::{self, ScrollState};
-use super::{Action, AppWindow};
+use super::{Action, AppWindow, Launch};
 
+/// Welcome page: how to get around with the mouse, and every built-in app as
+/// a clickable row that opens it.
 pub struct About {
     scroll: ScrollState,
     line_count: usize,
     view_h: u16,
+    area: Rect,
+    /// Line under the pointer, highlighted when it opens an app.
+    hover: Option<usize>,
 }
 
 impl About {
@@ -19,10 +25,13 @@ impl About {
             scroll: ScrollState::default(),
             line_count: 0,
             view_h: 20,
+            area: Rect::default(),
+            hover: None,
         }
     }
 
-    fn lines() -> Vec<Line<'static>> {
+    /// The page, with the app each line opens (if any).
+    fn lines(&self) -> Vec<(Line<'static>, Option<Launch>)> {
         let accent = Style::default()
             .fg(Color::Rgb(0, 190, 255))
             .add_modifier(Modifier::BOLD);
@@ -32,157 +41,87 @@ impl About {
         let dim = Style::default().fg(Color::Rgb(150, 155, 175));
         let txt = Style::default().fg(Color::Rgb(215, 218, 230));
 
+        // pad by display width: emoji are one or two cells
+        let pad = |k: &str| format!("   {k}{}", " ".repeat(20usize.saturating_sub(k.width())));
         let kv = |k: &str, v: &str| {
-            Line::from(vec![
-                Span::styled(format!("   {k:<18}"), key),
-                Span::styled(v.to_string(), txt),
-            ])
+            (
+                Line::from(vec![
+                    Span::styled(pad(k), key),
+                    Span::styled(v.to_string(), txt),
+                ]),
+                None,
+            )
         };
+        let plain = |s: &str, st: Style| (Line::from(Span::styled(s.to_string(), st)), None);
+        let blank = || (Line::default(), None);
 
-        vec![
-            Line::default(),
-            Line::from(Span::styled("   ▀█▀ █▀▀ ▀▄▀ ▀█▀ ▀█▀ █▀█ █▀█", accent)),
-            Line::from(Span::styled("    █  ██▄ █ █  █   █  █▄█ █▀ ", accent)),
-            Line::from(Span::styled(
-                "   a desktop environment for your terminal",
-                dim,
-            )),
-            Line::default(),
-            Line::from(Span::styled("   Desktop", accent)),
-            kv("F1", "start menu — just type to search apps"),
-            kv("F12", "shortcut key overlay"),
-            kv("F6 / Alt+Tab", "window switcher"),
-            kv("F11", "maximize / restore window"),
-            kv("Ctrl+W", "close window"),
-            kv("Ctrl+D", "show / restore desktop"),
-            kv("Ctrl+Shift+←/→", "snap window left / right"),
-            kv("Ctrl+Shift+↑", "maximize window"),
-            kv("Ctrl+arrows", "nudge window"),
-            kv("Ctrl+Q", "quit texttop"),
-            kv("F5", "prune dead desktop shortcuts"),
-            kv("Delete", "remove selected desktop shortcut"),
-            kv("Esc", "cancel drag / close menus"),
-            Line::default(),
-            Line::from(Span::styled("   Mouse", accent)),
-            kv(
-                "right-click",
-                "context menus (desktop · icons · windows · files)",
-            ),
-            kv("drag title bar", "move · edge snap · top = maximize"),
+        let home = dirs::home_dir().unwrap_or_else(|| ".".into());
+        let apps: Vec<(&str, &str, Option<Launch>)> = vec![
+            ("🗂 Files", "browse, preview, copy / move, snapshots, compare", Some(Launch::Files(home))),
+            ("🌐 Web", "real browser with JavaScript and media", Some(Launch::Web(None))),
+            ("🖥 Terminal", "full shell inside a window", Some(Launch::Terminal { program: None, args: Vec::new(), cwd: None })),
+            ("📝 Editor", "syntax colors by file type", Some(Launch::Editor(None))),
+            ("🛠 IDE", "explorer, terminal and tabs in one window", Some(Launch::Group { id: super::group::IDE.into(), cwd: None, open: Vec::new() })),
+            ("📌 Notes", "a sticky pad that keeps what you write", Some(Launch::Notes)),
+            ("🎛 Studio", "electronic music: clips, piano roll, export WAV", Some(Launch::Studio(None))),
+            ("🧮 Calculator", "expressions and a history tape", Some(Launch::Calculator)),
+            ("⏱ Clock", "clock, stopwatch and countdown timer", Some(Launch::Clock)),
+            ("📅 Calendar", "month view", Some(Launch::Calendar)),
+            ("🌿 Git", "status · log · diff · branches · commit", Some(Launch::Git(None))),
+            ("🔎 Search", "find text across a folder", Some(Launch::Search(None))),
+            ("⚙ Processes", "list, filter and end processes", Some(Launch::Processes)),
+            ("💻 System", "OS, paths, folders, environment", Some(Launch::SysInfo)),
+            ("🔢 Hex", "binary view of any file", Some(Launch::Hex(None))),
+            ("🪟 App Host", "show a real desktop app inside a window", Some(Launch::AppHost { cmd: None })),
+            ("🤝 Contribute", "get texttop's source and change it in the IDE", Some(Launch::Contribute)),
+            ("🧩 Detected apps", "find CLI tools on PATH and pin them", Some(Launch::DetectedApps)),
+            ("🎨 Wallpaper", "themes or your own picture", Some(Launch::Wallpaper)),
+            ("🐍 Snake", "click beside the head to turn", Some(Launch::Snake)),
+            ("💣 Minesweeper", "three sizes, flag mode for one-button play", Some(Launch::Minesweeper)),
+            ("🎮 2048", "swipe the board to slide tiles", Some(Launch::Game2048)),
+            ("🎵 🖼 🎬 Media", "audio, images and video open from Files", None),
+        ];
+
+        let mut out = vec![
+            blank(),
+            plain("   ▀█▀ █▀▀ ▀▄▀ ▀█▀ ▀█▀ █▀█ █▀█", accent),
+            plain("    █  ██▄ █ █  █   █  █▄█ █▀ ", accent),
+            plain("   a desktop environment for your terminal", dim),
+            blank(),
+            plain("   Getting around", accent),
+            kv("Start button", "every app, plus search"),
+            kv("right-click", "menus on the desktop, icons, windows and files"),
+            kv("drag a title bar", "move · drop on an edge to snap · top to maximize"),
             kv("double-click title", "maximize / restore"),
-            kv("drag ◢ corner", "resize window"),
+            kv("drag ◢ corner", "resize"),
             kv("─ □ ✕", "minimize · maximize · close"),
-            kv("drag icons", "custom placement · right-click Arrange to pack"),
-            kv("drag files", "drop on desktop / apps · Shift=cut"),
-            kv("taskbar »N", "overflow window list"),
-            kv("middle-click taskbar", "close window"),
-            kv("double-click", "open desktop icons & files"),
-            kv("mouse wheel", "scroll overflow content in apps"),
-            Line::default(),
-            Line::from(Span::styled("   Apps", accent)),
-            kv(
-                "🗂 Files",
-                "filter, rename, copy/paste, preview, bookmarks",
-            ),
-            kv(
-                "🌐 Web",
-                "real browser (JS+media) · F4 url · F3 crisp text",
-            ),
-            kv("🖥 Terminal", "full shell inside a window"),
-            kv(
-                "🧩 Programs",
-                "run apps: terminal, args form, or detached",
-            ),
-            kv("🎵 Audio", "mp3/wav/flac/ogg with visualizer"),
-            kv(
-                "🎛 Studio",
-                "electronic DAW — templates · clips · piano · export WAV",
-            ),
-            kv("🖼 Images", "zoom · pan · gallery · slideshow · ? help"),
-            kv("🎬 Video", "built-in engine playback with sound"),
-            kv(
-                "📝 Editor",
-                "syntax colors by file type · Ctrl+S save · Ctrl+H toggle",
-            ),
-            kv(
-                "🧮 Calculator",
-                "expressions with + − × ÷ ^ % ( ) · history tape",
-            ),
-            kv("⏱ Clock", "clock, stopwatch, and countdown timer"),
-            kv(
-                "📅 Calendar",
-                "month view — navigate days/months/years",
-            ),
-            kv("📌 Notes", "sticky pad saved to ~/.texttop_notes.txt"),
-            kv("🔢 Hex", "binary dump — open from Files with F3"),
-            kv("💻 System", "OS, paths, folder summaries, env"),
-            kv("🌿 Git", "status · log · diff · branches · commit (needs git on PATH)"),
-            kv("🔎 Search", "project search via ripgrep or builtin walk"),
-            kv("⚙ Processes", "list / filter / kill processes"),
-            kv(
-                "⏱ Snapshots",
-                "file history in ~/.texttop_snap — restore · version diffs",
-            ),
-            kv(
-                "↔ Compare",
-                "visual diff of 2+ marked files (pick A/B)",
-            ),
-            kv("🐍 Snake", "arrows steer · gets faster as you eat"),
-            kv("💣 Minesweeper", "click/flag mines · 3 difficulties"),
-            kv("🎮 2048", "slide & merge tiles to 2048"),
-            kv(
-                "🧩 Detected Apps",
-                "scan PATH for vim · claude · gemini · git · … and pin to desktop",
-            ),
-            Line::default(),
-            Line::from(Span::styled("   File Manager", accent)),
-            kv("/ or Ctrl+F", "filter · F2 rename · Del delete"),
-            kv("F7 / F8", "new folder / new file"),
-            kv("Ctrl+C/X/V", "copy · cut · paste"),
-            kv("Space / Ctrl+A", "mark file · select all · Esc clear"),
-            kv(
-                "right-click",
-                "snapshot · history · compare · git · pin",
-            ),
-            kv("Ctrl+G", "open Git app for this folder"),
-            kv("Ctrl+P / Tab", "preview pane · cycle sort"),
-            kv("Ctrl+L / Ctrl+T", "go to path · terminal here"),
-            kv("Alt+H/D/O/L", "home · desktop · docs · downloads"),
-            Line::default(),
-            Line::from(Span::styled(
-                "   Taskbar shows ⎇ branch* when you're in a git repo — click to open Git",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   Drop files onto Editor · Hex · Image · Audio · Video · Web · Terminal · Studio",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   Icons & theme persist in ~/.texttop_desktop.json;",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   open windows are restored on next start (Exit via menu).",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   Press ? in Files · Git · Images for per-app keymaps.",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   Everything is built in — no external programs",
-                dim,
-            )),
-            Line::from(Span::styled(
-                "   needed (except system git / optional rg).",
-                dim,
-            )),
-            Line::default(),
-            Line::from(Span::styled(
-                "   ↑↓ / PgUp/PgDn / mouse wheel — scroll this help",
-                dim,
-            )),
-        ]
+            kv("drag files", "onto the desktop or into apps"),
+            kv("taskbar", "click to switch · middle-click to close"),
+            kv("toolbars", "each app keeps its actions in buttons up top"),
+            blank(),
+            plain("   Apps — click one to open it", accent),
+        ];
+        for (name, desc, launch) in apps {
+            out.push((
+                Line::from(vec![
+                    Span::styled(pad(name), key),
+                    Span::styled(desc.to_string(), txt),
+                ]),
+                launch,
+            ));
+        }
+        out.extend([
+            blank(),
+            plain("   Icons, wallpaper and open windows come back on the next start.", dim),
+            plain("   Everything is built in — no external programs needed", dim),
+            plain("   (Git and Search use git / ripgrep when installed).", dim),
+        ]);
+        out
+    }
+
+    fn line_at(&self, row: u16) -> Option<usize> {
+        let a = self.area;
+        (row >= a.y && row < a.y + a.height).then(|| self.scroll.offset as usize + (row - a.y) as usize)
     }
 }
 
@@ -192,7 +131,20 @@ impl AppWindow for About {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        let lines = Self::lines();
+        self.area = area;
+        let hover = self.hover;
+        let lines: Vec<Line> = self
+            .lines()
+            .into_iter()
+            .enumerate()
+            .map(|(i, (line, launch))| {
+                if launch.is_some() && hover == Some(i) {
+                    line.style(Style::default().bg(Color::Rgb(0, 90, 140)))
+                } else {
+                    line
+                }
+            })
+            .collect();
         self.line_count = lines.len();
         self.view_h = area.height;
         scroll::render_scrollable(f, area, &lines, &mut self.scroll);
@@ -209,7 +161,22 @@ impl AppWindow for About {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
-        self.scroll.on_mouse(m, self.line_count, self.view_h);
+        if self.scroll.on_mouse(m, self.line_count, self.view_h) {
+            return Action::None;
+        }
+        match m.kind {
+            MouseEventKind::Moved => self.hover = self.line_at(m.row),
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(launch) = self
+                    .line_at(m.row)
+                    .and_then(|i| self.lines().into_iter().nth(i))
+                    .and_then(|(_, l)| l)
+                {
+                    return Action::Launch(launch);
+                }
+            }
+            _ => {}
+        }
         Action::None
     }
 }

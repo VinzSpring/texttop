@@ -12,7 +12,16 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{self, Controls, Look};
 use super::{Action, AppWindow, Launch};
+
+/// Buttons of the pin dialogs.
+#[derive(Clone, Copy, PartialEq)]
+enum Btn {
+    Ok,
+    Cancel,
+    Target(PinTo),
+}
 
 /// Where a pin lives.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -222,6 +231,11 @@ fn sel_style() -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
+/// An input box that does not have focus.
+fn field_style() -> Style {
+    Style::default().fg(TXT).bg(Color::Rgb(12, 16, 30))
+}
+
 // ------------------------------------------------------------------ editor
 
 /// Settings dialog for a pin: name, icon, program, args, cwd, target.
@@ -236,6 +250,7 @@ pub struct PinEditor {
     sel: usize,
     editing: bool,
     status: String,
+    ui: Controls<Btn>,
 }
 
 /// Rows: 0 name · 1 icon · 2 program · 3 args · 4 cwd · 5 target · 6 save · 7 cancel
@@ -257,6 +272,7 @@ impl PinEditor {
             sel: 0,
             editing: false,
             status: String::new(),
+            ui: Controls::new(),
         }
     }
 
@@ -314,7 +330,8 @@ impl PinEditor {
 
     fn field_line<'a>(&self, label: &'a str, value: &'a str, row: usize) -> Line<'a> {
         let selected = self.sel == row;
-        let style = if selected { sel_style() } else { Style::default().fg(TXT) };
+        // unselected values still read as input boxes
+        let style = if selected { sel_style() } else { field_style() };
         let cursor = if selected && self.editing { "▏" } else { "" };
         Line::from(vec![
             Span::styled(format!("   {label:<13}"), Style::default().fg(DIM)),
@@ -336,10 +353,6 @@ impl AppWindow for PinEditor {
         let dim = Style::default().fg(DIM);
         let txt = Style::default().fg(TXT);
 
-        let target = match self.to {
-            PinTo::Desktop => "◉ Desktop   ○ Taskbar",
-            PinTo::Taskbar => "○ Desktop   ◉ Taskbar",
-        };
         let mut lines: Vec<Line> = vec![
             Line::default(),
             Line::from(Span::styled(
@@ -352,22 +365,10 @@ impl AppWindow for PinEditor {
             self.field_line("Program:", &self.program, 2),
             self.field_line("Arguments:", &self.args, 3),
             self.field_line("Working dir:", &self.cwd, 4),
-            Line::from(vec![
-                Span::styled("   Pin to:      ", dim),
-                Span::styled(
-                    format!(" {target} "),
-                    if self.sel == 5 { sel_style() } else { txt },
-                ),
-            ]),
+            Line::from(Span::styled("   Pin to:      ", dim)),
             Line::default(),
-            Line::from(Span::styled(
-                "   ▶ Save pin",
-                if self.sel == 6 { sel_style() } else { txt },
-            )),
-            Line::from(Span::styled(
-                "   ✕ Cancel",
-                if self.sel == 7 { sel_style() } else { txt },
-            )),
+            Line::default(),
+            Line::default(),
             Line::default(),
             Line::from(Span::styled(
                 "   {field} or {field=default} in arguments is asked at each launch",
@@ -379,19 +380,32 @@ impl AppWindow for PinEditor {
             Paragraph::new(lines),
             Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)),
         );
-        let hint = if self.editing {
-            " type value · Enter done · Esc cancel edit "
-        } else {
-            " ↑↓ choose · Enter edit/apply · Space target · Esc close "
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {}  │{}", self.status, hint),
-                Style::default().fg(DIM).bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
+        let _ = txt;
+        self.ui.begin();
+        let buf = f.buffer_mut();
+        let bottom = area.y + area.height.saturating_sub(1);
+        let x0 = area.x + 18;
+        if area.y + 8 < bottom {
+            let mut x = x0;
+            for t in [PinTo::Desktop, PinTo::Taskbar] {
+                let on = self.to == t;
+                let label = match (t, on) {
+                    (PinTo::Desktop, true) => "◉ Desktop",
+                    (PinTo::Desktop, false) => "○ Desktop",
+                    (_, true) => "◉ Taskbar",
+                    (_, false) => "○ Taskbar",
+                };
+                let look = if self.sel == 5 && on { Look::On } else { Look::Raised };
+                x += self.ui.button(buf, x, area.y + 8, label, Btn::Target(t), look) + 1;
+            }
+        }
+        if area.y + 10 < bottom {
+            let save = if self.sel == 6 { Look::On } else { Look::Primary };
+            let cancel = if self.sel == 7 { Look::On } else { Look::Raised };
+            let w = self.ui.button(buf, x0, area.y + 10, "▶ Save pin", Btn::Ok, save);
+            self.ui.button(buf, x0 + w + 2, area.y + 10, "Cancel", Btn::Cancel, cancel);
+        }
+        ui::status_bar(buf, Rect::new(area.x, bottom, area.width, 1), &self.status);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -450,12 +464,23 @@ impl AppWindow for PinEditor {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            self.editing = false;
+            return match hit {
+                Some(Btn::Ok) => self.save(),
+                Some(Btn::Cancel) => Action::Close,
+                Some(Btn::Target(t)) => {
+                    self.sel = 5;
+                    self.to = t;
+                    Action::None
+                }
+                None => Action::None,
+            };
+        }
         if let MouseEventKind::Down(MouseButton::Left) = m.kind {
             let rel = m.row.saturating_sub(area.y);
             let sel = match rel {
-                3..=8 => Some(rel as usize - 3),
-                10 => Some(6),
-                11 => Some(7),
+                3..=7 => Some(rel as usize - 3),
                 _ => None,
             };
             if let Some(sel) = sel {
@@ -476,6 +501,7 @@ pub struct PinPrompt {
     values: Vec<(String, String)>,
     sel: usize,
     editing: bool,
+    ui: Controls<Btn>,
 }
 
 impl PinPrompt {
@@ -487,6 +513,7 @@ impl PinPrompt {
             values,
             sel: 0,
             editing,
+            ui: Controls::new(),
         }
     }
 
@@ -526,40 +553,28 @@ impl AppWindow for PinPrompt {
         ];
         for (i, (name, val)) in self.values.iter().enumerate() {
             let selected = self.sel == i;
-            let style = if selected { sel_style() } else { txt };
+            let style = if selected { sel_style() } else { field_style() };
             let cursor = if selected && self.editing { "▏" } else { "" };
             lines.push(Line::from(vec![
                 Span::styled(format!("   {name:<14}"), dim),
                 Span::styled(format!(" {val}{cursor} "), style),
             ]));
         }
-        lines.push(Line::default());
-        lines.push(Line::from(Span::styled(
-            "   ▶ Run in terminal",
-            if self.sel == self.run_row() { sel_style() } else { txt },
-        )));
-        lines.push(Line::from(Span::styled(
-            "   ✕ Cancel",
-            if self.sel == self.run_row() + 1 { sel_style() } else { txt },
-        )));
+        let _ = txt;
         lines.truncate(area.height.saturating_sub(1) as usize);
         f.render_widget(
             Paragraph::new(lines),
             Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)),
         );
-        let hint = if self.editing {
-            " type value · Enter next · Esc stop editing "
-        } else {
-            " ↑↓ choose · Enter edit/run · Esc close "
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                hint,
-                Style::default().fg(DIM).bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
+        self.ui.begin();
+        let buf = f.buffer_mut();
+        let y = area.y + 5 + self.values.len() as u16;
+        if y < area.y + area.height {
+            let run = if self.sel == self.run_row() { Look::On } else { Look::Primary };
+            let cancel = if self.sel == self.run_row() + 1 { Look::On } else { Look::Raised };
+            let w = self.ui.button(buf, area.x + 3, y, "▶ Run in terminal", Btn::Ok, run);
+            self.ui.button(buf, area.x + 5 + w, y, "Cancel", Btn::Cancel, cancel);
+        }
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -607,15 +622,17 @@ impl AppWindow for PinPrompt {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        match self.ui.route(&m) {
+            Some(Some(Btn::Ok)) => return Action::LaunchAndClose(self.pin.launch_with(&self.values)),
+            Some(Some(Btn::Cancel)) => return Action::Close,
+            Some(_) => return Action::None,
+            None => {}
+        }
         if let MouseEventKind::Down(MouseButton::Left) = m.kind {
             let rel = m.row.saturating_sub(area.y) as usize;
             let n = self.values.len();
             let sel = if rel >= 4 && rel < 4 + n {
                 Some(rel - 4)
-            } else if rel == 5 + n {
-                Some(self.run_row())
-            } else if rel == 6 + n {
-                Some(self.run_row() + 1)
             } else {
                 None
             };

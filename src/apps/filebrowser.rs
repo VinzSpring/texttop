@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::time::{Instant, SystemTime};
+use std::sync::mpsc::{self, Receiver};
+use std::time::{Duration, Instant, SystemTime};
+
+use notify::{EventKind, RecursiveMode, Watcher};
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
@@ -14,6 +17,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::gitutil::{self, GitLetter};
 use super::snaputil;
+use super::ui::{Controls, Item, Look};
 use super::{file_icon, launch_for_path, Action, AppWindow, Launch};
 use crate::gfx;
 
@@ -37,6 +41,26 @@ enum Prompt {
 enum ClipOp {
     Copy,
     Cut,
+}
+
+/// Buttons on the bottom action bar.
+#[derive(Clone, Copy, PartialEq)]
+enum Bar {
+    NewFolder,
+    NewFile,
+    Copy,
+    Cut,
+    Paste,
+    Rename,
+    Delete,
+    Filter,
+    ClearFilter,
+    More,
+    UseImage,
+    UseFolder,
+    Close,
+    PromptOk,
+    PromptCancel,
 }
 
 /// Buttons on the toolbar row.
@@ -75,6 +99,7 @@ enum FileMenuAction {
     NewFolder,
     NewFile,
     TerminalHere,
+    RunHere,
     Refresh,
     TogglePreview,
     ToggleHidden,
@@ -133,9 +158,17 @@ pub struct FileBrowser {
     git_summary: String,
     /// Multi-select marks (canonical paths of files/dirs).
     marked: HashSet<PathBuf>,
-    show_help: bool,
+    bar: Controls<Bar>,
     /// When true, opening an image sets it as wallpaper and closes this window.
     pick_wallpaper: bool,
+    /// When true, this is a folder / file picker: it answers `PickPath`.
+    pick_path: bool,
+    /// Watches the shown folder so the list follows changes made elsewhere.
+    watcher: Option<notify::RecommendedWatcher>,
+    watch_rx: Option<Receiver<()>>,
+    watched: Option<PathBuf>,
+    /// Last change seen; the list reloads once things have been quiet briefly.
+    changed_at: Option<Instant>,
 }
 
 impl FileBrowser {
@@ -169,8 +202,13 @@ impl FileBrowser {
             git_root: None,
             git_summary: String::new(),
             marked: HashSet::new(),
-            show_help: false,
+            bar: Controls::new(),
             pick_wallpaper: false,
+            pick_path: false,
+            watcher: None,
+            watch_rx: None,
+            watched: None,
+            changed_at: None,
         };
         fb.refresh();
         fb
@@ -190,7 +228,16 @@ impl FileBrowser {
         let mut fb = Self::new(start);
         fb.pick_wallpaper = true;
         fb.preview = true;
-        fb.status = "Enter / double-click an image · Esc cancel".into();
+        fb.status = "double-click an image to use it".into();
+        fb
+    }
+
+    /// File browser used to choose a folder (Use this folder) or a file
+    /// (double-click). The owner receives `Action::PickPath`.
+    pub fn path_picker(start: PathBuf) -> Self {
+        let mut fb = Self::new(start);
+        fb.pick_path = true;
+        fb.status = "open a folder, or double-click a file".into();
         fb
     }
 
@@ -267,7 +314,7 @@ impl FileBrowser {
                         let n = items.len();
                         self.entries.extend(items);
                         self.status = if self.hidden_skipped > 0 {
-                            format!("{n} items · {} hidden (Ctrl+H)", self.hidden_skipped)
+                            format!("{n} items · {} hidden", self.hidden_skipped)
                         } else if self.show_hidden {
                             format!("{n} items · hidden shown")
                         } else {
@@ -311,6 +358,55 @@ impl FileBrowser {
         }
         self.scroll = 0;
         self.update_preview();
+        self.watch();
+    }
+
+    /// Follow the current folder with the directory watcher.
+    fn watch(&mut self) {
+        if self.cwd == self.watched {
+            return;
+        }
+        if let (Some(w), Some(old)) = (&mut self.watcher, &self.watched) {
+            let _ = w.unwatch(old);
+        }
+        self.watched = None;
+        let Some(dir) = self.cwd.clone() else {
+            return;
+        };
+        if self.watcher.is_none() {
+            let (tx, rx) = mpsc::channel();
+            let made = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                if let Ok(ev) = res {
+                    if is_listing_change(&ev) {
+                        let _ = tx.send(());
+                    }
+                }
+            });
+            match made {
+                Ok(w) => {
+                    self.watcher = Some(w);
+                    self.watch_rx = Some(rx);
+                }
+                Err(_) => return,
+            }
+        }
+        if let Some(w) = &mut self.watcher {
+            if w.watch(&dir, RecursiveMode::NonRecursive).is_ok() {
+                self.watched = Some(dir);
+            }
+        }
+    }
+
+    /// Reload after an outside change, keeping the selection, scroll position
+    /// and any picker hint in place.
+    fn auto_refresh(&mut self) {
+        let scroll = self.scroll;
+        let status = self.status.clone();
+        self.refresh();
+        self.scroll = scroll.min(self.filtered.len().saturating_sub(1));
+        if self.pick_path || self.pick_wallpaper {
+            self.status = status;
+        }
     }
 
     fn sort_label(&self) -> String {
@@ -406,7 +502,7 @@ impl FileBrowser {
         self.status = if n == 0 {
             "selection cleared".into()
         } else {
-            format!("{n} selected · Space toggle · Ctrl+A all · Esc clear")
+            format!("{n} selected")
         };
         self.move_sel(1);
     }
@@ -498,6 +594,9 @@ impl FileBrowser {
             self.set_cwd(Some(p));
             return Action::None;
         }
+        if self.pick_path {
+            return Action::PickPath(e.path.clone());
+        }
         if self.pick_wallpaper {
             if crate::apps::wallpaper::is_image_path(&e.path) {
                 return Action::SetWallpaperImageAndClose(e.path.clone());
@@ -587,7 +686,7 @@ impl FileBrowser {
                         buf.truncate(n);
                         if buf.iter().any(|&b| b == 0) {
                             self.preview_text = format!(
-                                " binary · {} · F3 hex view\n\n{}",
+                                " binary · {} · right-click → Hex\n\n{}",
                                 gfx::fmt_size(e.size),
                                 hex_preview(&buf)
                             );
@@ -875,6 +974,7 @@ impl FileBrowser {
         items.push(("New file".into(), FileMenuAction::NewFile));
         if self.cwd.is_some() {
             items.push(("Terminal here".into(), FileMenuAction::TerminalHere));
+            items.push(("Run app here…".into(), FileMenuAction::RunHere));
         }
         if self.git_root.is_some() || self.cwd.is_some() {
             items.push(("Open Git here".into(), FileMenuAction::GitOpen));
@@ -952,6 +1052,14 @@ impl FileBrowser {
                         program: None,
                         args: Vec::new(),
                         cwd: Some(dir),
+                    });
+                }
+            }
+            FileMenuAction::RunHere => {
+                if let Some(dir) = self.cwd.clone() {
+                    return Action::Launch(Launch::RunHere {
+                        dir,
+                        files: self.selected_files(),
                     });
                 }
             }
@@ -1046,7 +1154,7 @@ impl FileBrowser {
             FileMenuAction::Compare => {
                 let paths = self.selected_files();
                 if paths.len() < 2 {
-                    self.status = "mark 2+ files (Space) then Compare".into();
+                    self.status = "tick 2+ files (click the ○ left of a name) then Compare".into();
                 } else {
                     return Action::Launch(Launch::Compare(paths));
                 }
@@ -1147,6 +1255,148 @@ impl FileBrowser {
                 self.status = "bookmark path missing".into();
             }
         }
+    }
+
+    /// Bottom row: the common file actions, or the active prompt's field.
+    fn render_bar(&mut self, f: &mut Frame, row: Rect) {
+        self.bar.begin();
+        let buf = f.buffer_mut();
+        if let Some((kind, input)) = &self.prompt {
+            if matches!(kind, Prompt::DeleteConfirm) {
+                let name = self.current().map(|e| e.name.clone()).unwrap_or_default();
+                self.bar.toolbar(
+                    buf,
+                    row,
+                    &[Item::Label(format!(" Delete {name}? This cannot be undone."), Color::White)],
+                    &[
+                        Item::with("🗑 Delete", Bar::PromptOk, Look::Danger),
+                        Item::with("Cancel", Bar::PromptCancel, Look::Raised),
+                    ],
+                );
+                return;
+            }
+            let (label, ok) = match kind {
+                Prompt::Filter => ("Filter", "Apply"),
+                Prompt::Rename => ("Rename to", "Rename"),
+                Prompt::Mkdir => ("New folder", "Create"),
+                Prompt::NewFile => ("New file", "Create"),
+                _ => ("Go to", "Go"),
+            };
+            self.bar
+                .input_row(buf, row, label, input, (ok, Bar::PromptOk), Bar::PromptCancel);
+            return;
+        }
+        let clip = match &self.clipboard {
+            Some((ClipOp::Copy, p)) => format!(
+                " · 📋{}",
+                p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+            ),
+            Some((ClipOp::Cut, p)) => format!(
+                " · ✂{}",
+                p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+            ),
+            None => String::new(),
+        };
+        let marks = if self.marked.is_empty() {
+            String::new()
+        } else {
+            format!(" · {} sel", self.marked.len())
+        };
+        let status = Item::Label(format!("{}{clip}{marks}", self.status), Color::Rgb(150, 158, 185));
+        if self.pick_path {
+            self.bar.toolbar(
+                buf,
+                row,
+                &[Item::Label(String::new(), Color::Reset), status],
+                &[
+                    Item::with(
+                        "📂 Use this folder",
+                        Bar::UseFolder,
+                        if self.cwd.is_some() { Look::Primary } else { Look::Disabled },
+                    ),
+                    Item::with("Cancel", Bar::Close, Look::Raised),
+                ],
+            );
+            return;
+        }
+        if self.pick_wallpaper {
+            let is_img = self.current().is_some_and(|e| !e.is_dir && super::wallpaper::is_image_path(&e.path));
+            self.bar.toolbar(
+                buf,
+                row,
+                &[Item::Label(String::new(), Color::Reset), status],
+                &[
+                    Item::with("🖼 Use this image", Bar::UseImage, if is_img { Look::Primary } else { Look::Disabled }),
+                    Item::with("Cancel", Bar::Close, Look::Raised),
+                ],
+            );
+            return;
+        }
+        let item = self.current().filter(|e| !e.is_up).is_some();
+        let has = |b: bool| Look::enabled_if(b);
+        let in_dir = self.cwd.is_some();
+        let filter = if self.filter.is_empty() {
+            Item::btn("🔍 Filter", Bar::Filter)
+        } else {
+            Item::with(format!("🔍 {} ✕", self.filter), Bar::ClearFilter, Look::On)
+        };
+        self.bar.toolbar(
+            buf,
+            row,
+            &[
+                Item::with("+ Folder", Bar::NewFolder, has(in_dir)),
+                Item::with("+ File", Bar::NewFile, has(in_dir)),
+                Item::Sep,
+                // clipboard trio as icons: they are universal and the bar is tight
+                Item::with("⧉", Bar::Copy, has(item || !self.marked.is_empty())),
+                Item::with("✂", Bar::Cut, has(item || !self.marked.is_empty())),
+                Item::with("📋", Bar::Paste, has(in_dir && self.clipboard.is_some())),
+                Item::Sep,
+                Item::with("✎ Rename", Bar::Rename, has(item)),
+                Item::with("🗑 Delete", Bar::Delete, has(item)),
+                Item::Sep,
+                Item::btn("⋯ More", Bar::More),
+                filter,
+            ],
+            &[status],
+        );
+    }
+
+    fn run_bar(&mut self, b: Bar, col: u16, row: u16) -> Action {
+        match b {
+            Bar::NewFolder => return self.run_file_menu(FileMenuAction::NewFolder),
+            Bar::NewFile => return self.run_file_menu(FileMenuAction::NewFile),
+            Bar::Copy => return self.run_file_menu(FileMenuAction::Copy),
+            Bar::Cut => return self.run_file_menu(FileMenuAction::Cut),
+            Bar::Paste => return self.run_file_menu(FileMenuAction::Paste),
+            Bar::Rename => return self.run_file_menu(FileMenuAction::Rename),
+            Bar::Delete => return self.run_file_menu(FileMenuAction::Delete),
+            Bar::Filter => self.start_prompt(Prompt::Filter, self.filter.clone()),
+            Bar::ClearFilter => {
+                self.filter.clear();
+                self.apply_filter();
+                self.status.clear();
+            }
+            Bar::More => self.open_file_context(col, row),
+            Bar::UseImage => return self.open_sel(),
+            Bar::UseFolder => {
+                if let Some(dir) = self.cwd.clone() {
+                    return Action::PickPath(dir);
+                }
+            }
+            Bar::Close => return Action::Close,
+            Bar::PromptOk => {
+                if let Some((Prompt::DeleteConfirm, input)) = &mut self.prompt {
+                    *input = "y".into();
+                }
+                return self.commit_prompt();
+            }
+            Bar::PromptCancel => {
+                self.prompt = None;
+                self.status = "cancelled".into();
+            }
+        }
+        Action::None
     }
 
     /// Toolbar: nav buttons, clickable breadcrumb path, hidden/preview toggles.
@@ -1314,11 +1564,12 @@ impl FileBrowser {
             }
         };
 
-        let meta_w = 24usize;
+        let meta_w = meta_width(list.width);
         let name_w = list.width.saturating_sub(4 + meta_w as u16) as usize;
         let name_x = list.x + 6;
         let date_x = list.x + 6 + name_w.saturating_sub(1) as u16;
-        let size_x = date_x + 11;
+        // Without the date column, Size sits where Modified would.
+        let size_x = if meta_w == META_FULL { date_x + 11 } else { date_x };
         let max_x = area.x + area.width;
 
         let nl = label_for("Name", SortBy::Name, self.sort);
@@ -1328,10 +1579,10 @@ impl FileBrowser {
                 .push((name_x, date_x.saturating_sub(1).max(name_x), SortBy::Name));
         }
         // meta columns only when the name column has real room
-        if name_w < 10 {
+        if name_w < 10 || meta_w == 0 {
             return;
         }
-        if date_x + 11 <= max_x {
+        if meta_w == META_FULL && date_x + 11 <= max_x {
             let dl = label_for("Modified", SortBy::Modified, self.sort);
             buf.set_string(date_x, y, &dl, style_for(SortBy::Modified, self.sort));
             self.header_hits.push((date_x, size_x, SortBy::Modified));
@@ -1402,6 +1653,29 @@ impl FileBrowser {
 }
 
 /// Dotfiles everywhere; on Windows also the filesystem hidden attribute.
+/// Columns after the name: git + date + size when the list is wide, size
+/// alone when it is narrow (a docked explorer), nothing when it is tiny.
+const META_FULL: usize = 24;
+
+fn meta_width(list_w: u16) -> usize {
+    match list_w {
+        52.. => META_FULL,
+        30.. => 9,
+        _ => 0,
+    }
+}
+
+/// Whether a watcher event can change what the list shows. Reads (our own
+/// listing triggers those) and git's bookkeeping inside `.git` are ignored,
+/// so refreshing — which runs `git status` — cannot feed itself.
+fn is_listing_change(ev: &notify::Event) -> bool {
+    if matches!(ev.kind, EventKind::Access(_)) {
+        return false;
+    }
+    let in_git = |p: &PathBuf| p.components().any(|c| c.as_os_str() == ".git");
+    ev.paths.is_empty() || !ev.paths.iter().all(in_git)
+}
+
 fn is_hidden(name: &str, md: Option<&fs::Metadata>) -> bool {
     if name.starts_with('.') {
         return true;
@@ -1533,9 +1807,30 @@ fn hex_preview(buf: &[u8]) -> String {
 }
 
 impl AppWindow for FileBrowser {
+    fn on_tick(&mut self) {
+        if let Some(rx) = &self.watch_rx {
+            if rx.try_iter().count() > 0 {
+                self.changed_at = Some(Instant::now());
+            }
+        }
+        // Debounce: a copy or a build touches many files at once.
+        // A rename or new-folder prompt keeps the change waiting.
+        if self.prompt.is_none()
+            && self
+                .changed_at
+                .is_some_and(|t| t.elapsed() >= Duration::from_millis(250))
+        {
+            self.changed_at = None;
+            self.auto_refresh();
+        }
+    }
+
     fn title(&self) -> String {
         if self.pick_wallpaper {
             return "Choose wallpaper".into();
+        }
+        if self.pick_path {
+            return "Open folder or file".into();
         }
         match &self.cwd {
             None => "Drives".into(),
@@ -1591,7 +1886,7 @@ impl AppWindow for FileBrowser {
                 gfx::fmt_size(e.size)
             };
             let date = Self::fmt_mtime(e.modified);
-            let meta_w = 24usize; // git + date + size
+            let meta_w = meta_width(list.width);
             let name_w = list.width.saturating_sub(4 + meta_w as u16) as usize;
             let mut name = e.name.clone();
             if name.chars().count() > name_w {
@@ -1614,7 +1909,14 @@ impl AppWindow for FileBrowser {
                 .git
                 .map(|g| g.color())
                 .unwrap_or(Color::Rgb(60, 70, 90));
-            let mark_ch = if marked { '●' } else { ' ' };
+            // the mark column is clickable; the selected row shows its box
+            let mark_ch = if marked {
+                '●'
+            } else if selected && !e.is_up {
+                '○'
+            } else {
+                ' '
+            };
             let sel_bg = if selected {
                 if focused {
                     Color::Rgb(0, 96, 150)
@@ -1641,7 +1943,7 @@ impl AppWindow for FileBrowser {
                     },
                 ),
                 Span::styled(
-                    format!("{date} "),
+                    if meta_w == META_FULL { format!("{date} ") } else { String::new() },
                     base.fg(if selected {
                         Color::White
                     } else {
@@ -1649,7 +1951,7 @@ impl AppWindow for FileBrowser {
                     }),
                 ),
                 Span::styled(
-                    format!("{size:>8}"),
+                    if meta_w == 0 { String::new() } else { format!("{size:>8}") },
                     base.fg(if selected {
                         Color::White
                     } else {
@@ -1687,86 +1989,15 @@ impl AppWindow for FileBrowser {
             );
         }
 
-        let status = if let Some((kind, input)) = &self.prompt {
-            let label = match kind {
-                Prompt::Filter => "Filter",
-                Prompt::Rename => "Rename",
-                Prompt::Mkdir => "New folder",
-                Prompt::NewFile => "New file",
-                Prompt::Goto => "Go to",
-                Prompt::DeleteConfirm => "Delete? (y/n)",
-            };
-            format!(" {label}: {input}█  Esc cancel ")
-        } else {
-            let clip = match &self.clipboard {
-                Some((ClipOp::Copy, p)) => format!(
-                    " · 📋{}",
-                    p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
-                ),
-                Some((ClipOp::Cut, p)) => format!(
-                    " · ✂{}",
-                    p.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
-                ),
-                None => String::new(),
-            };
-            let marks = if self.marked.is_empty() {
-                String::new()
-            } else {
-                format!(" · {} sel", self.marked.len())
-            };
-            format!(
-                " {}{}{}  │ / filter · Space mark · Ctrl+H hidden · right-click · ? help ",
-                self.status, clip, marks
-            )
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                status,
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
+        self.render_bar(f, Rect::new(area.x, area.y + area.height - 1, area.width, 1));
 
         if self.context.is_some() {
             self.render_context(f, area);
         }
 
-        if self.show_help {
-            gfx::key_overlay(
-                f,
-                area,
-                "⌨ File Manager · any key closes",
-                &[
-                    ("Enter / →", "open · ← or Backspace up"),
-                    ("Alt+← / Alt+→", "history back / forward"),
-                    ("Space", "mark · Ctrl+A mark all"),
-                    ("/ or Ctrl+F", "filter names"),
-                    ("Ctrl+L", "go to path — or just paste one"),
-                    ("Ctrl+C/X/V", "copy / cut / paste files"),
-                    ("Ctrl+Shift+C", "copy path as text"),
-                    ("Ctrl+P", "preview pane"),
-                    ("Ctrl+H", "hidden files"),
-                    ("Tab / click header", "sort columns"),
-                    ("F2", "rename · Del delete"),
-                    ("F3 / F4", "hex view / edit"),
-                    ("F7 / F8", "new folder / file"),
-                    ("Ctrl+T / Ctrl+G", "terminal / git here"),
-                    ("Alt+H/D/O/L", "home · desktop · docs · downloads"),
-                    ("click crumbs", "jump along the path"),
-                    ("drag", "move/copy across windows"),
-                ],
-            );
-        }
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
-        if self.show_help {
-            self.show_help = false;
-            return Action::None;
-        }
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
 
@@ -1796,6 +2027,17 @@ impl AppWindow for FileBrowser {
             return Action::None;
         }
 
+        if let Some((Prompt::DeleteConfirm, _)) = self.prompt {
+            match k.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    return self.run_bar(Bar::PromptOk, 0, 0);
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                    return self.run_bar(Bar::PromptCancel, 0, 0);
+                }
+                _ => return Action::None,
+            }
+        }
         if let Some((_, ref mut input)) = self.prompt {
             match k.code {
                 KeyCode::Esc => {
@@ -1834,7 +2076,9 @@ impl AppWindow for FileBrowser {
             }
             KeyCode::Enter => return self.open_sel(),
             KeyCode::Backspace => self.go_up(),
-            KeyCode::Esc | KeyCode::Char('q') if self.pick_wallpaper => return Action::Close,
+            KeyCode::Esc | KeyCode::Char('q') if self.pick_wallpaper || self.pick_path => {
+                return Action::Close
+            }
             KeyCode::Esc if !self.marked.is_empty() => self.clear_marks(),
             KeyCode::Char(' ') if !ctrl && !alt => self.toggle_mark_current(),
             KeyCode::Char('a') if ctrl => self.mark_all_filtered(),
@@ -1937,9 +2181,6 @@ impl AppWindow for FileBrowser {
                     }
                 }
             }
-            KeyCode::Char('?') => {
-                self.show_help = true;
-            }
             KeyCode::Char(c) if !ctrl && !alt => {
                 let lc = c.to_ascii_lowercase();
                 let n = self.filtered.len();
@@ -1968,6 +2209,12 @@ impl AppWindow for FileBrowser {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        // The bottom bar holds the prompt's own OK / Cancel, so it stays live.
+        if self.context.is_none() {
+            if let Some(hit) = self.bar.route(&m) {
+                return hit.map_or(Action::None, |b| self.run_bar(b, m.column, m.row));
+            }
+        }
         if self.prompt.is_some() {
             return Action::None;
         }
@@ -2067,7 +2314,7 @@ impl AppWindow for FileBrowser {
                     if idx < self.filtered.len() {
                         self.sel = idx;
                         self.update_preview();
-                        if m.modifiers.contains(KeyModifiers::CONTROL) {
+                        if m.modifiers.contains(KeyModifiers::CONTROL) || m.column == list.x {
                             if let Some(e) = self.current().filter(|e| !e.is_up) {
                                 let p = e.path.clone();
                                 if !self.marked.remove(&p) {
@@ -2151,7 +2398,7 @@ impl AppWindow for FileBrowser {
 
 #[cfg(test)]
 mod tests {
-    use super::clean_pasted_path;
+    use super::*;
 
     #[test]
     fn accepts_every_clipboard_flavor_of_a_path() {
@@ -2167,6 +2414,39 @@ mod tests {
         ] {
             assert_eq!(clean_pasted_path(pasted), want, "input: {pasted:?}");
         }
+    }
+
+    #[test]
+    fn picks_up_files_created_outside() {
+        let dir = std::env::temp_dir().join(format!("tt_watch_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let mut fb = FileBrowser::new(dir.clone());
+        assert!(fb.watched.is_some(), "folder is watched");
+        fs::write(dir.join("new.txt"), "hi").unwrap();
+        let end = Instant::now() + Duration::from_secs(5);
+        let seen = loop {
+            fb.on_tick();
+            if fb.entries.iter().any(|e| e.name == "new.txt") {
+                break true;
+            }
+            if Instant::now() > end {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let _ = fs::remove_dir_all(&dir);
+        assert!(seen, "the new file showed up without a manual refresh");
+    }
+
+    #[test]
+    fn ignores_git_bookkeeping() {
+        let ev = notify::Event::new(EventKind::Modify(notify::event::ModifyKind::Any))
+            .add_path(PathBuf::from("repo/.git/index"));
+        assert!(!is_listing_change(&ev));
+        let ev = notify::Event::new(EventKind::Create(notify::event::CreateKind::File))
+            .add_path(PathBuf::from("repo/main.rs"));
+        assert!(is_listing_change(&ev));
     }
 
     #[cfg(not(windows))]

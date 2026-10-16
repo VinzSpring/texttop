@@ -30,13 +30,14 @@ impl Notes {
         let path = notes_path();
         // The file is only written on save, so a first run has nothing to read.
         let editor = if path.exists() {
-            Editor::new(Some(path))
+            Editor::new(Some(path)).fixed()
         } else {
             Editor::with_lines(
                 Some(path),
                 WELCOME.iter().map(|s| s.to_string()).collect(),
-                "new notes file · Ctrl+S saves".into(),
+                "new notes file".into(),
             )
+            .fixed()
         };
         Notes { editor }
     }

@@ -14,8 +14,19 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{Controls, Item, Look};
 use super::webdata::{self, Bookmarks, History, Settings};
 use super::{Action, AppWindow};
+
+/// Controls in the status bar.
+#[derive(Clone, Copy, PartialEq)]
+enum Sb {
+    TextMode,
+    ZoomOut,
+    ZoomIn,
+    Go,
+    CancelUrl,
+}
 use crate::engine::{js_escape, Cmd, CookieInfo, DataKind, Engine, MouseKind, Status};
 use crate::gfx;
 
@@ -50,18 +61,17 @@ const MENU_TOOLS: [(Tool, &str); 4] = [
 ];
 
 impl Tool {
-    /// Shown in the status bar on hover, so the accelerator is discoverable
-    /// without having to memorise it.
+    /// Shown in the status bar on hover, like a tooltip.
     fn hint(self) -> &'static str {
         match self {
-            Tool::Back => "Back (Ctrl+B)",
-            Tool::Forward => "Forward (Ctrl+F)",
-            Tool::Reload => "Reload (Ctrl+R)",
-            Tool::Bookmark => "Bookmark this page (F2)",
-            Tool::History => "History (Ctrl+H)",
-            Tool::Bookmarks => "Bookmarks (Ctrl+K)",
-            Tool::Cookies => "Cookies (F8)",
-            Tool::Privacy => "Privacy & data (F7)",
+            Tool::Back => "Back",
+            Tool::Forward => "Forward",
+            Tool::Reload => "Reload",
+            Tool::Bookmark => "Bookmark this page",
+            Tool::History => "History",
+            Tool::Bookmarks => "Bookmarks",
+            Tool::Cookies => "Cookies",
+            Tool::Privacy => "Privacy & data",
         }
     }
 }
@@ -81,7 +91,7 @@ h1{font-size:72px;margin:0 0 8px 0;background:linear-gradient(90deg,#00bfff,#c08
 p{color:#aab;font-size:26px;margin:6px 0 26px}
 a{display:inline-block;margin:10px;padding:20px 34px;border-radius:16px;background:#ffffff14;color:#8fd6ff;font-size:30px;text-decoration:none;border:1px solid #ffffff22}
 a:hover{background:#ffffff2e}
-</style></head><body><h1>texttop</h1><p>click a tile — or press Ctrl+L and type a URL</p><div>
+</style></head><body><h1>texttop</h1><p>click a tile — or click the address bar and type a URL</p><div>
 <a href="https://lite.duckduckgo.com/lite/">🔎 DuckDuckGo</a>
 <a href="https://en.wikipedia.org">📚 Wikipedia</a>
 <a href="https://news.ycombinator.com">🗞 Hacker News</a>
@@ -162,6 +172,8 @@ pub struct WebBrowser {
     recorded: String,
     /// Toolbar hit boxes from the last render: (x0, x1 exclusive, tool).
     tool_hits: Vec<(u16, u16, Tool)>,
+    /// Status-bar controls (text mode, zoom, URL go / cancel).
+    sb: Controls<Sb>,
     /// Tool under the pointer, so the status bar can explain it.
     hover: Option<Tool>,
 }
@@ -196,6 +208,7 @@ impl WebBrowser {
             cookies: Vec::new(),
             recorded: String::new(),
             tool_hits: Vec::new(),
+            sb: Controls::new(),
             hover: None,
         }
     }
@@ -576,6 +589,33 @@ impl WebBrowser {
             Style::default().fg(Color::White).bg(bg),
         );
     }
+
+    fn run_sb(&mut self, c: Sb) {
+        match c {
+            Sb::TextMode => {
+                self.overlay = !self.overlay;
+                self.engine.send(Cmd::TextOverlay(self.overlay));
+                self.note = if self.overlay {
+                    "crisp text overlay ON".into()
+                } else {
+                    "crisp text overlay OFF (pure pixels)".into()
+                };
+            }
+            Sb::ZoomOut | Sb::ZoomIn => {
+                let d = if c == Sb::ZoomIn { 0.25 } else { -0.25 };
+                self.zoom = (self.zoom + d).clamp(0.5, 5.0);
+                self.cache.clear();
+                self.engine.send(Cmd::Zoom(self.zoom));
+            }
+            Sb::Go => {
+                self.on_key(KeyEvent::from(KeyCode::Enter));
+            }
+            Sb::CancelUrl => {
+                self.on_key(KeyEvent::from(KeyCode::Esc));
+            }
+        }
+    }
+
 
     /// Run a toolbar control. Same entry point for a click and for the
     /// matching accelerator, so the two can never diverge.
@@ -962,18 +1002,10 @@ impl AppWindow for WebBrowser {
             self.render_panel(f, content);
         }
 
-        // status bar
-        let hint = if self.editing {
-            " Enter go · Esc cancel ".to_string()
-        } else if let Some(tool) = self.hover {
-            format!(" {} ", tool.hint())
-        } else {
-            format!(
-                " zoom {:.2} │ click the toolbar above · F3 text mode · F9/F10 zoom ",
-                self.zoom
-            )
-        };
-        let left = if !self.note.is_empty() {
+        // status bar: page title or tooltip, then view controls
+        let left = if let Some(tool) = self.hover {
+            tool.hint().to_string()
+        } else if !self.note.is_empty() {
             self.note.clone()
         } else {
             info.title
@@ -983,14 +1015,23 @@ impl AppWindow for WebBrowser {
         } else {
             Color::Rgb(100, 105, 125)
         };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {}  │{}", left.chars().take(40).collect::<String>(), hint),
-                Style::default().fg(dim).bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            status_bar,
-        );
+        self.sb.begin();
+        let label = Item::Label(format!(" {}", left.chars().take(60).collect::<String>()), dim);
+        let right = if self.editing {
+            vec![
+                Item::with("Go", Sb::Go, Look::Primary),
+                Item::with("Cancel", Sb::CancelUrl, Look::Raised),
+            ]
+        } else {
+            vec![
+                Item::with("Aa Crisp text", Sb::TextMode, Look::on_if(self.overlay)),
+                Item::Sep,
+                Item::with("−", Sb::ZoomOut, Look::enabled_if(self.zoom > 0.5)),
+                Item::Label(format!("{:.0}%", self.zoom * 100.0), dim),
+                Item::with("+", Sb::ZoomIn, Look::enabled_if(self.zoom < 5.0)),
+            ]
+        };
+        self.sb.toolbar(f.buffer_mut(), status_bar, &[label], &right);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -1038,25 +1079,9 @@ impl AppWindow for WebBrowser {
             }
             KeyCode::Char('b') if ctrl => self.run_tool(Tool::Back),
             KeyCode::Char('f') if ctrl => self.run_tool(Tool::Forward),
-            KeyCode::F(3) => {
-                self.overlay = !self.overlay;
-                self.engine.send(Cmd::TextOverlay(self.overlay));
-                self.note = if self.overlay {
-                    "crisp text overlay ON".into()
-                } else {
-                    "crisp text overlay OFF (pure pixels)".into()
-                };
-            }
-            KeyCode::F(9) => {
-                self.zoom = (self.zoom - 0.25).max(0.5);
-                self.cache.clear();
-                self.engine.send(Cmd::Zoom(self.zoom));
-            }
-            KeyCode::F(10) => {
-                self.zoom = (self.zoom + 0.25).min(5.0);
-                self.cache.clear();
-                self.engine.send(Cmd::Zoom(self.zoom));
-            }
+            KeyCode::F(3) => self.run_sb(Sb::TextMode),
+            KeyCode::F(9) => self.run_sb(Sb::ZoomOut),
+            KeyCode::F(10) => self.run_sb(Sb::ZoomIn),
             KeyCode::Up => self.scroll_by(-100),
             KeyCode::Down => self.scroll_by(100),
             KeyCode::PageUp => self.scroll_by(-600),
@@ -1116,6 +1141,12 @@ impl AppWindow for WebBrowser {
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
         let content = Rect::new(area.x, area.y + 1, area.width, area.height.saturating_sub(2));
+        if let Some(hit) = self.sb.route(&m) {
+            if let Some(c) = hit {
+                self.run_sb(c);
+            }
+            return Action::None;
+        }
 
         // A panel covers the page, so it takes the mouse while it is open —
         // otherwise clicks would land on a page the user cannot see.
@@ -1340,7 +1371,7 @@ fn empty_note(panel: Panel, filtered: bool) -> &'static str {
     }
     match panel {
         Panel::History => "no pages visited yet",
-        Panel::Bookmarks => "no bookmarks yet — F2 bookmarks the current page",
+        Panel::Bookmarks => "no bookmarks yet — click ☆ in the toolbar to add the current page",
         Panel::Cookies => "no cookies stored",
         _ => "nothing here",
     }

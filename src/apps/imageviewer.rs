@@ -11,8 +11,26 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
 use crate::gfx;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Prev,
+    Next,
+    ZoomOut,
+    Fit,
+    Actual,
+    ZoomIn,
+    RotateLeft,
+    RotateRight,
+    FlipH,
+    FlipV,
+    Slideshow,
+    Info,
+    Wallpaper,
+}
 
 /// Same cell pixel geometry as web/video — keeps image aspect correct on
 /// typical ~1∶2 terminal glyphs.
@@ -62,12 +80,12 @@ pub struct ImageViewer {
     view: Rect,
     scale: f64,
 
-    show_help: bool,
     show_info: bool,
     slideshow: bool,
     ticks: u32,
     drag: Option<(u16, u16)>,
     last_click: Option<(Instant, u16, u16)>,
+    ui: Controls<Cmd>,
 }
 
 impl ImageViewer {
@@ -90,12 +108,12 @@ impl ImageViewer {
             cache: gfx::RgbCache::default(),
             view: Rect::default(),
             scale: 1.0,
-            show_help: false,
             show_info: false,
             slideshow: false,
             ticks: 0,
             drag: None,
             last_click: None,
+            ui: Controls::new(),
         };
         v.scan_gallery();
         v.load();
@@ -335,8 +353,37 @@ impl ImageViewer {
             Zoom::Fit => " fit".to_string(),
             Zoom::Scale(_) => format!(" {:.0}%", self.scale * 100.0),
         };
-        let show = if self.slideshow { " · ▶ auto" } else { "" };
-        format!(" {name} ·{pos}{dims}{zoom}{show} · ? help ")
+        let show = if self.slideshow { " · ▶ slideshow" } else { "" };
+        format!(" {name} ·{pos}{dims}{zoom}{show} ")
+    }
+
+    fn view_of(area: Rect) -> Rect {
+        Rect::new(area.x, area.y + 1, area.width, area.height.saturating_sub(2))
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        match c {
+            Cmd::Prev => self.nav(-1),
+            Cmd::Next => self.nav(1),
+            Cmd::ZoomOut => self.zoom_by(0.8, None),
+            Cmd::ZoomIn => self.zoom_by(1.25, None),
+            Cmd::Fit => self.zoom = Zoom::Fit,
+            Cmd::Actual => {
+                self.scale = self.scale.max(f64::MIN_POSITIVE);
+                self.zoom_by(1.0 / self.scale, None);
+            }
+            Cmd::RotateLeft => self.transform(image::imageops::rotate270),
+            Cmd::RotateRight => self.transform(image::imageops::rotate90),
+            Cmd::FlipH => self.transform(image::imageops::flip_horizontal),
+            Cmd::FlipV => self.transform(image::imageops::flip_vertical),
+            Cmd::Slideshow => {
+                self.slideshow = !self.slideshow;
+                self.ticks = 0;
+            }
+            Cmd::Info => self.show_info = !self.show_info,
+            Cmd::Wallpaper => return Action::SetWallpaperImage(self.path.clone()),
+        }
+        Action::None
     }
 }
 
@@ -400,11 +447,42 @@ impl AppWindow for ImageViewer {
     }
 
     fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        if area.height < 2 {
+        if area.height < 3 {
             return;
         }
-        let view = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+        let view = Self::view_of(area);
         self.view = view;
+        self.ui.begin();
+        let many = Look::enabled_if(self.gallery.len() > 1);
+        let loaded = Look::enabled_if(self.img.is_some());
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &[
+                Item::with("◀", Cmd::Prev, many),
+                Item::with("▶", Cmd::Next, many),
+                Item::Sep,
+                Item::with("−", Cmd::ZoomOut, loaded),
+                Item::with("Fit", Cmd::Fit, Look::on_if(self.zoom == Zoom::Fit)),
+                Item::with("100%", Cmd::Actual, loaded),
+                Item::with("+", Cmd::ZoomIn, loaded),
+                Item::Sep,
+                Item::with("⟲", Cmd::RotateLeft, loaded),
+                Item::with("⟳", Cmd::RotateRight, loaded),
+                Item::with("⇋", Cmd::FlipH, loaded),
+                Item::with("⇵", Cmd::FlipV, loaded),
+                Item::Sep,
+                Item::with(
+                    "▶ Slideshow",
+                    Cmd::Slideshow,
+                    if self.gallery.len() > 1 { Look::on_if(self.slideshow) } else { Look::Disabled },
+                ),
+            ],
+            &[
+                Item::with("ℹ Info", Cmd::Info, Look::on_if(self.show_info)),
+                Item::with("🖼 Wallpaper", Cmd::Wallpaper, loaded),
+            ],
+        );
         if view.width == 0 || view.height == 0 {
             return;
         }
@@ -419,7 +497,7 @@ impl AppWindow for ImageViewer {
                         Style::default().fg(Color::Rgb(255, 110, 110)),
                     )),
                     Line::from(Span::styled(
-                        "    ←/→ next · previous image",
+                        "    use ◀ ▶ above to browse the other images here",
                         Style::default().fg(Color::Rgb(150, 155, 175)),
                     )),
                 ]),
@@ -489,35 +567,6 @@ impl AppWindow for ImageViewer {
                 ));
             }
             draw_overlay(f, view, "Image info", lines);
-        } else if self.show_help {
-            let dim = Style::default().fg(Color::Rgb(120, 130, 160));
-            let lit = Style::default().fg(Color::Rgb(210, 215, 235));
-            let row = |k: &'static str, d: &'static str| {
-                Line::from(vec![
-                    Span::styled(format!("  {k:<14}"), lit),
-                    Span::styled(d, dim),
-                ])
-            };
-            draw_overlay(
-                f,
-                view,
-                "Image viewer keys",
-                vec![
-                    row("scroll · + -", "zoom (wheel zooms at cursor)"),
-                    row("drag · hjkl", "pan when zoomed"),
-                    row("f or 0", "fit to window"),
-                    row("1", "100% pixel view"),
-                    row("← → · n p", "previous / next image"),
-                    row("Home / End", "first / last image"),
-                    row("[ ]", "rotate left / right"),
-                    row("x / y", "flip horizontal / vertical"),
-                    row("s", "slideshow"),
-                    row("w", "set as wallpaper"),
-                    row("i", "image info"),
-                    row("r", "reload"),
-                    row("q / Esc", "close"),
-                ],
-            );
         }
 
         f.render_widget(
@@ -535,17 +584,9 @@ impl AppWindow for ImageViewer {
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let zoomed = matches!(self.zoom, Zoom::Scale(_));
         match k.code {
-            KeyCode::Char('?') => {
-                self.show_help = !self.show_help;
-                self.show_info = false;
-            }
-            KeyCode::Char('i') => {
-                self.show_info = !self.show_info;
-                self.show_help = false;
-            }
+            KeyCode::Char('i') => self.show_info = !self.show_info,
             KeyCode::Char('q') | KeyCode::Esc => {
-                if self.show_help || self.show_info {
-                    self.show_help = false;
+                if self.show_info {
                     self.show_info = false;
                 } else {
                     return Action::Close;
@@ -590,7 +631,10 @@ impl AppWindow for ImageViewer {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
-        let view = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
+        let view = Self::view_of(area);
         let inside = m.column >= view.x
             && m.column < view.x + view.width
             && m.row >= view.y
@@ -637,7 +681,7 @@ impl AppWindow for ImageViewer {
     }
 
     fn on_tick(&mut self) {
-        if self.slideshow && self.gallery.len() > 1 && !self.show_help && !self.show_info {
+        if self.slideshow && self.gallery.len() > 1 && !self.show_info {
             self.ticks += 1;
             if self.ticks >= SLIDESHOW_TICKS {
                 self.ticks = 0;

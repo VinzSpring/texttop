@@ -1,19 +1,23 @@
-//! 2048 — slide and merge tiles with the arrow keys.
+//! 2048 — slide and merge tiles: swipe the board, or use the arrow buttons.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
 use crate::gfx;
 
-const STATUS_FG: Color = Color::Rgb(140, 150, 175);
-const STATUS_BG: Color = Color::Rgb(18, 22, 36);
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    NewGame,
+    Slide(i32, i32),
+    /// The board itself: a press starts a swipe.
+    Board,
+}
 const BOARD_BG: Color = Color::Rgb(30, 28, 38);
 const EMPTY_BG: Color = Color::Rgb(44, 42, 54);
 
@@ -24,6 +28,9 @@ pub struct Game2048 {
     over: bool,
     won: bool,
     rng: u64,
+    ui: Controls<Cmd>,
+    /// Where a swipe on the board started.
+    swipe: Option<(u16, u16)>,
 }
 
 fn tile_color(v: u32) -> (Color, Color) {
@@ -65,6 +72,8 @@ impl Game2048 {
             over: false,
             won: false,
             rng: seed,
+            ui: Controls::new(),
+            swipe: None,
         };
         g.spawn_tile();
         g.spawn_tile();
@@ -183,13 +192,24 @@ impl AppWindow for Game2048 {
             return;
         }
         gfx::fill(f.buffer_mut(), area, Color::Rgb(12, 14, 22));
+        self.ui.begin();
+        let best = self.best.max(self.score);
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &[Item::with("✦ New game", Cmd::NewGame, Look::on_if(self.over))],
+            &[Item::Label(
+                format!("score {}   best {best}", self.score),
+                Color::Rgb(220, 224, 238),
+            )],
+        );
 
-        // tile geometry adapts to the window
+        // tile geometry adapts to the window; leave a ring for the arrows
         let avail = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
+            area.x + 4,
+            area.y + 2,
+            area.width.saturating_sub(8),
+            area.height.saturating_sub(4),
         );
         let tile_w = ((avail.width.saturating_sub(5)) / 4).clamp(4, 9);
         let tile_h = ((avail.height.saturating_sub(5)) / 4).clamp(1, 3);
@@ -197,20 +217,25 @@ impl AppWindow for Game2048 {
         let board_h = tile_h * 4 + 5;
         let bx = avail.x + avail.width.saturating_sub(board_w) / 2;
         let by = avail.y + avail.height.saturating_sub(board_h) / 2;
-        gfx::fill(f.buffer_mut(), Rect::new(bx, by, board_w, board_h), BOARD_BG);
+        let board = Rect::new(bx, by, board_w, board_h);
+        gfx::fill(f.buffer_mut(), board, BOARD_BG);
+        self.ui.add(board, Cmd::Board);
 
-        // header
-        let head = format!(" 2048   score {}   best {}", self.score, self.best.max(self.score));
-        f.buffer_mut().set_string(
-            area.x + 1,
-            area.y,
-            &head,
-            Style::default()
-                .fg(Color::Rgb(220, 224, 238))
-                .add_modifier(Modifier::BOLD),
-        );
-
+        // arrow buttons on all four sides
         let buf = f.buffer_mut();
+        let arrows = [
+            (Rect::new(bx + board_w / 2 - 2, by - 1, 5, 1), "▲", Cmd::Slide(0, -1)),
+            (Rect::new(bx + board_w / 2 - 2, by + board_h, 5, 1), "▼", Cmd::Slide(0, 1)),
+            (Rect::new(bx - 3, by + board_h / 2 - 1, 3, 3), "◀", Cmd::Slide(-1, 0)),
+            (Rect::new(bx + board_w, by + board_h / 2 - 1, 3, 3), "▶", Cmd::Slide(1, 0)),
+        ];
+        for (r, label, cmd) in arrows {
+            if r.intersection(area) == r {
+                let look = if self.over { Look::Disabled } else { Look::Raised };
+                self.ui.big_button(buf, r, label, cmd, look);
+            }
+        }
+
         for y in 0..4u16 {
             for x in 0..4u16 {
                 let v = self.grid[y as usize][x as usize];
@@ -250,15 +275,15 @@ impl AppWindow for Game2048 {
         // end / win banner
         if self.over || self.won {
             let msg = if self.over {
-                " game over — r restarts "
+                " game over — click New game "
             } else {
-                " 2048! keep going or r to restart "
+                " 2048! keep going "
             };
             let w = msg.chars().count() as u16;
             if w <= area.width {
                 buf.set_string(
                     area.x + (area.width - w) / 2,
-                    by + board_h.min(avail.height.saturating_sub(1)),
+                    by + board_h / 2,
                     msg,
                     Style::default()
                         .fg(Color::White)
@@ -271,15 +296,6 @@ impl AppWindow for Game2048 {
                 );
             }
         }
-
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                " arrows/wasd slide · r restart · q close ",
-                Style::default().fg(STATUS_FG).bg(STATUS_BG),
-            ))
-            .style(Style::default().bg(STATUS_BG)),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
-        );
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -290,6 +306,32 @@ impl AppWindow for Game2048 {
             KeyCode::Down | KeyCode::Char('s') => self.shift((0, 1)),
             KeyCode::Char('r') => self.restart(),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
+            _ => {}
+        }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        if let MouseEventKind::Up(MouseButton::Left) = m.kind {
+            // A swipe: the longer axis of the drag decides the direction.
+            // Cells are about twice as tall as wide, so rows count double.
+            if let Some((x0, y0)) = self.swipe.take() {
+                let dx = m.column as i32 - x0 as i32;
+                let dy = (m.row as i32 - y0 as i32) * 2;
+                if dx.abs().max(dy.abs()) >= 2 {
+                    if dx.abs() > dy.abs() {
+                        self.shift((dx.signum(), 0));
+                    } else {
+                        self.shift((0, dy.signum()));
+                    }
+                }
+            }
+            return Action::None;
+        }
+        match self.ui.route(&m) {
+            Some(Some(Cmd::NewGame)) => self.restart(),
+            Some(Some(Cmd::Slide(dx, dy))) => self.shift((dx, dy)),
+            Some(Some(Cmd::Board)) => self.swipe = Some((m.column, m.row)),
             _ => {}
         }
         Action::None

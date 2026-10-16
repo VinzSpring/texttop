@@ -66,7 +66,7 @@
 <rect x="0" y="666" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="684" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="702" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="702" width="1242" height="18" fill="#121624"/>
+<rect x="9" y="702" width="1242" height="18" fill="#1c243e"/>
 <rect x="1251" y="702" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="720" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="738" width="81" height="18" fill="#0060a0"/>
@@ -269,7 +269,9 @@
 <path d="M4.5,693.0 L4.5,684.0 M4.5,693.0 L4.5,702.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,693.0 L1255.5,684.0 M1255.5,693.0 L1255.5,702.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,711.0 L4.5,702.0 M4.5,711.0 L4.5,720.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
-<path d="M472.5,711.0 L472.5,702.0 M472.5,711.0 L472.5,720.0" stroke="#8c96af" stroke-width="1.3" fill="none"/>
+<path d="M175.5,711.0 L175.5,702.0 M175.5,711.0 L175.5,720.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
+<path d="M274.5,711.0 L274.5,702.0 M274.5,711.0 L274.5,720.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
+<path d="M463.5,711.0 L463.5,702.0 M463.5,711.0 L463.5,720.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,711.0 L1255.5,702.0 M1255.5,711.0 L1255.5,720.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,720.0 Q4.5,729.0 9.0,729.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M13.5,729.0 L9.0,729.0 M13.5,729.0 L18.0,729.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
@@ -438,19 +440,20 @@
 <text x="54" y="67.7" fill="#8c96b4" textLength="18" lengthAdjust="spacingAndGlyphs">..</text>
 <text x="1143" y="67.7" fill="#78829b" textLength="45" lengthAdjust="spacingAndGlyphs">&lt;DIR&gt;</text>
 <text x="18" y="85.7" fill="#78beff" textLength="18" lengthAdjust="spacingAndGlyphs">📁</text>
-<text x="45" y="85.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
+<text x="45" y="85.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="85.7" fill="#78beff" textLength="36" lengthAdjust="spacingAndGlyphs">docs</text>
 <text x="1044" y="85.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
 <text x="1170" y="85.7" fill="#78829b" textLength="45" lengthAdjust="spacingAndGlyphs">&lt;DIR&gt;</text>
 <text x="18" y="103.7" fill="#78beff" textLength="18" lengthAdjust="spacingAndGlyphs">📁</text>
-<text x="45" y="103.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
+<text x="45" y="103.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="103.7" fill="#78beff" textLength="63" lengthAdjust="spacingAndGlyphs">scripts</text>
 <text x="1044" y="103.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
 <text x="1170" y="103.7" fill="#78829b" textLength="45" lengthAdjust="spacingAndGlyphs">&lt;DIR&gt;</text>
+<text x="9" y="121.7" fill="#ffffff" textLength="9" lengthAdjust="spacingAndGlyphs">○</text>
 <text x="18" y="121.7" fill="#ffffff" textLength="18" lengthAdjust="spacingAndGlyphs">📁</text>
 <text x="45" y="121.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="121.7" fill="#ffffff" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">src</text>
-<text x="1044" y="121.7" fill="#ffffff" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
+<text x="1044" y="121.7" fill="#ffffff" textLength="90" lengthAdjust="spacingAndGlyphs">2026-10-12</text>
 <text x="1170" y="121.7" fill="#ffffff" textLength="45" lengthAdjust="spacingAndGlyphs">&lt;DIR&gt;</text>
 <text x="18" y="139.7" fill="#78beff" textLength="18" lengthAdjust="spacingAndGlyphs">📁</text>
 <text x="63" y="139.7" fill="#78beff" textLength="54" lengthAdjust="spacingAndGlyphs">target</text>
@@ -470,66 +473,61 @@
 <text x="1044" y="193.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-08-22</text>
 <text x="1170" y="193.7" fill="#78829b" textLength="45" lengthAdjust="spacingAndGlyphs">&lt;DIR&gt;</text>
 <text x="18" y="211.7" fill="#b4b9c8" textLength="18" lengthAdjust="spacingAndGlyphs">📄</text>
-<text x="45" y="211.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="211.7" fill="#b4b9c8" textLength="90" lengthAdjust="spacingAndGlyphs">Cargo.lock</text>
 <text x="1044" y="211.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-08-30</text>
 <text x="1161" y="211.7" fill="#78829b" textLength="36" lengthAdjust="spacingAndGlyphs">94.5</text>
 <text x="1206" y="211.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
 <text x="18" y="229.7" fill="#ffdc78" textLength="18" lengthAdjust="spacingAndGlyphs">📜</text>
-<text x="45" y="229.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="229.7" fill="#ffdc78" textLength="90" lengthAdjust="spacingAndGlyphs">Cargo.toml</text>
-<text x="1044" y="229.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
+<text x="1044" y="229.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-27</text>
 <text x="1170" y="229.7" fill="#78829b" textLength="27" lengthAdjust="spacingAndGlyphs">2.8</text>
 <text x="1206" y="229.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
 <text x="18" y="247.7" fill="#b4b9c8" textLength="18" lengthAdjust="spacingAndGlyphs">📄</text>
-<text x="45" y="247.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
 <text x="63" y="247.7" fill="#b4b9c8" textLength="108" lengthAdjust="spacingAndGlyphs">CHANGELOG.md</text>
-<text x="1044" y="247.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
-<text x="1170" y="247.7" fill="#78829b" textLength="27" lengthAdjust="spacingAndGlyphs">2.2</text>
+<text x="1044" y="247.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-27</text>
+<text x="1170" y="247.7" fill="#78829b" textLength="27" lengthAdjust="spacingAndGlyphs">2.7</text>
 <text x="1206" y="247.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
 <text x="18" y="265.7" fill="#b4b9c8" textLength="18" lengthAdjust="spacingAndGlyphs">📄</text>
-<text x="45" y="265.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
 <text x="63" y="265.7" fill="#b4b9c8" textLength="126" lengthAdjust="spacingAndGlyphs">LICENSE-APACHE</text>
 <text x="1044" y="265.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-09</text>
 <text x="1161" y="265.7" fill="#78829b" textLength="36" lengthAdjust="spacingAndGlyphs">11.1</text>
 <text x="1206" y="265.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
 <text x="18" y="283.7" fill="#b4b9c8" textLength="18" lengthAdjust="spacingAndGlyphs">📄</text>
-<text x="45" y="283.7" fill="#8c96aa" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
 <text x="63" y="283.7" fill="#b4b9c8" textLength="99" lengthAdjust="spacingAndGlyphs">LICENSE-MIT</text>
-<text x="1044" y="283.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
+<text x="1044" y="283.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-27</text>
 <text x="1170" y="283.7" fill="#78829b" textLength="27" lengthAdjust="spacingAndGlyphs">1.1</text>
 <text x="1206" y="283.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
 <text x="18" y="301.7" fill="#b4b9c8" textLength="18" lengthAdjust="spacingAndGlyphs">📄</text>
-<text x="45" y="301.7" fill="#ffc85a" textLength="9" lengthAdjust="spacingAndGlyphs">M</text>
 <text x="63" y="301.7" fill="#b4b9c8" textLength="81" lengthAdjust="spacingAndGlyphs">README.md</text>
 <text x="1044" y="301.7" fill="#646e87" textLength="90" lengthAdjust="spacingAndGlyphs">2026-09-26</text>
-<text x="1161" y="301.7" fill="#78829b" textLength="36" lengthAdjust="spacingAndGlyphs">10.1</text>
+<text x="1161" y="301.7" fill="#78829b" textLength="36" lengthAdjust="spacingAndGlyphs">10.7</text>
 <text x="1206" y="301.7" fill="#78829b" textLength="9" lengthAdjust="spacingAndGlyphs">K</text>
-<text x="18" y="715.7" fill="#8c96af" textLength="18" lengthAdjust="spacingAndGlyphs">13</text>
-<text x="45" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">items</text>
-<text x="99" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="117" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">5</text>
-<text x="135" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">hidden</text>
-<text x="198" y="715.7" fill="#8c96af" textLength="72" lengthAdjust="spacingAndGlyphs">(Ctrl+H)</text>
-<text x="279" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="297" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
-<text x="315" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="369" y="715.7" fill="#8c96af" textLength="18" lengthAdjust="spacingAndGlyphs">+0</text>
-<text x="396" y="715.7" fill="#8c96af" textLength="27" lengthAdjust="spacingAndGlyphs">~21</text>
-<text x="432" y="715.7" fill="#8c96af" textLength="18" lengthAdjust="spacingAndGlyphs">?7</text>
-<text x="486" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">/</text>
-<text x="504" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">filter</text>
-<text x="567" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="585" y="715.7" fill="#8c96af" textLength="45" lengthAdjust="spacingAndGlyphs">Space</text>
-<text x="639" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">mark</text>
-<text x="684" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="702" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">Ctrl+H</text>
-<text x="765" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">hidden</text>
-<text x="828" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="846" y="715.7" fill="#8c96af" textLength="99" lengthAdjust="spacingAndGlyphs">right-click</text>
-<text x="954" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="972" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">?</text>
-<text x="990" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">help</text>
+<text x="18" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="36" y="715.7" fill="#d2daf0" textLength="54" lengthAdjust="spacingAndGlyphs">Folder</text>
+<text x="108" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="126" y="715.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">File</text>
+<text x="189" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">⧉</text>
+<text x="216" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">✂</text>
+<text x="243" y="715.7" fill="#5a6482" textLength="18" lengthAdjust="spacingAndGlyphs">📋</text>
+<text x="288" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">✎</text>
+<text x="306" y="715.7" fill="#d2daf0" textLength="54" lengthAdjust="spacingAndGlyphs">Rename</text>
+<text x="378" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">🗑</text>
+<text x="396" y="715.7" fill="#d2daf0" textLength="54" lengthAdjust="spacingAndGlyphs">Delete</text>
+<text x="477" y="715.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">⋯</text>
+<text x="495" y="715.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">More</text>
+<text x="549" y="715.7" fill="#d2daf0" textLength="18" lengthAdjust="spacingAndGlyphs">🔍</text>
+<text x="576" y="715.7" fill="#d2daf0" textLength="54" lengthAdjust="spacingAndGlyphs">Filter</text>
+<text x="891" y="715.7" fill="#969eb9" textLength="18" lengthAdjust="spacingAndGlyphs">13</text>
+<text x="918" y="715.7" fill="#969eb9" textLength="45" lengthAdjust="spacingAndGlyphs">items</text>
+<text x="972" y="715.7" fill="#969eb9" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
+<text x="990" y="715.7" fill="#969eb9" textLength="9" lengthAdjust="spacingAndGlyphs">5</text>
+<text x="1008" y="715.7" fill="#969eb9" textLength="54" lengthAdjust="spacingAndGlyphs">hidden</text>
+<text x="1071" y="715.7" fill="#969eb9" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
+<text x="1089" y="715.7" fill="#969eb9" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
+<text x="1107" y="715.7" fill="#969eb9" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
+<text x="1161" y="715.7" fill="#969eb9" textLength="18" lengthAdjust="spacingAndGlyphs">+0</text>
+<text x="1188" y="715.7" fill="#969eb9" textLength="27" lengthAdjust="spacingAndGlyphs">~43</text>
+<text x="1224" y="715.7" fill="#969eb9" textLength="18" lengthAdjust="spacingAndGlyphs">?1</text>
 <text x="1251" y="733.7" fill="#00beff" textLength="9" lengthAdjust="spacingAndGlyphs">◢</text>
 <text x="9" y="751.7" fill="#ffffff" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⊞</text>
 <text x="27" y="751.7" fill="#ffffff" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">Start</text>
@@ -539,8 +537,8 @@
 <text x="234" y="751.7" fill="#ffffff" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs">E:\Python\tex…</text>
 <text x="1017" y="751.7" fill="#ffc85a" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
 <text x="1035" y="751.7" fill="#ffc85a" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">22:53</text>
-<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sat</text>
-<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
-<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sep</text>
+<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">23:21</text>
+<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Wed</text>
+<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
 </g></svg>

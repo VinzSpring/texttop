@@ -9,7 +9,11 @@
 <rect width="1260" height="756" fill="#0b0d14"/>
 <rect x="0" y="0" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="18" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="18" width="1242" height="18" fill="#10121c"/>
+<rect x="9" y="18" width="387" height="18" fill="#10121c"/>
+<rect x="396" y="18" width="126" height="18" fill="#161a28"/>
+<rect x="522" y="18" width="9" height="18" fill="#10121c"/>
+<rect x="531" y="18" width="81" height="18" fill="#161a28"/>
+<rect x="612" y="18" width="639" height="18" fill="#10121c"/>
 <rect x="1251" y="18" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="36" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="54" width="81" height="18" fill="#0c0e16"/>
@@ -645,16 +649,18 @@
 <text x="1215" y="13.7" fill="#78dc82" textLength="9" lengthAdjust="spacingAndGlyphs">□</text>
 <text x="1233" y="13.7" fill="#ff5f5f" textLength="9" lengthAdjust="spacingAndGlyphs">✕</text>
 <text x="27" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">⌂</text>
-<text x="63" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
-<text x="81" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Session</text>
-<text x="171" y="31.7" fill="#ffdc5a" textLength="9" lengthAdjust="spacingAndGlyphs">2</text>
-<text x="189" y="31.7" fill="#ffdc5a" textLength="63" lengthAdjust="spacingAndGlyphs">Arrange</text>
-<text x="279" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">3</text>
-<text x="297" y="31.7" fill="#828aa0" textLength="45" lengthAdjust="spacingAndGlyphs">Piano</text>
-<text x="369" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">124</text>
-<text x="405" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">BPM</text>
-<text x="450" y="31.7" fill="#dce0ec" textLength="54" lengthAdjust="spacingAndGlyphs">record</text>
-<text x="513" y="31.7" fill="#dce0ec" textLength="27" lengthAdjust="spacingAndGlyphs">off</text>
+<text x="63" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Session</text>
+<text x="153" y="31.7" fill="#ffdc5a" textLength="63" lengthAdjust="spacingAndGlyphs">Arrange</text>
+<text x="243" y="31.7" fill="#828aa0" textLength="45" lengthAdjust="spacingAndGlyphs">Piano</text>
+<text x="315" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">124</text>
+<text x="351" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">BPM</text>
+<text x="405" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="423" y="31.7" fill="#dce0ec" textLength="45" lengthAdjust="spacingAndGlyphs">Place</text>
+<text x="477" y="31.7" fill="#dce0ec" textLength="36" lengthAdjust="spacingAndGlyphs">clip</text>
+<text x="540" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
+<text x="558" y="31.7" fill="#dce0ec" textLength="45" lengthAdjust="spacingAndGlyphs">Track</text>
+<text x="630" y="31.7" fill="#dce0ec" textLength="54" lengthAdjust="spacingAndGlyphs">record</text>
+<text x="693" y="31.7" fill="#dce0ec" textLength="27" lengthAdjust="spacingAndGlyphs">off</text>
 <text x="81" y="49.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
 <text x="189" y="49.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">5</text>
 <text x="297" y="49.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">9</text>
@@ -679,7 +685,7 @@
 <text x="99" y="661.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">●</text>
 <text x="135" y="661.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">−</text>
 <text x="171" y="661.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">+</text>
-<text x="207" y="661.7" fill="#00beff" textLength="54" lengthAdjust="spacingAndGlyphs">001.12</text>
+<text x="207" y="661.7" fill="#00beff" textLength="54" lengthAdjust="spacingAndGlyphs">001.11</text>
 <text x="270" y="661.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">ARR</text>
 <text x="324" y="661.7" fill="#ffdc5a" textLength="36" lengthAdjust="spacingAndGlyphs">Save</text>
 <text x="387" y="661.7" fill="#00beff" textLength="54" lengthAdjust="spacingAndGlyphs">Export</text>
@@ -727,8 +733,8 @@
 <text x="315" y="751.7" fill="#ffffff" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">unti…</text>
 <text x="1017" y="751.7" fill="#ffc85a" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
 <text x="1035" y="751.7" fill="#ffc85a" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">22:54</text>
-<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sat</text>
-<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
-<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sep</text>
+<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">23:22</text>
+<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Wed</text>
+<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
 </g></svg>

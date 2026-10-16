@@ -9,7 +9,17 @@
 <rect width="1260" height="756" fill="#0b0d14"/>
 <rect x="0" y="0" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="18" width="9" height="18" fill="#0c0e16"/>
-<rect x="9" y="18" width="1242" height="18" fill="#10121c"/>
+<rect x="9" y="18" width="387" height="18" fill="#10121c"/>
+<rect x="396" y="18" width="72" height="18" fill="#161a28"/>
+<rect x="468" y="18" width="9" height="18" fill="#10121c"/>
+<rect x="477" y="18" width="72" height="18" fill="#161a28"/>
+<rect x="549" y="18" width="9" height="18" fill="#10121c"/>
+<rect x="558" y="18" width="63" height="18" fill="#161a28"/>
+<rect x="621" y="18" width="9" height="18" fill="#10121c"/>
+<rect x="630" y="18" width="63" height="18" fill="#161a28"/>
+<rect x="693" y="18" width="9" height="18" fill="#10121c"/>
+<rect x="702" y="18" width="72" height="18" fill="#161a28"/>
+<rect x="774" y="18" width="477" height="18" fill="#10121c"/>
 <rect x="1251" y="18" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="36" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="54" width="1260" height="18" fill="#0c0e16"/>
@@ -1247,28 +1257,21 @@
 <text x="1215" y="13.7" fill="#78dc82" textLength="9" lengthAdjust="spacingAndGlyphs">□</text>
 <text x="1233" y="13.7" fill="#ff5f5f" textLength="9" lengthAdjust="spacingAndGlyphs">✕</text>
 <text x="27" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">⌂</text>
-<text x="63" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
-<text x="81" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Session</text>
-<text x="171" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">2</text>
-<text x="189" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Arrange</text>
-<text x="279" y="31.7" fill="#ffdc5a" textLength="9" lengthAdjust="spacingAndGlyphs">3</text>
-<text x="297" y="31.7" fill="#ffdc5a" textLength="45" lengthAdjust="spacingAndGlyphs">Piano</text>
-<text x="369" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">124</text>
-<text x="405" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">BPM</text>
-<text x="450" y="31.7" fill="#828aa0" textLength="45" lengthAdjust="spacingAndGlyphs">click</text>
-<text x="504" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">toggles</text>
-<text x="576" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="594" y="31.7" fill="#828aa0" textLength="36" lengthAdjust="spacingAndGlyphs">drag</text>
-<text x="639" y="31.7" fill="#828aa0" textLength="81" lengthAdjust="spacingAndGlyphs">stretches</text>
-<text x="729" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="747" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">[</text>
-<text x="765" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">]</text>
-<text x="783" y="31.7" fill="#828aa0" textLength="54" lengthAdjust="spacingAndGlyphs">length</text>
-<text x="846" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="864" y="31.7" fill="#828aa0" textLength="45" lengthAdjust="spacingAndGlyphs">wheel</text>
-<text x="918" y="31.7" fill="#828aa0" textLength="45" lengthAdjust="spacingAndGlyphs">pitch</text>
-<text x="972" y="31.7" fill="#828aa0" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="990" y="31.7" fill="#828aa0" textLength="27" lengthAdjust="spacingAndGlyphs">Esc</text>
+<text x="63" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Session</text>
+<text x="153" y="31.7" fill="#828aa0" textLength="63" lengthAdjust="spacingAndGlyphs">Arrange</text>
+<text x="243" y="31.7" fill="#ffdc5a" textLength="45" lengthAdjust="spacingAndGlyphs">Piano</text>
+<text x="315" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">124</text>
+<text x="351" y="31.7" fill="#00beff" textLength="27" lengthAdjust="spacingAndGlyphs">BPM</text>
+<text x="405" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">◂</text>
+<text x="423" y="31.7" fill="#dce0ec" textLength="36" lengthAdjust="spacingAndGlyphs">Note</text>
+<text x="486" y="31.7" fill="#dce0ec" textLength="36" lengthAdjust="spacingAndGlyphs">Note</text>
+<text x="531" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">▸</text>
+<text x="567" y="31.7" fill="#dce0ec" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
+<text x="603" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">▲</text>
+<text x="639" y="31.7" fill="#dce0ec" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
+<text x="675" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">▼</text>
+<text x="711" y="31.7" fill="#dce0ec" textLength="9" lengthAdjust="spacingAndGlyphs">⟲</text>
+<text x="729" y="31.7" fill="#dce0ec" textLength="36" lengthAdjust="spacingAndGlyphs">Loop</text>
 <text x="27" y="49.7" fill="#00beff" textLength="36" lengthAdjust="spacingAndGlyphs">Stab</text>
 <text x="81" y="49.7" fill="#00beff" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
 <text x="108" y="49.7" fill="#00beff" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
@@ -1354,8 +1357,8 @@
 <text x="315" y="751.7" fill="#ffffff" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">unti…</text>
 <text x="1017" y="751.7" fill="#ffc85a" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
 <text x="1035" y="751.7" fill="#ffc85a" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">22:54</text>
-<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sat</text>
-<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
-<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sep</text>
+<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">23:21</text>
+<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Wed</text>
+<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
 </g></svg>

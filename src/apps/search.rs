@@ -9,11 +9,24 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, Mo
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::scroll::{self, ScrollState};
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Query,
+    Search,
+    ChangeRoot,
+    ParentRoot,
+    RootOk,
+    RootCancel,
+    Open,
+    OpenFolder,
+    CopyPath,
+}
 
 struct Hit {
     path: PathBuf,
@@ -34,6 +47,7 @@ pub struct SearchApp {
     status: String,
     use_rg: bool,
     last_click: Option<(std::time::Instant, usize)>,
+    ui: Controls<Cmd>,
 }
 
 impl SearchApp {
@@ -59,12 +73,13 @@ impl SearchApp {
             scroll: ScrollState::default(),
             view_h: 20,
             status: if use_rg {
-                "ripgrep ready · type query · Enter search".into()
+                "type what to look for, then Search (uses ripgrep)".into()
             } else {
-                "builtin walk · type query · Enter search".into()
+                "type what to look for, then Search".into()
             },
             use_rg,
             last_click: None,
+            ui: Controls::new(),
         }
     }
 
@@ -82,6 +97,49 @@ impl SearchApp {
         } else {
             self.status = format!("not a folder: {}", p.display());
         }
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        let hit = self.hits.get(self.sel).map(|h| h.path.clone());
+        match c {
+            Cmd::Query => {
+                self.root_input = None;
+                self.editing = true;
+            }
+            Cmd::Search => self.run_search(),
+            Cmd::ChangeRoot => {
+                self.root_input = Some(self.root.to_string_lossy().to_string());
+            }
+            Cmd::ParentRoot => {
+                if let Some(p) = self.root.parent() {
+                    self.root_input = Some(p.to_string_lossy().to_string());
+                    self.commit_root();
+                }
+            }
+            Cmd::RootOk => self.commit_root(),
+            Cmd::RootCancel => self.root_input = None,
+            Cmd::Open => {
+                if let Some(p) = hit {
+                    return Action::Launch(Launch::Editor(Some(p)));
+                }
+            }
+            Cmd::OpenFolder => {
+                if let Some(dir) = hit.as_ref().and_then(|p| p.parent()) {
+                    return Action::Launch(Launch::Files(dir.to_path_buf()));
+                }
+            }
+            Cmd::CopyPath => {
+                if let Some(p) = hit {
+                    crate::clipboard::copy(&p.to_string_lossy());
+                    self.status = "path copied".into();
+                }
+            }
+        }
+        Action::None
+    }
+
+    fn body(area: Rect) -> Rect {
+        Rect::new(area.x, area.y + 2, area.width, area.height.saturating_sub(3))
     }
 
     fn run_search(&mut self) {
@@ -216,33 +274,59 @@ impl AppWindow for SearchApp {
         if area.height < 3 {
             return;
         }
-        let active = self.editing || self.root_input.is_some();
-        let q_style = if active {
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Rgb(40, 70, 110))
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::Rgb(200, 210, 230)).bg(Color::Rgb(28, 36, 62))
-        };
-        let qline = if let Some(input) = &self.root_input {
-            format!(" 📂 {input}█  Enter set root · Esc cancel ")
-        } else if self.editing {
-            format!(" 🔍 {}█  in {} ", self.query, self.root.display())
-        } else {
-            format!(" 🔍 {}  in {} ", self.query, self.root.display())
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(qline, q_style)).style(q_style),
+        self.ui.begin();
+        let buf = f.buffer_mut();
+        // row 0: the query field and its button
+        let field = self.ui.toolbar(
+            buf,
             Rect::new(area.x, area.y, area.width, 1),
+            &[],
+            &[
+                Item::with("🔍 Search", Cmd::Search, Look::enabled_if(!self.query.trim().is_empty())),
+                Item::with("Open", Cmd::Open, Look::enabled_if(!self.hits.is_empty())),
+            ],
         );
+        let fbg = if self.editing { Color::Rgb(12, 16, 30) } else { Color::Rgb(18, 22, 38) };
+        let fr = Rect::new(field.x + 1, field.y, field.width.saturating_sub(2), 1);
+        ui::fill_row(buf, fr, fbg);
+        let text = if self.query.is_empty() && !self.editing {
+            Span::styled(" find in files…", Style::default().fg(ui::DIM).bg(fbg))
+        } else {
+            let caret = if self.editing { "▏" } else { "" };
+            Span::styled(format!(" {}{caret}", self.query), Style::default().fg(Color::White).bg(fbg))
+        };
+        let shown: String = text.content.chars().take(fr.width as usize).collect();
+        buf.set_string(fr.x, fr.y, shown, text.style);
+        self.ui.add(fr, Cmd::Query);
 
-        let body = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
-        );
+        // row 1: where to search
+        let root_row = Rect::new(area.x, area.y + 1, area.width, 1);
+        if let Some(input) = &self.root_input {
+            self.ui
+                .input_row(buf, root_row, "Search in", input, ("Set", Cmd::RootOk), Cmd::RootCancel);
+        } else {
+            let room = area.width.saturating_sub(24) as usize;
+            let root = self.root.display().to_string();
+            let root = if root.chars().count() > room {
+                let skip = root.chars().count() - room.saturating_sub(1);
+                format!("…{}", root.chars().skip(skip).collect::<String>())
+            } else {
+                root
+            };
+            self.ui.toolbar(
+                buf,
+                root_row,
+                &[
+                    Item::Label(format!(" in 📁 {root}"), Color::Rgb(170, 180, 205)),
+                ],
+                &[
+                    Item::btn("⬆", Cmd::ParentRoot),
+                    Item::btn("Change…", Cmd::ChangeRoot),
+                ],
+            );
+        }
+
+        let body = Self::body(area);
         let sel_bg = Color::Rgb(0, 90, 140);
         let lines: Vec<Line> = if self.hits.is_empty() {
             vec![Line::from(Span::styled(
@@ -285,23 +369,20 @@ impl AppWindow for SearchApp {
         scroll::render_scrollable(f, body, &lines, &mut self.scroll);
         let _ = n;
 
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(
-                    " {} │ / query · Enter search/open · dbl-click open · Ctrl+L root · q ",
-                    self.status
-                ),
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+        ui::status_bar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            &self.status,
         );
+        self.ui.render_menu(f.buffer_mut(), area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        if self.ui.menu_open() && k.code == KeyCode::Esc {
+            self.ui.close_menu();
+            return Action::None;
+        }
         // root path editing takes over the input line
         if self.root_input.is_some() {
             match k.code {
@@ -359,8 +440,13 @@ impl AppWindow for SearchApp {
                 }
             }
             KeyCode::F(5) => self.run_search(),
-            KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
-            _ => {}
+            KeyCode::Esc => return Action::Close,
+            // typing goes to the search field, like any search box
+            _ => {
+                if super::text_edit(&mut self.query, k) {
+                    self.editing = true;
+                }
+            }
         }
         Action::None
     }
@@ -375,15 +461,36 @@ impl AppWindow for SearchApp {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
-        let body = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
-        );
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
+        if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+            && self.scroll.on_mouse(m, self.hits.len(), self.view_h)
+        {
+            let top = self.scroll.offset as usize;
+            let bottom = (top + self.view_h as usize).saturating_sub(1);
+            self.sel = self.sel.clamp(top, bottom.max(top)).min(self.hits.len().saturating_sub(1));
+            return Action::None;
+        }
+        let body = Self::body(area);
         match m.kind {
-            MouseEventKind::Down(MouseButton::Left) if m.row == area.y => {
-                self.editing = true;
+            MouseEventKind::Down(MouseButton::Right)
+                if m.row >= body.y && m.row < body.y + body.height =>
+            {
+                let idx = self.scroll.offset as usize + (m.row - body.y) as usize;
+                if idx < self.hits.len() {
+                    self.sel = idx;
+                    self.ui.open_menu(
+                        m.column,
+                        m.row,
+                        vec![
+                            ("Open in editor".into(), Some(Cmd::Open)),
+                            ("Show in Files".into(), Some(Cmd::OpenFolder)),
+                            (String::new(), None),
+                            ("Copy path".into(), Some(Cmd::CopyPath)),
+                        ],
+                    );
+                }
             }
             MouseEventKind::Down(MouseButton::Left)
                 if m.row >= body.y && m.row < body.y + body.height =>
@@ -391,6 +498,7 @@ impl AppWindow for SearchApp {
                 let idx = self.scroll.offset as usize + (m.row - body.y) as usize;
                 if idx < self.hits.len() {
                     self.sel = idx;
+                    self.editing = false;
                     let now = std::time::Instant::now();
                     let dbl = matches!(self.last_click, Some((t, li))
                         if li == idx && now.duration_since(t).as_millis() < 450);

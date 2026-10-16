@@ -71,6 +71,22 @@ pub fn init_env() -> PathBuf {
 /// swaps. Without this, tests running in parallel would see each other's mode.
 static MODE_LOCK: Mutex<()> = Mutex::new(());
 
+/// Run `f` against the shared snapshot profile while holding the env lock.
+///
+/// `clean` deletes the saved desktop and session first, so `Desktop::new`
+/// sees a first launch. The lock covers that check and any files it writes;
+/// otherwise a parallel desktop test would observe a half-written profile.
+pub fn with_profile<T>(clean: bool, f: impl FnOnce(&std::path::Path) -> T) -> T {
+    let home = init_env();
+    let _guard = MODE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if clean {
+        for name in [".texttop_desktop.json", ".texttop_session.json"] {
+            let _ = std::fs::remove_file(home.join(name));
+        }
+    }
+    f(&home)
+}
+
 /// Render exactly the way `main` does for a terminal of the given capability:
 /// draw with the color mode pinned, then fold the finished frame down to the
 /// 256 palette.

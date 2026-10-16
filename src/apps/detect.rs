@@ -9,12 +9,13 @@ use ratatui::crossterm::event::{
 };
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use super::pin::{PinTo, PinnedApp};
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
 
 const BG: Color = Color::Rgb(12, 14, 22);
@@ -631,6 +632,13 @@ pub fn scan_known_apps(already: &HashSet<String>) -> Vec<DetectedApp> {
 
 // ── chooser UI ───────────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, PartialEq)]
+enum Btn {
+    All,
+    Add,
+    Cancel,
+}
+
 pub struct DetectedAppsChooser {
     apps: Vec<DetectedApp>,
     /// Selected for pinning.
@@ -638,6 +646,7 @@ pub struct DetectedAppsChooser {
     sel: usize,
     scroll: usize,
     view_h: usize,
+    ui: Controls<Btn>,
 }
 
 impl DetectedAppsChooser {
@@ -650,6 +659,7 @@ impl DetectedAppsChooser {
             sel: 0,
             scroll: 0,
             view_h: 12,
+            ui: Controls::new(),
         }
     }
 
@@ -729,17 +739,33 @@ impl AppWindow for DetectedAppsChooser {
             }
         }
 
-        let hint = Line::from(vec![
-            Span::styled(" ↑↓ ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("move  ", Style::default().fg(DIM)),
-            Span::styled("Space ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("toggle  ", Style::default().fg(DIM)),
-            Span::styled("a ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("all  ", Style::default().fg(DIM)),
-            Span::styled("Enter ", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("add to desktop", Style::default().fg(DIM)),
-        ]);
-        f.render_widget(Paragraph::new(hint), Rect::new(area.x, area.y, area.width, 1));
+        self.ui.begin();
+        let all_on = !self.checked.is_empty() && self.checked.iter().all(|&c| c);
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &[Item::Label(" Tick the tools to put on your desktop".into(), FG)],
+            &[Item::with(
+                if all_on { "☐ Select none" } else { "☑ Select all" },
+                Btn::All,
+                Look::enabled_if(!self.apps.is_empty()),
+            )],
+        );
+        let n = self.checked_count();
+        let add = if n == 0 {
+            "📌 Add to desktop".to_string()
+        } else {
+            format!("📌 Add {n} to desktop")
+        };
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y + area.height.saturating_sub(1), area.width, 1),
+            &[],
+            &[
+                Item::with(add, Btn::Add, if n > 0 { Look::Primary } else { Look::Disabled }),
+                Item::with("Cancel", Btn::Cancel, Look::Raised),
+            ],
+        );
 
         if self.apps.is_empty() {
             f.render_widget(
@@ -790,7 +816,7 @@ impl AppWindow for DetectedAppsChooser {
             let y = list_top + row;
             let on = self.checked.get(i).copied().unwrap_or(false);
             let selected = i == self.sel;
-            let mark = if on { "[x]" } else { "[ ]" };
+            let mark = if on { "☑" } else { "☐" };
             let path = app.program.to_string_lossy();
             let path_short = if path.chars().count() > 36 {
                 format!(
@@ -824,18 +850,6 @@ impl AppWindow for DetectedAppsChooser {
             );
             row += 1;
         }
-
-        let foot = Line::from(vec![
-            Span::styled("  ", Style::default().bg(BG)),
-            Span::styled(
-                format!("{} selected · Esc cancel", self.checked_count()),
-                Style::default().fg(DIM).bg(BG),
-            ),
-        ]);
-        f.render_widget(
-            Paragraph::new(foot),
-            Rect::new(area.x, area.y + area.height.saturating_sub(1), area.width, 1),
-        );
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -881,6 +895,16 @@ impl AppWindow for DetectedAppsChooser {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        match self.ui.route(&m) {
+            Some(Some(Btn::All)) => {
+                self.toggle_all();
+                return Action::None;
+            }
+            Some(Some(Btn::Add)) => return self.apply(),
+            Some(Some(Btn::Cancel)) => return Action::Close,
+            Some(None) => return Action::None,
+            None => {}
+        }
         match m.kind {
             MouseEventKind::ScrollUp => {
                 self.move_sel(-1);

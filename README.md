@@ -48,7 +48,7 @@ window big. Set `TEXTTOP_TRUECOLOR=1` or `0` to override the auto-detect.
 </tr>
 </table>
 
-More in the **[handbook](docs/HANDBOOK.md)** — every app, pictured, with its keys.
+More in the **[handbook](docs/HANDBOOK.md)** — every app, pictured and explained.
 
 <!-- screenshots:end -->
 
@@ -80,6 +80,24 @@ cargo build --release --no-default-features
 ```
 The web/video engine needs a graphical session on Linux (X11/Wayland);
 on headless boxes use `xvfb-run`.
+
+## Testing
+
+`cargo test` runs the unit tests and the golden render tests
+(`UPDATE_SNAPSHOTS=1 cargo test` accepts intended changes to the pictures).
+
+To check that everything builds, renders and works on Linux — from any OS with
+Docker:
+```
+docker build -f tests/linux/Dockerfile -t texttop-linux-test .
+docker run --rm -v "$PWD/target/linux-e2e:/out" texttop-linux-test
+```
+The container builds with every default feature (WebKitGTK, ALSA), runs
+`cargo test` under a virtual X server, then drives the real binary in a
+pseudo-terminal (`tests/linux/e2e.py`): desktop, Run app here, the IDE app
+group, tabs, the directory watcher, a web page through WebKitGTK, the folder
+picker, App Groups settings and Contribute's clone. Each step's screen is
+saved in `target/linux-e2e`. Add `-e E2E_NO_NETWORK=1` to skip the clone.
 
 ## Known limitations
 

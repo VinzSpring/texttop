@@ -11,7 +11,15 @@ use ratatui::Frame;
 
 use super::scroll::{self, ScrollState};
 use super::snaputil::{self, DiffKind, DiffLine};
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Swap,
+    SetA(usize),
+    SetB(usize),
+}
 
 pub struct CompareApp {
     paths: Vec<PathBuf>,
@@ -23,6 +31,7 @@ pub struct CompareApp {
     scroll: ScrollState,
     status: String,
     view_h: u16,
+    ui: Controls<Cmd>,
 }
 
 impl CompareApp {
@@ -42,6 +51,7 @@ impl CompareApp {
             scroll: ScrollState::default(),
             status: String::new(),
             view_h: 20,
+            ui: Controls::new(),
             paths,
         };
         if app.paths.len() < 2 {
@@ -88,6 +98,25 @@ impl CompareApp {
             }
         }
         self.scroll.offset = 0;
+    }
+
+    fn run(&mut self, c: Cmd) {
+        match c {
+            Cmd::Swap => std::mem::swap(&mut self.left, &mut self.right),
+            Cmd::SetA(i) => {
+                if i == self.right {
+                    self.right = self.left;
+                }
+                self.left = i;
+            }
+            Cmd::SetB(i) => {
+                if i == self.left {
+                    self.left = self.right;
+                }
+                self.right = i;
+            }
+        }
+        self.recompute();
     }
 
     fn colored_lines(&self) -> Vec<Line<'static>> {
@@ -141,20 +170,17 @@ impl AppWindow for CompareApp {
         );
         let footer = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
 
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                format!(
-                    " ↔ Compare  A:{}  B:{} ",
-                    self.label(self.left),
-                    self.label(self.right)
-                ),
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(36, 48, 72))
-                    .add_modifier(Modifier::BOLD),
-            )))
-            .style(Style::default().bg(Color::Rgb(36, 48, 72))),
+        self.ui.begin();
+        let ready = self.paths.len() >= 2;
+        self.ui.toolbar(
+            f.buffer_mut(),
             header,
+            &[
+                Item::Label(format!(" A: {}", self.label(self.left)), Color::Rgb(255, 120, 120)),
+                Item::with("⇄ Swap", Cmd::Swap, Look::enabled_if(ready)),
+                Item::Label(format!("B: {}", self.label(self.right)), Color::Rgb(120, 220, 140)),
+            ],
+            &[],
         );
 
         let diff_area = if list_w > 0 {
@@ -165,15 +191,6 @@ impl AppWindow for CompareApp {
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| p.display().to_string());
-                let tag = if i == self.left && i == self.right {
-                    "AB"
-                } else if i == self.left {
-                    "A "
-                } else if i == self.right {
-                    "B "
-                } else {
-                    "  "
-                };
                 let selected = i == self.list_sel && self.focus_list;
                 let base = if selected && focused {
                     Style::default().fg(Color::White).bg(Color::Rgb(0, 96, 150))
@@ -182,12 +199,21 @@ impl AppWindow for CompareApp {
                 } else {
                     Style::default().fg(Color::Rgb(180, 185, 200))
                 };
-                lines.push(Line::from(Span::styled(format!(" {tag} {name}"), base)));
+                // two chips per row pick the sides; the name follows
+                lines.push(Line::from(Span::styled(format!("        {name}"), base)));
             }
             f.render_widget(
                 Paragraph::new(lines).style(Style::default().bg(Color::Rgb(18, 22, 36))),
                 list_area,
             );
+            let buf = f.buffer_mut();
+            for i in 0..self.paths.len().min(list_area.height as usize) {
+                let y = list_area.y + i as u16;
+                let a = if i == self.left { Look::Danger } else { Look::Raised };
+                let b = if i == self.right { Look::Primary } else { Look::Raised };
+                let w = self.ui.button(buf, list_area.x, y, "A", Cmd::SetA(i), a);
+                self.ui.button(buf, list_area.x + w + 1, y, "B", Cmd::SetB(i), b);
+            }
             let div = Rect::new(body.x + list_w, body.y, 1, body.height);
             let div_lines: Vec<Line> = (0..body.height)
                 .map(|_| {
@@ -215,21 +241,7 @@ impl AppWindow for CompareApp {
         let lines = self.colored_lines();
         scroll::render_scrollable(f, diff_area, &lines, &mut self.scroll);
 
-        let hint = if self.paths.len() > 2 {
-            " ↑↓ pick · a/b set sides · Tab focus · wheel scroll · q "
-        } else {
-            " ↑↓/PgUp/PgDn scroll · q quit "
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {} │{hint}", self.status),
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
-            footer,
-        );
+        ui::status_bar(f.buffer_mut(), footer, &self.status);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -292,6 +304,12 @@ impl AppWindow for CompareApp {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            if let Some(c) = hit {
+                self.run(c);
+            }
+            return Action::None;
+        }
         let list_w = if self.paths.len() > 2 {
             area.width.min(28).max(16)
         } else {

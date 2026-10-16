@@ -14,9 +14,8 @@ use ratatui::crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::style::Color;
+use ratatui::widgets::Clear;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -74,6 +73,30 @@ enum Palette {
     NewTrack,
 }
 
+/// Buttons in the header that act on the current selection.
+#[derive(Clone, Copy)]
+enum Act {
+    LaunchCell,
+    StopTrack,
+    NewClip,
+    Duplicate,
+    ClearCell,
+    LaunchScene,
+    AddTrack,
+    MuteTrack,
+    DeleteTrack,
+    PlaceArr,
+    ShorterArr,
+    LongerArr,
+    DeleteArr,
+    ShorterNote,
+    LongerNote,
+    OctaveUp,
+    OctaveDown,
+    Loop,
+    Back,
+}
+
 #[derive(Clone)]
 enum Hit {
     Template(usize),
@@ -100,6 +123,7 @@ enum Hit {
     ArrEmpty { track: usize, bar: u32 },
     PianoCell { row: u16, step: u16 },
     Browser(usize),
+    Act(Act),
 }
 
 /// Arrange lane geometry from the last render (for drag math).
@@ -127,7 +151,6 @@ pub struct Studio {
     /// View to return to when leaving the template screen.
     back_view: Option<View>,
     dirty: bool,
-    help: bool,
     status: String,
     message_ticks: u16,
     confirm: Option<(&'static str, u16)>,
@@ -171,14 +194,13 @@ impl Studio {
         let engine = Engine::start(project.clone());
         let status = status
             .or_else(|| engine.error.clone())
-            .unwrap_or_else(|| "pick a template · Space play · ? help".into());
+            .unwrap_or_else(|| "pick a template to start".into());
         let mut s = Studio {
             engine,
             path: None,
             view,
             back_view: None,
             dirty: false,
-            help: false,
             status,
             message_ticks: MSG_TICKS,
             confirm: None,
@@ -283,7 +305,7 @@ impl Studio {
         self.dirty = true;
         self.view = View::Session;
         self.back_view = None;
-        self.say(format!("{} — tap clips, Space to play, E to export", t.name));
+        self.say(format!("{} — tap clips to launch them, ▶ plays everything", t.name));
     }
 
     fn set_view(&mut self, v: View) {
@@ -423,7 +445,7 @@ impl Studio {
         self.sel_track = track;
         self.selected_clip = Some(id);
         self.palette = None;
-        self.say(format!("placed {name} — Enter launches, 3 edits"));
+        self.say(format!("placed {name} — click it to launch"));
     }
 
     fn new_empty_clip(&mut self, scene: usize, track: usize) {
@@ -518,7 +540,7 @@ impl Studio {
             self.say("a project needs at least one track");
             return;
         }
-        if !self.confirmed("deltrack", &format!("delete track {name}? press x again")) {
+        if !self.confirmed("deltrack", &format!("delete track {name}? click 🗑 again")) {
             return;
         }
         self.stop_track(t);
@@ -676,7 +698,7 @@ impl Studio {
                 self.sel_scene = scene;
                 self.sel_track = t;
                 self.selected_clip = Some(id);
-                self.say(format!("dropped {name} into S{} — Enter to launch", scene + 1));
+                self.say(format!("dropped {name} into S{} — click it to launch", scene + 1));
             }
             None => self.say("no free sampler cell and track limit reached"),
         }
@@ -958,15 +980,6 @@ impl Studio {
         }
     }
 
-    fn hint(&self) -> &'static str {
-        match self.view {
-            View::Session => "click a cell · Enter launch · n new · d dup · a add track · ? help",
-            View::Arrange => "click lane places selected clip · drag moves · [ ] length · Del",
-            View::Piano => "click toggles · drag stretches · [ ] length · wheel pitch · Esc",
-            View::Home => "pick a template",
-        }
-    }
-
     fn push_hit(&mut self, r: Rect, h: Hit) {
         let r = r.intersection(clip_rect());
         if r.width > 0 && r.height > 0 {
@@ -1083,10 +1096,6 @@ impl AppWindow for Studio {
         }
         fill(f, area, BG);
 
-        if self.help {
-            self.render_help(f, area);
-            return;
-        }
         if self.view == View::Home {
             self.render_home(f, area);
             return;
@@ -1117,10 +1126,6 @@ impl AppWindow for Studio {
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
-        if self.help {
-            self.help = false;
-            return Action::None;
-        }
         if let Some(pal) = self.palette {
             let n = self.palette_items(pal).len();
             match k.code {
@@ -1151,7 +1156,6 @@ impl AppWindow for Studio {
                     }
                 }
                 KeyCode::Char('q') => return self.close(),
-                KeyCode::Char('?') => self.help = true,
                 _ => {}
             }
             return Action::None;
@@ -1173,7 +1177,6 @@ impl AppWindow for Studio {
                     self.say("preset disarmed");
                 }
             }
-            KeyCode::Char('?') => self.help = true,
             KeyCode::Char(' ') => self.toggle_play(),
             KeyCode::Char('r') | KeyCode::Char('R') if !ctrl => self.toggle_record(),
             KeyCode::Char('s') | KeyCode::Char('S') => self.save(),
@@ -1233,10 +1236,6 @@ impl AppWindow for Studio {
             .map(|(_, h)| h.clone());
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                if self.help {
-                    self.help = false;
-                    return Action::None;
-                }
                 if self.palette.is_some() && !matches!(hit, Some(Hit::PaletteItem(_))) {
                     self.palette = None;
                     return Action::None;
@@ -1371,7 +1370,7 @@ impl AppWindow for Studio {
 
 impl Studio {
     fn close(&mut self) -> Action {
-        if self.dirty && !self.confirmed("quit", "unsaved changes — press q again to discard (s saves)")
+        if self.dirty && !self.confirmed("quit", "unsaved changes — close again to discard them, or 💾 save first")
         {
             return Action::None;
         }
@@ -1537,6 +1536,7 @@ impl Studio {
 
     fn handle_hit(&mut self, h: Hit, col: u16) {
         match h {
+            Hit::Act(a) => self.run_act(a),
             Hit::Template(i) => self.apply_template(i),
             Hit::View(v) => self.set_view(v),
             Hit::Home => {
@@ -1649,7 +1649,7 @@ impl Studio {
             f,
             area.x + 2,
             area.y + 1,
-            " session clips · piano roll · arrange · one-tap FX · E export ",
+            " session clips · piano roll · arrange · one-tap FX · WAV export ",
             DIM,
             BG,
         );
@@ -1678,17 +1678,21 @@ impl Studio {
             put(f, x + 1, y + 3, t.blurb, DIM, bg);
             self.push_hit(rect, Hit::Template(i));
         }
-        let back = if self.back_view.is_some() { " · Esc back" } else { "" };
         let msg = if self.message_ticks > 0 {
             self.status.clone()
         } else {
-            format!("1–6 pick · drop a .ttstudio or sample · q close{back}")
+            "click a template · or drop a .ttstudio project or a sample".to_string()
         };
+        let y = area.y + area.height.saturating_sub(1);
+        let mut x = area.x + 2;
+        if self.back_view.is_some() {
+            x += self.act_button(f, x, y, "◀ Back", Act::Back);
+        }
         put(
             f,
-            area.x + 2,
-            area.y + area.height.saturating_sub(1),
-            &clip_label(&msg, area.width.saturating_sub(4) as usize),
+            x,
+            y,
+            &clip_label(&msg, (area.x + area.width).saturating_sub(x + 2) as usize),
             if self.confirm.is_some() { SEL } else { DIM },
             BG,
         );
@@ -1701,9 +1705,9 @@ impl Studio {
         self.push_hit(Rect::new(x, r.y, 3, 1), Hit::Home);
         x += 4;
         let tabs = [
-            (View::Session, "1 Session"),
-            (View::Arrange, "2 Arrange"),
-            (View::Piano, "3 Piano"),
+            (View::Session, "Session"),
+            (View::Arrange, "Arrange"),
+            (View::Piano, "Piano"),
         ];
         for (v, label) in tabs {
             let on = self.view == v;
@@ -1717,14 +1721,120 @@ impl Studio {
         let bpm_s = format!("{bpm:.0} BPM");
         put(f, x + 1, r.y, &bpm_s, ACCENT, BAR_BG);
         x += bpm_s.width() as u16 + 3;
-        let (msg, fg) = if self.message_ticks > 0 {
+        // what can be done with the selection, as buttons
+        let end = r.x + r.width;
+        for (label, act) in self.actions() {
+            let w = label.width() as u16 + 2;
+            if x + w + 1 > end {
+                break;
+            }
+            x += self.act_button(f, x, r.y, label, act) + 1;
+        }
+        if self.message_ticks > 0 {
             let fg = if self.confirm.is_some() { SEL } else { FG };
-            (self.status.as_str(), fg)
-        } else {
-            (self.hint(), DIM)
-        };
-        let room = (r.x + r.width).saturating_sub(x + 1) as usize;
-        put(f, x, r.y, &clip_label(msg, room), fg, BAR_BG);
+            let room = end.saturating_sub(x + 1) as usize;
+            put(f, x + 1, r.y, &clip_label(&self.status, room), fg, BAR_BG);
+        }
+    }
+
+    /// One header button; returns its width.
+    fn act_button(&mut self, f: &mut Frame, x: u16, y: u16, label: &str, act: Act) -> u16 {
+        let w = label.width() as u16 + 2;
+        put(f, x, y, &format!(" {label} "), FG, PANEL);
+        self.push_hit(Rect::new(x, y, w, 1), Hit::Act(act));
+        w
+    }
+
+    /// Header actions for the current view and selection.
+    fn actions(&self) -> Vec<(&'static str, Act)> {
+        match self.view {
+            View::Session => {
+                let (sc, tr) = (self.sel_scene, self.sel_track);
+                let mut v = Vec::new();
+                match self.cell(sc, tr) {
+                    Some(id) if self.is_launched(tr, &id) => v.push(("■ Stop clip", Act::StopTrack)),
+                    Some(_) => {
+                        v.push(("▶ Launch", Act::LaunchCell));
+                        v.push(("⧉ Duplicate", Act::Duplicate));
+                        v.push(("✕ Clear", Act::ClearCell));
+                    }
+                    None => v.push(("+ New clip", Act::NewClip)),
+                }
+                v.push(("▶ Scene", Act::LaunchScene));
+                v.push(("+ Track", Act::AddTrack));
+                v.push(("🔇 Mute", Act::MuteTrack));
+                v.push(("🗑 Track", Act::DeleteTrack));
+                v
+            }
+            View::Arrange => {
+                if self.sel_arr.is_some() {
+                    vec![
+                        ("◂ Shorter", Act::ShorterArr),
+                        ("Longer ▸", Act::LongerArr),
+                        ("✕ Remove", Act::DeleteArr),
+                    ]
+                } else {
+                    vec![("+ Place clip", Act::PlaceArr), ("+ Track", Act::AddTrack)]
+                }
+            }
+            View::Piano => {
+                let mut v = vec![
+                    ("◂ Note", Act::ShorterNote),
+                    ("Note ▸", Act::LongerNote),
+                    ("Oct ▲", Act::OctaveUp),
+                    ("Oct ▼", Act::OctaveDown),
+                    ("⟲ Loop", Act::Loop),
+                ];
+                if self.back_view.is_some() {
+                    v.push(("◀ Back", Act::Back));
+                }
+                v
+            }
+            View::Home => Vec::new(),
+        }
+    }
+
+    fn run_act(&mut self, a: Act) {
+        let (sc, tr) = (self.sel_scene, self.sel_track);
+        match a {
+            Act::LaunchCell => self.launch_cell(sc, tr),
+            Act::StopTrack => self.stop_track(tr),
+            Act::NewClip => self.new_empty_clip(sc, tr),
+            Act::Duplicate => self.duplicate_cell(),
+            Act::ClearCell => self.clear_cell(sc, tr),
+            Act::LaunchScene => self.launch_scene(sc),
+            Act::AddTrack => {
+                self.palette = Some(Palette::NewTrack);
+                self.pal_sel = 0;
+            }
+            Act::MuteTrack => self.nudge_track(tr, |t| t.mute = !t.mute),
+            Act::DeleteTrack => self.delete_track(),
+            Act::PlaceArr => {
+                let bar = self.engine.shared.bar.load(Ordering::Relaxed);
+                self.place_in_arrangement(tr, bar.max(self.arr_off));
+            }
+            Act::ShorterArr | Act::LongerArr | Act::DeleteArr => {
+                if let Some(i) = self.sel_arr {
+                    match a {
+                        Act::ShorterArr => self.resize_arr(i, -1),
+                        Act::LongerArr => self.resize_arr(i, 1),
+                        _ => self.delete_arr(i),
+                    }
+                }
+            }
+            Act::ShorterNote => self.resize_note_at_cursor(-1),
+            Act::LongerNote => self.resize_note_at_cursor(1),
+            Act::OctaveUp => {
+                self.piano_base = (self.piano_base + 12).min(127 - PIANO_ROWS as u8 + 1)
+            }
+            Act::OctaveDown => self.piano_base = self.piano_base.saturating_sub(12),
+            Act::Loop => self.toggle_audio_loop(),
+            Act::Back => {
+                if let Some(v) = self.back_view.take() {
+                    self.view = v;
+                }
+            }
+        }
     }
 
     fn render_session(&mut self, f: &mut Frame, area: Rect) {
@@ -1963,7 +2073,7 @@ impl Studio {
                     f,
                     area.x + 1,
                     area.y,
-                    &format!(" {}  ·  drum steps  ·  click or Enter toggles ", clip.name),
+                    &format!(" {}  ·  drum steps  ·  click toggles ", clip.name),
                     ACCENT,
                     BG,
                 );
@@ -2270,38 +2380,7 @@ impl Studio {
             put(f, x + 1, yy, &line, fg, bg);
             self.push_hit(Rect::new(x, yy, w, 1), Hit::PaletteItem(i));
         }
-        put(f, x + 1, y + h.saturating_sub(1), " ↑↓ Enter · Esc ", DIM, POP_BG);
-    }
-
-    fn render_help(&self, f: &mut Frame, area: Rect) {
-        fill(f, area, BG);
-        let lines = [
-            "Studio — electronic music, CapCut-simple",
-            "",
-            "  Space      play / pause          Home   stop & rewind",
-            "  R          record launched clips into Arrange",
-            "  1 2 3      session · arrange · piano     Tab cycles   T templates",
-            "  + −        tempo                 S save · E export WAV",
-            "  A / X      add track / delete selected track (twice)   M mute",
-            "",
-            "  Session    arrows move · Enter launch (again stops) · L launch scene",
-            "             N new empty clip · D duplicate below · Del clear · . stop track",
-            "             [ ] track volume · click a browser preset to arm it",
-            "  Arrange    click a lane to place the selected clip · drag to move",
-            "             [ ] length · ←→ move · Del or right-click removes",
-            "  Piano      click / Enter toggles · drag stretches · [ ] note length",
-            "             ↑↓ at the edge scrolls pitch · PgUp/PgDn octave · L loop (samples)",
-            "  Mixer      click M/S · click or scroll volume · scroll name to pan",
-            "             scroll Flt sets the cutoff",
-            "  Drop       .ttstudio project or mp3/wav/flac/ogg sample",
-            "",
-            "  Press any key to close this help.",
-        ];
-        let text: Vec<Line> = lines
-            .iter()
-            .map(|l| Line::from(Span::styled(*l, Style::default().fg(FG))))
-            .collect();
-        f.render_widget(Paragraph::new(text), area);
+        put(f, x + 1, y + h.saturating_sub(1), " click to add · outside cancels ", DIM, POP_BG);
     }
 }
 

@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{
+    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -9,7 +11,27 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::syntax::{self, HlState, Lang};
-use super::{Action, AppWindow};
+use super::ui::{Controls, Item, Look};
+use super::{Action, AppWindow, Launch};
+
+/// Everything the editor can do from its menus, toolbar and context menu.
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    FileMenu,
+    EditMenu,
+    ViewMenu,
+    New,
+    Open,
+    Save,
+    SaveAs,
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+    Highlight,
+    PromptOk,
+    PromptCancel,
+}
 
 pub struct Editor {
     path: Option<PathBuf>,
@@ -24,6 +46,13 @@ pub struct Editor {
     /// Where a selection was started, as (line, column). The other end is the
     /// cursor, so moving the cursor grows or shrinks the selection.
     anchor: Option<(usize, usize)>,
+    ui: Controls<Cmd>,
+    /// Path being typed into the "Save as" field.
+    save_as: Option<String>,
+    /// Bound to one file (Notes): no New / Open / Save as.
+    fixed: bool,
+    /// Saved under a new path, so the session should reopen that one.
+    renamed: bool,
 }
 
 fn bidx(s: &str, cx: usize) -> usize {
@@ -32,8 +61,7 @@ fn bidx(s: &str, cx: usize) -> usize {
 
 impl Editor {
     pub fn new(path: Option<PathBuf>) -> Self {
-        let mut status =
-            String::from("Ctrl+S save · Ctrl+C/X/V copy/cut/paste · Shift+arrows select");
+        let mut status = String::new();
         let lines = match &path {
             Some(p) => match fs::read(p) {
                 Ok(bytes) => {
@@ -72,7 +100,17 @@ impl Editor {
             lang,
             highlight: lang != Lang::Plain,
             anchor: None,
+            ui: Controls::new(),
+            save_as: None,
+            fixed: false,
+            renamed: false,
         }
+    }
+
+    /// Lock the editor to its file (Notes): the File menu only saves.
+    pub fn fixed(mut self) -> Self {
+        self.fixed = true;
+        self
     }
 
     pub fn is_modified(&self) -> bool {
@@ -85,7 +123,7 @@ impl Editor {
 
     fn save(&mut self) {
         match &self.path {
-            None => self.status = "untitled — open a file from the file manager to save".into(),
+            None => self.begin_save_as(),
             Some(p) => match fs::write(p, self.lines.join("\n")) {
                 Ok(_) => {
                     self.modified = false;
@@ -95,6 +133,147 @@ impl Editor {
                 Err(e) => self.status = format!("✗ save failed: {e}"),
             },
         }
+    }
+
+    fn begin_save_as(&mut self) {
+        let start = match &self.path {
+            Some(p) => p.clone(),
+            None => std::env::current_dir()
+                .unwrap_or_else(|_| super::state_home())
+                .join("untitled.txt"),
+        };
+        self.save_as = Some(start.to_string_lossy().to_string());
+    }
+
+    fn finish_save_as(&mut self) {
+        let Some(input) = self.save_as.take() else {
+            return;
+        };
+        let input = input.trim();
+        if input.is_empty() {
+            return;
+        }
+        let p = PathBuf::from(input);
+        if self.path.as_ref() != Some(&p) {
+            self.renamed = true;
+        }
+        self.path = Some(p);
+        self.save();
+    }
+
+    fn paste(&mut self) {
+        let text = crate::clipboard::paste();
+        if text.is_empty() {
+            self.status = "clipboard empty".into();
+        } else {
+            self.on_paste(&text);
+            self.status = "pasted".into();
+        }
+    }
+
+    fn toggle_highlight(&mut self) {
+        self.highlight = !self.highlight;
+        self.status = if self.highlight {
+            format!("highlight on ({})", self.lang.label())
+        } else {
+            "highlight off".into()
+        };
+    }
+
+    fn edit_items(&self) -> Vec<(String, Option<Cmd>)> {
+        let sel = self.sel_range().is_some();
+        vec![
+            (if sel { "Cut" } else { "Cut line" }.into(), Some(Cmd::Cut)),
+            (if sel { "Copy" } else { "Copy line" }.into(), Some(Cmd::Copy)),
+            ("Paste".into(), Some(Cmd::Paste)),
+            (String::new(), None),
+            ("Select all".into(), Some(Cmd::SelectAll)),
+        ]
+    }
+
+    fn run(&mut self, c: Cmd) -> Action {
+        match c {
+            Cmd::FileMenu => {
+                let mut items = Vec::new();
+                if !self.fixed {
+                    items.push(("New file".into(), Some(Cmd::New)));
+                    items.push(("Open…".into(), Some(Cmd::Open)));
+                    items.push((String::new(), None));
+                }
+                items.push(("Save".into(), Some(Cmd::Save)));
+                if !self.fixed {
+                    items.push(("Save as…".into(), Some(Cmd::SaveAs)));
+                }
+                self.ui.open_menu_under(Cmd::FileMenu, items);
+            }
+            Cmd::EditMenu => {
+                let items = self.edit_items();
+                self.ui.open_menu_under(Cmd::EditMenu, items);
+            }
+            Cmd::ViewMenu => {
+                let mark = if self.highlight { "☑" } else { "☐" };
+                self.ui.open_menu_under(
+                    Cmd::ViewMenu,
+                    vec![
+                        (format!("{mark} Syntax colors"), Some(Cmd::Highlight)),
+                        (format!("  {}", self.lang.label()), None),
+                    ],
+                );
+            }
+            Cmd::New => return Action::Launch(Launch::Editor(None)),
+            Cmd::Open => {
+                let dir = self
+                    .path
+                    .as_ref()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                    .or_else(|| std::env::current_dir().ok())
+                    .unwrap_or_else(super::state_home);
+                return Action::Launch(Launch::Files(dir));
+            }
+            Cmd::Save => self.save(),
+            Cmd::SaveAs => self.begin_save_as(),
+            Cmd::Cut => self.cut(),
+            Cmd::Copy => self.copy(),
+            Cmd::Paste => self.paste(),
+            Cmd::SelectAll => self.select_all(),
+            Cmd::Highlight => self.toggle_highlight(),
+            Cmd::PromptOk => self.finish_save_as(),
+            Cmd::PromptCancel => self.save_as = None,
+        }
+        Action::None
+    }
+
+    /// Menu bar and quick buttons along the top row.
+    fn render_bar(&mut self, f: &mut Frame, row: Rect) {
+        let buf = f.buffer_mut();
+        if let Some(input) = &self.save_as {
+            self.ui
+                .input_row(buf, row, "Save as", input, ("Save", Cmd::PromptOk), Cmd::PromptCancel);
+            return;
+        }
+        let sel = self.sel_range().is_some();
+        let save_look = if self.modified || self.path.is_none() {
+            Look::Primary
+        } else {
+            Look::Plain
+        };
+        let left = [
+            Item::btn("File", Cmd::FileMenu),
+            Item::btn("Edit", Cmd::EditMenu),
+            Item::btn("View", Cmd::ViewMenu),
+            Item::Sep,
+            Item::with("💾 Save", Cmd::Save, save_look),
+            Item::Sep,
+            Item::btn(if sel { "✂ Cut" } else { "✂" }, Cmd::Cut),
+            Item::btn(if sel { "⧉ Copy" } else { "⧉" }, Cmd::Copy),
+            Item::btn("📋", Cmd::Paste),
+        ];
+        let right = [Item::with(
+            if self.highlight { "🎨 Colors" } else { "🎨 Plain" },
+            Cmd::Highlight,
+            Look::on_if(self.highlight),
+        )];
+        self.ui.toolbar(buf, row, &left, &right);
     }
 
     /// Put the caret under the pointer. `gutter` wide line numbers sit left of
@@ -137,6 +316,9 @@ impl Editor {
     /// Returns false when there was no selection.
     fn delete_selection(&mut self) -> bool {
         let Some(((sy, sx), (ey, ex))) = self.sel_range() else {
+            // An empty selection must not outlive the edit that follows: once
+            // lines shift, a stale anchor can point past the end of the text.
+            self.anchor = None;
             return false;
         };
         let head: String = self.lines[sy].chars().take(sx).collect();
@@ -173,6 +355,7 @@ impl Editor {
             self.status = "cut selection".into();
         } else {
             crate::clipboard::copy(&format!("{}\n", self.lines[self.cy]));
+            self.anchor = None;
             if self.lines.len() == 1 {
                 self.lines[0].clear();
             } else {
@@ -258,10 +441,13 @@ impl AppWindow for Editor {
         }
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height < 2 {
+    fn render(&mut self, f: &mut Frame, full: Rect, focused: bool) {
+        if full.height < 3 {
             return;
         }
+        self.ui.begin();
+        self.render_bar(f, Rect::new(full.x, full.y, full.width, 1));
+        let area = Rect::new(full.x, full.y + 1, full.width, full.height - 1);
         let text_h = area.height as usize - 1;
         if self.cy < self.scroll {
             self.scroll = self.cy;
@@ -310,12 +496,16 @@ impl AppWindow for Editor {
             "plain"
         };
         let status = format!(
-            " {}  ·  Ln {}, Col {}  ·  {}  ·  {} ",
+            " {}  ·  Ln {}, Col {}  ·  {}{} ",
             if self.modified { "modified •" } else { "saved ✓" },
             self.cy + 1,
             self.cx + 1,
             hl,
-            self.status
+            if self.status.is_empty() {
+                String::new()
+            } else {
+                format!("  ·  {}", self.status)
+            }
         );
         f.render_widget(
             Paragraph::new(Span::styled(
@@ -325,6 +515,7 @@ impl AppWindow for Editor {
             .style(Style::default().bg(Color::Rgb(18, 22, 36))),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
         );
+        self.ui.render_menu(f.buffer_mut(), full);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -337,28 +528,27 @@ impl AppWindow for Editor {
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         // Shift with a movement key extends the selection instead of dropping it.
         let ext = k.modifiers.contains(KeyModifiers::SHIFT);
+        if self.ui.menu_open() && k.code == KeyCode::Esc {
+            self.ui.close_menu();
+            return Action::None;
+        }
+        if let Some(input) = self.save_as.as_mut() {
+            match k.code {
+                KeyCode::Enter => self.finish_save_as(),
+                KeyCode::Esc => self.save_as = None,
+                _ => {
+                    super::text_edit(input, k);
+                }
+            }
+            return Action::None;
+        }
         match k.code {
             KeyCode::Char('s') if ctrl => self.save(),
             KeyCode::Char('c') if ctrl => self.copy(),
             KeyCode::Char('x') if ctrl => self.cut(),
-            KeyCode::Char('v') if ctrl => {
-                let text = crate::clipboard::paste();
-                if text.is_empty() {
-                    self.status = "clipboard empty".into();
-                } else {
-                    self.on_paste(&text);
-                    self.status = "pasted".into();
-                }
-            }
+            KeyCode::Char('v') if ctrl => self.paste(),
             KeyCode::Char('a') if ctrl => self.select_all(),
-            KeyCode::Char('h') if ctrl => {
-                self.highlight = !self.highlight;
-                self.status = if self.highlight {
-                    format!("highlight on ({})", self.lang.label())
-                } else {
-                    "highlight off".into()
-                };
-            }
+            KeyCode::Char('h') if ctrl => self.toggle_highlight(),
             KeyCode::Char(c) if !ctrl && !alt => {
                 self.delete_selection();
                 let i = bidx(&self.lines[self.cy], self.cx);
@@ -464,6 +654,10 @@ impl AppWindow for Editor {
         if text.is_empty() {
             return Action::None;
         }
+        if let Some(input) = self.save_as.as_mut() {
+            super::paste_line(input, text);
+            return Action::None;
+        }
         self.delete_selection();
         // Split the current line at the cursor and stitch the paste in between.
         let at = bidx(&self.lines[self.cy], self.cx);
@@ -487,7 +681,14 @@ impl AppWindow for Editor {
         Action::None
     }
 
-    fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+    fn on_mouse(&mut self, m: MouseEvent, full: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            return hit.map_or(Action::None, |c| self.run(c));
+        }
+        let area = Rect::new(full.x, full.y + 1, full.width, full.height.saturating_sub(1));
+        if m.row < area.y || self.save_as.is_some() {
+            return Action::None;
+        }
         match m.kind {
             MouseEventKind::ScrollUp => {
                 self.anchor = None;
@@ -498,6 +699,16 @@ impl AppWindow for Editor {
                 self.anchor = None;
                 self.cy = (self.cy + 3).min(self.lines.len() - 1);
                 self.cx = self.cx.min(self.line_len(self.cy));
+            }
+            MouseEventKind::Down(MouseButton::Right) => {
+                // Keep an existing selection for Cut / Copy; otherwise move
+                // the caret first, like a left click would.
+                if self.sel_range().is_none() {
+                    self.move_to(m, area);
+                    self.anchor = None;
+                }
+                let items = self.edit_items();
+                self.ui.open_menu(m.column, m.row, items);
             }
             MouseEventKind::Down(_) => {
                 self.anchor = None;
@@ -520,6 +731,10 @@ impl AppWindow for Editor {
 
     fn accepts_drop(&self) -> bool {
         true
+    }
+
+    fn session_launch(&self) -> Option<Launch> {
+        self.renamed.then(|| Launch::Editor(self.path.clone()))
     }
 
     fn on_drop(&mut self, paths: &[PathBuf], _cut: bool) -> Action {
@@ -563,6 +778,17 @@ mod tests {
             kind: KeyEventKind::Press,
             state: KeyEventState::NONE,
         }
+    }
+
+    #[test]
+    fn an_empty_selection_does_not_survive_an_edit() {
+        // Shift+Down, Shift+Up leaves anchor == cursor on the last line; the
+        // Backspace that joins it away must not leave the anchor dangling.
+        let mut e = ed(&["one", ""]);
+        select(&mut e, (1, 0), (1, 0));
+        e.on_key(key(KeyCode::Backspace, KeyModifiers::NONE));
+        e.on_key(key(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_eq!(e.lines, ["onex"]);
     }
 
     #[test]

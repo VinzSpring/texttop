@@ -41,7 +41,13 @@ serde_json = "1"
 unicode-width = "0.2"
 portable-pty = "0.8"
 vt100 = "0.15"
+# Directory watching for the file browser (inotify / ReadDirectoryChangesW / FSEvents).
+notify = "6.1"
 rodio = { version = "0.19", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+# dup2 for parking stderr while the TUI is up.
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = { version = "0.38", optional = true }

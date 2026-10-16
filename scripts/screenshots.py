@@ -6,7 +6,7 @@ and renders every capture as an SVG (crisp quadrant pixels and box lines are
 drawn as shapes, so images look right regardless of the viewer's font). Then:
 
   docs/screenshots/<scene>.svg   one file per scene
-  docs/HANDBOOK.md               user handbook: every app, pictured, with keys
+  docs/HANDBOOK.md               user handbook: every app, pictured and explained
   README.md                      gallery between <!-- screenshots:start/end -->
 
 Requirements:  pip install pyte            (all platforms)
@@ -551,6 +551,23 @@ def s_terminal(s: Session):
     s.snap("terminal", settle=2.5)
 
 
+def s_ide(s: Session):
+    s.ready()
+    # The project is open in Files: start the IDE there with Run app here.
+    pos = s.find("Cargo.toml", min_y=1)
+    if not pos:
+        raise RuntimeError("Files did not list the project")
+    s.menu(pos[0] + 2, pos[1], "Run app here")
+    s.click_text("🛠  IDE")
+    s.wait(3)
+    s.key(F11)
+    s.wait(1.5)
+    readme = s.find("README.md", min_y=2)
+    if readme:
+        s.dclick(readme[0] + 2, readme[1])
+    s.snap("ide", settle=2.5)
+
+
 def s_image(s: Session):
     s.ready()
     s.key(F11)
@@ -689,6 +706,7 @@ SCENES = [
     Scene("editor", "texttop — Editor", s_editor, lambda sb: ROOT / "src" / "gfx.rs"),
     Scene("git", "texttop — Git", s_git, lambda sb: ROOT),
     Scene("terminal", "texttop — Terminal", s_terminal, lambda sb: ROOT),
+    Scene("ide", "texttop — IDE app group", s_ide, lambda sb: ROOT),
     Scene("image", "texttop — Images", s_image, make_image),
     Scene("studio", "texttop — Studio", s_studio, make_studio,
           shots=["studio_session", "studio_piano", "studio_arrange"]),
@@ -756,92 +774,90 @@ Any number of windows can share the screen.
 """),
     ("files", "Files", ["files"], """
 A full file manager with git status badges, multi-select, previews and
-bookmarks. Right-click a file for snapshots, compare and git actions.
-
-| Keys | Action |
-|---|---|
-| Enter / → · ← / Backspace | open · up a level |
-| Space · Ctrl+A | mark · mark all |
-| / or Ctrl+F | filter names |
-| Ctrl+L | go to path (or just paste one) |
-| Ctrl+C / X / V | copy / cut / paste |
-| F2 · Del | rename · delete |
-| F3 · F4 | hex view · edit |
-| F7 · F8 | new folder · new file |
-| Ctrl+P · Ctrl+H | preview pane · hidden files |
-| Ctrl+T · Ctrl+G | terminal here · git here |
-| ? | full keymap |
+bookmarks. The top bar has back / forward / up / home / refresh, a clickable
+path and toggles for hidden files and the preview pane; click a column heading
+to sort. The bottom bar holds the everyday actions: **+ Folder**, **+ File**,
+copy ⧉ / cut ✂ / paste 📋, **Rename**, **Delete** (with a confirm button),
+**⋯ More** and **🔍 Filter**. Click the ○ left of a name to tick several files.
+Right-click a file for open-with, hex view, snapshots, compare, pin and git
+actions. **Run app here…** lists every built-in app plus your own desktop and
+taskbar apps: pick one to start it in the current folder, or to open the
+selected files with it (untick **Open selected files** to just use the folder).
+The list follows the folder live: files created, renamed or deleted elsewhere
+show up on their own.
 """),
     ("editor", "Editor", ["editor"], """
 A text editor with line numbers and syntax highlighting for Rust, Python,
 JS/TS, C/C++, Go, Java, JSON, TOML, YAML, HTML, CSS, SQL, shell, Markdown and
-more.
-
-| Keys | Action |
-|---|---|
-| Ctrl+S | save |
-| Ctrl+C / X / V | copy / cut / paste (line when nothing is selected) |
-| Ctrl+A | select all |
-| Ctrl+H | toggle highlighting |
-| Shift+arrows | select |
+more. **File** (new, open, save, save as…), **Edit** (cut, copy, paste, select
+all) and **View** (syntax colors) menus sit on the top bar next to 💾 Save and
+the clipboard buttons; right-click the text for the same edit menu. Drag to
+select. Save as… asks for the path in a field with Save / Cancel buttons.
 """),
     ("git", "Git", ["git"], """
-Status, log, diff, branches and commit through the system `git`.
-
-| Keys | Action |
-|---|---|
-| Tab / 1–5 | switch panes |
-| Space | stage / unstage |
-| d · Enter | diff · open file |
-| c | commit staged |
-| n | new branch |
-| Ctrl+L | change repository |
+Status, log, diff, branches and commit through the system `git`. Tabs along
+the top switch panes; the second row has the actions for the current pane —
+**Stage / Unstage**, **Stage all**, **Diff**, **Open**, **Commit…**,
+**Show commit**, **Checkout**, **New branch…**. Tick the box next to a file to
+stage it, double-click to open it, right-click for its menu. **📂 Repo…**
+switches repository; the commit message is typed into a field with a
+✔ Commit button.
 """),
     ("terminal", "Terminal", ["terminal"], """
 Your real shell in a window, with a full VT emulator and system clipboard
-copy/paste. Everything you type goes to the shell; use the mouse or the
-desktop keys (F-keys) to manage the window.
+copy/paste. Everything you type goes to the shell. Drag to select (copied on
+release), right-click for Copy / Paste. When the shell exits, a **Close**
+button appears.
+"""),
+    ("ide", "IDE, app groups & Contribute", ["ide"], """
+An **app group** is a virtual app made of several frames: built-in apps docked
+left, right, top or bottom around a tab area, all started in one folder. App
+groups are listed in the start menu and in **Run app here…** like any other
+app, and starting one somewhere hands that folder to every frame.
+
+The **IDE** is the built-in group: a file explorer on the left, a terminal at
+the bottom, and everything you open from inside it (a file in the editor, an
+image, a video, another terminal) lands in a tab. Its top bar shows the group's
+name and folder, **📂 Open folder/file** to move it to another folder or open a
+file, and **⚙ Settings**. Drag a frame's edge to resize it.
+
+**🧱 App Groups** (in Settings) edits groups: name, icon, start-menu section,
+whether opened apps become tabs, and the list of frames. Each frame has an app,
+where it docks, a size, and an optional parameter (a subfolder, a file, or the
+command a terminal runs). A sketch shows the arrangement as you go. **▶ Try
+it** saves and opens the group.
+
+**🤝 Contribute / Customize** downloads texttop's own source code with git
+into texttop's data folder and opens it in the IDE, ready for
+`cargo run --release`. **⟳ Get latest** updates the copy later.
 """),
     ("images", "Images", ["image"], """
 Images are drawn with quadrant pixels: every cell carries a 2×2 pixel pattern
-with a best-fit pair of truecolor colors.
-
-| Keys | Action |
-|---|---|
-| + / − · f · 1 | zoom · fit · actual size |
-| arrows / hjkl | pan |
-| n / p · ← / → | next / previous in folder |
-| Space | slideshow |
-| w | set as wallpaper |
-| i · ? | info · help |
+with a best-fit pair of truecolor colors. The toolbar browses the folder
+(◀ ▶), zooms (− · Fit · 100% · +), rotates and flips, runs a slideshow, shows
+image info and sets the picture as wallpaper. Scroll to zoom at the pointer,
+drag to pan, double-click to toggle fit / 100%.
 """),
     ("studio", "Studio", ["studio_session", "studio_piano", "studio_arrange"], """
 An electronic music studio: pick a genre template, launch clips in the session
 grid, edit notes in the piano roll, lay out a song in the arrangement and
 export a WAV. Drop mp3/wav/flac/ogg files onto the window to use samples.
 
-**Everywhere**
+The header switches between **Session**, **Arrange** and **Piano** and shows
+buttons for whatever is selected: **Launch**, **Stop clip**, **New clip**,
+**Duplicate**, **Clear**, **Scene**, **+ Track**, **Mute**, **🗑 Track** in the
+session; **Place clip**, **Shorter / Longer**, **Remove** in the arrangement;
+note length, octave and loop in the piano roll. The transport row plays, stops,
+records, changes tempo, saves and exports.
 
-| Keys | Action |
-|---|---|
-| Space · Home | play / pause · stop |
-| 1 · 2 · 3 · Tab | session · arrange · piano · cycle |
-| T | templates |
-| R | record launched clips into the arrangement |
-| + / − | tempo |
-| A · X | add track · delete track |
-| S · E | save `.ttstudio` · export WAV |
+**Session** — click a clip to launch it (again stops), click ▶S*n* to launch a
+scene. Click a browser preset to arm it, then click empty cells to fill them.
 
-**Session** — arrows move, Enter launches (again stops), L launches the whole
-scene, N new empty clip, D duplicates below, Del clears, `[` `]` volume.
-Click a browser preset to arm it, then click empty cells to fill them.
-
-**Piano roll** — click or Enter toggles a note, drag to stretch it, `[` `]`
-change its length, the wheel or ↑↓ at the edge scroll pitch, PgUp/PgDn jump an
-octave.
+**Piano roll** — click toggles a note, drag stretches it, the wheel scrolls
+pitch.
 
 **Arrangement** — click a lane to place the selected clip, drag to move,
-`[` `]` resize, ←→ nudge, Del or right-click removes. Playback loops the song.
+right-click removes. Playback loops the song.
 
 **Mixer** — click M / S, click or scroll the volume bar, scroll a track name
 to pan, click Flt · Dly · Rvb · Pmp to toggle effects (scroll Flt for cutoff).
@@ -850,38 +866,34 @@ to pan, click Flt · Dly · Rvb · Pmp to toggle effects (scroll Flt for cutoff)
 A real browser engine (WebView2 / WebKitGTK / WKWebView) rendered with hybrid
 graphics: images and layout as pixels, text as crisp terminal characters. The
 first picture is Wikipedia as you see it; the second is the same page with the
-text overlay switched off (F3) — the raw pixel frame the engine captures,
-where small text would be unreadable. Links, forms, scrolling and video work.
+text overlay switched off — the raw pixel frame the engine captures, where
+small text would be unreadable. Links, forms, scrolling and video work.
 
-| Keys | Action |
-|---|---|
-| F4 | address bar |
-| F3 | toggle text overlay |
-| F9 / F10 | zoom |
-| F2 | bookmark |
-| F7 · F8 | privacy · cookies |
+The toolbar has back / forward / reload, the address bar (click to type),
+☆ bookmark, History, Bookmarks, Cookies and Privacy. The status bar toggles
+**Aa Crisp text** and zooms (− / +).
 """),
     ("wallpaper", "Wallpaper", ["wallpaper"], """
-Gradient themes for the desktop background, or any picture via the
-**image…** tile (or `w` in the image viewer).
+Gradient themes for the desktop background — click a tile to try it — or any
+picture via **🖼 Image…** (or **🖼 Wallpaper** in the image viewer).
 """),
     ("tools", "Clock, Calendar & Calculator", ["tools"], """
-| App | Keys |
+| App | How |
 |---|---|
-| Clock | Tab cycles clock / stopwatch / timer · Space start/stop · R reset · `[` `]` ±1 min |
-| Calendar | ←→ day · ↑↓ week · `[` `]` month · PgUp/PgDn year · T today |
-| Calculator | type an expression (`+ − * / ^ %`, parentheses) · Enter evaluates |
+| Clock | tabs for clock / stopwatch / timer · big Start / Pause and Reset buttons · timer presets and ±1m / ±30s |
+| Calendar | ◀◀ ◀ ▶ ▶▶ step months and years · click a day · Today · the wheel flips months |
+| Calculator | click the keys or type an expression (`+ − * / ^ %`, parentheses) |
 """),
     ("games", "Games", ["games"], """
-| Game | Keys |
+| Game | How |
 |---|---|
-| Snake | arrows / wasd steer · Space pause · r restart |
-| Minesweeper | click reveal · right-click flag · 1/2/3 difficulty |
-| 2048 | arrows / wasd slide · r restart |
+| Snake | Start / Pause and New game on the toolbar · click beside the head (or ◀ ▲ ▼ ▶) to turn |
+| Minesweeper | click reveals · right-click flags · **⚑ Flag mode** makes clicks plant flags · easy / medium / hard |
+| 2048 | swipe the board with the mouse or click the arrows around it · New game |
 """),
     ("system", "System", ["system"], """
 Operating system and CPU details, special folders and an environment snapshot.
-F5 refreshes.
+**📋 Copy report** puts it all on the clipboard.
 """),
 ]
 
@@ -956,7 +968,7 @@ def write_readme_gallery():
         lines.append("</tr>")
     lines.append("</table>")
     lines.append("")
-    lines.append("More in the **[handbook](docs/HANDBOOK.md)** — every app, pictured, with its keys.")
+    lines.append("More in the **[handbook](docs/HANDBOOK.md)** — every app, pictured and explained.")
     lines.append("")
     lines.append(END)
     block = "\n".join(lines)

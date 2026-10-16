@@ -11,8 +11,20 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow};
 use crate::engine::{Cmd, Engine, MouseKind, Status};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Ctl {
+    PlayPause,
+    Back,
+    Forward,
+    Restart,
+    Mute,
+    Quieter,
+    Louder,
+}
 use crate::gfx;
 
 const CELL_PX_W: i32 = 8;
@@ -30,6 +42,7 @@ pub struct VideoPlayer {
     fps_count: u32,
     fps: u32,
     fps_window: std::time::Instant,
+    ui: Controls<Ctl>,
 }
 
 impl VideoPlayer {
@@ -53,6 +66,7 @@ impl VideoPlayer {
             fps_count: 0,
             fps: 0,
             fps_window: std::time::Instant::now(),
+            ui: Controls::new(),
         }
     }
 
@@ -60,6 +74,19 @@ impl VideoPlayer {
         if let Some(e) = &self.engine {
             e.send(Cmd::Script(s.to_string()));
         }
+    }
+
+    fn run(&self, c: Ctl) {
+        let js = match c {
+            Ctl::PlayPause => "{if(v.paused)v.play();else v.pause();}",
+            Ctl::Forward => "v.currentTime+=5;",
+            Ctl::Back => "v.currentTime=Math.max(0,v.currentTime-5);",
+            Ctl::Louder => "v.volume=Math.min(1,v.volume+0.1);",
+            Ctl::Quieter => "v.volume=Math.max(0,v.volume-0.1);",
+            Ctl::Mute => "v.muted=!v.muted;",
+            Ctl::Restart => "{v.currentTime=0;v.play();}",
+        };
+        self.script(&format!("{V}{js}"));
     }
 }
 
@@ -128,31 +155,33 @@ impl AppWindow for VideoPlayer {
             );
         }
 
-        let status = format!(
-            " 🎬 {} fps · Space pause · ←→ seek 5s · ↑↓ volume · m mute · click controls · q close ",
-            self.fps
-        );
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                status,
-                Style::default().fg(Color::Rgb(140, 150, 175)).bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+        self.ui.begin();
+        self.ui.toolbar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            &[
+                Item::btn("⏪", Ctl::Back),
+                Item::with("▶ ❚❚", Ctl::PlayPause, Look::Raised),
+                Item::btn("⏩", Ctl::Forward),
+                Item::btn("↺", Ctl::Restart),
+                Item::Sep,
+                Item::btn("🔇", Ctl::Mute),
+                Item::btn("🔉", Ctl::Quieter),
+                Item::btn("🔊", Ctl::Louder),
+            ],
+            &[Item::Label(format!("🎬 {} fps", self.fps), ui::DIM)],
         );
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
         match k.code {
-            KeyCode::Char(' ') | KeyCode::Char('k') => {
-                self.script(&format!("{V}{{if(v.paused)v.play();else v.pause();}}"))
-            }
-            KeyCode::Right => self.script(&format!("{V}v.currentTime+=5;")),
-            KeyCode::Left => self.script(&format!("{V}v.currentTime=Math.max(0,v.currentTime-5);")),
-            KeyCode::Up => self.script(&format!("{V}v.volume=Math.min(1,v.volume+0.1);")),
-            KeyCode::Down => self.script(&format!("{V}v.volume=Math.max(0,v.volume-0.1);")),
-            KeyCode::Char('m') => self.script(&format!("{V}v.muted=!v.muted;")),
-            KeyCode::Char('r') => self.script(&format!("{V}{{v.currentTime=0;v.play();}}")),
+            KeyCode::Char(' ') | KeyCode::Char('k') => self.run(Ctl::PlayPause),
+            KeyCode::Right => self.run(Ctl::Forward),
+            KeyCode::Left => self.run(Ctl::Back),
+            KeyCode::Up => self.run(Ctl::Louder),
+            KeyCode::Down => self.run(Ctl::Quieter),
+            KeyCode::Char('m') => self.run(Ctl::Mute),
+            KeyCode::Char('r') => self.run(Ctl::Restart),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
             _ => {}
         }
@@ -160,6 +189,12 @@ impl AppWindow for VideoPlayer {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            if let Some(c) = hit {
+                self.run(c);
+            }
+            return Action::None;
+        }
         let view = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
         let inside = m.column >= view.x
             && m.column < view.x + view.width

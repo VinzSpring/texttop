@@ -244,14 +244,6 @@ impl AppWindow for Calculator {
                 for yy in y..y + btn_h {
                     buf.set_string(x, yy, &pad, style);
                 }
-                // fake rounded corners
-                if btn_h >= 2 && bw >= 3 {
-                    let corner = Style::default().bg(BODY_BG);
-                    buf.set_string(x, y, " ", corner);
-                    buf.set_string(x + bw - 1, y, " ", corner);
-                    buf.set_string(x, y + btn_h - 1, " ", corner);
-                    buf.set_string(x + bw - 1, y + btn_h - 1, " ", corner);
-                }
                 let lw = label.chars().count() as u16;
                 buf.set_string(x + (bw.saturating_sub(lw)) / 2, y + btn_h / 2, label, style);
                 self.buttons.push((Rect::new(x, y, bw, btn_h), key));

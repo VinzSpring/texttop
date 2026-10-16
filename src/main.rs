@@ -45,6 +45,8 @@ fn main() -> Result<()> {
 
 fn tui_main() -> Result<()> {
     let mut terminal = ratatui::init();
+    #[cfg(unix)]
+    quiet_stderr::start();
     execute!(stdout(), EnableMouseCapture)?;
     // Without bracketed paste the terminal replays pasted text as ordinary key
     // events, so a pasted path fires whatever single-key shortcuts its letters
@@ -55,7 +57,50 @@ fn tui_main() -> Result<()> {
     let _ = execute!(stdout(), DisableBracketedPaste);
     let _ = execute!(stdout(), DisableMouseCapture);
     ratatui::restore();
+    #[cfg(unix)]
+    quiet_stderr::stop();
     res
+}
+
+/// GTK, WebKit and other libraries print warnings straight to stderr, which
+/// lands on top of the desktop and garbles it. While the TUI is up, stderr
+/// goes to `<state home>/.texttop_stderr.log` instead; a panic puts it back
+/// first so its message still reaches the screen.
+#[cfg(unix)]
+mod quiet_stderr {
+    use std::os::fd::AsRawFd;
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    static SAVED: AtomicI32 = AtomicI32::new(-1);
+
+    pub fn start() {
+        let path = crate::apps::state_home().join(".texttop_stderr.log");
+        let Ok(log) = std::fs::File::create(path) else {
+            return;
+        };
+        // SAFETY: plain fd juggling on fd 2; `log` stays open through the dup.
+        let saved = unsafe { libc::dup(2) };
+        if saved < 0 || unsafe { libc::dup2(log.as_raw_fd(), 2) } < 0 {
+            return;
+        }
+        SAVED.store(saved, Ordering::SeqCst);
+        let prev = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            stop();
+            prev(info);
+        }));
+    }
+
+    pub fn stop() {
+        let saved = SAVED.swap(-1, Ordering::SeqCst);
+        if saved >= 0 {
+            // SAFETY: `saved` is the duplicate of the original stderr.
+            unsafe {
+                libc::dup2(saved, 2);
+                libc::close(saved);
+            }
+        }
+    }
 }
 
 fn run(terminal: &mut ratatui::DefaultTerminal) -> Result<()> {

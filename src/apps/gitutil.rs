@@ -442,6 +442,16 @@ pub fn stage(root: &Path, path: &Path) -> Result<(), String> {
     }
 }
 
+/// Stage every change in the work tree, new files included.
+pub fn stage_all(root: &Path) -> Result<(), String> {
+    if run_git_status(root, &["add", "-A"]) {
+        invalidate(root);
+        Ok(())
+    } else {
+        Err("git add failed".into())
+    }
+}
+
 pub fn unstage(root: &Path, path: &Path) -> Result<(), String> {
     let rel = path.strip_prefix(root).unwrap_or(path);
     if run_git_status(root, &["restore", "--staged", "--", &rel.to_string_lossy()])

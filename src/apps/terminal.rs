@@ -16,7 +16,16 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{Controls, Look};
 use super::{Action, AppWindow, Launch};
+
+/// Terminal context menu and exit bar.
+#[derive(Clone, Copy, PartialEq)]
+enum TCmd {
+    Copy,
+    Paste,
+    Close,
+}
 
 pub struct Terminal {
     title: String,
@@ -26,6 +35,7 @@ pub struct Terminal {
     child: Option<Box<dyn Child + Send + Sync>>,
     size: (u16, u16),
     exited: bool,
+    ui: Controls<TCmd>,
     error: Option<String>,
     /// Mouse selection over the visible grid, as (anchor, cursor) in
     /// (row, col). Either end may come first — [`Terminal::sel_span`] orders
@@ -65,6 +75,7 @@ impl Terminal {
             child: None,
             size: (cols, rows),
             exited: false,
+            ui: Controls::new(),
             error: None,
             sel: None,
             copied: None,
@@ -392,9 +403,11 @@ impl AppWindow for Terminal {
                 );
             }
         }
+        self.ui.begin();
         if self.exited {
-            let msg = " process exited — Ctrl+W closes ";
-            let x = area.x + area.width.saturating_sub(msg.len() as u16) / 2;
+            let msg = " process exited ";
+            let w = msg.len() as u16 + 9;
+            let x = area.x + area.width.saturating_sub(w) / 2;
             let y = area.y + area.height.saturating_sub(1);
             buf.set_string(
                 x,
@@ -404,7 +417,10 @@ impl AppWindow for Terminal {
                     .fg(Color::Rgb(255, 200, 90))
                     .bg(Color::Rgb(40, 40, 20)),
             );
+            self.ui
+                .button(buf, x + msg.len() as u16, y, "Close", TCmd::Close, Look::Primary);
         }
+        self.ui.render_menu(buf, area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -472,7 +488,32 @@ impl AppWindow for Terminal {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            match hit {
+                Some(TCmd::Copy) => self.copy_selection(),
+                Some(TCmd::Paste) => {
+                    let text = crate::clipboard::paste();
+                    if !text.is_empty() {
+                        return self.on_paste(&text);
+                    }
+                }
+                Some(TCmd::Close) => return Action::Close,
+                None => {}
+            }
+            return Action::None;
+        }
         match m.kind {
+            MouseEventKind::Down(MouseButton::Right) => {
+                let has_sel = self.sel.is_some_and(|(a, b)| a != b);
+                self.ui.open_menu(
+                    m.column,
+                    m.row,
+                    vec![
+                        ("Copy".into(), has_sel.then_some(TCmd::Copy)),
+                        ("Paste".into(), Some(TCmd::Paste)),
+                    ],
+                );
+            }
             MouseEventKind::ScrollUp => {
                 self.sel = None;
                 self.send(b"\x1b[A");

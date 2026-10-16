@@ -10,7 +10,13 @@ use ratatui::text::{Line, Span};
 use ratatui::Frame;
 
 use super::scroll::{self, ScrollState};
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Copy,
+}
 use crate::gfx;
 
 pub struct SysInfo {
@@ -18,6 +24,8 @@ pub struct SysInfo {
     line_count: usize,
     view_h: u16,
     started: std::time::Instant,
+    ui: Controls<Cmd>,
+    copied: bool,
 }
 
 impl SysInfo {
@@ -27,6 +35,8 @@ impl SysInfo {
             line_count: 0,
             view_h: 20,
             started: std::time::Instant::now(),
+            ui: Controls::new(),
+            copied: false,
         }
     }
 
@@ -124,10 +134,6 @@ impl SysInfo {
             "   * session uptime (since this window opened)",
             dim,
         )));
-            out.push(Line::from(Span::styled(
-                "   ↑↓ / wheel scroll · F5 refresh · q close",
-                dim,
-            )));
         out
     }
 }
@@ -199,7 +205,22 @@ impl AppWindow for SysInfo {
         "System".into()
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
+    fn render(&mut self, f: &mut Frame, full: Rect, _focused: bool) {
+        if full.height < 2 {
+            return;
+        }
+        self.ui.begin();
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(full.x, full.y, full.width, 1),
+            &[Item::with(
+                if self.copied { "✓ Copied" } else { "📋 Copy report" },
+                Cmd::Copy,
+                Look::on_if(self.copied),
+            )],
+            &[],
+        );
+        let area = Rect::new(full.x, full.y + 1, full.width, full.height - 1);
         let lines = self.lines();
         self.line_count = lines.len();
         self.view_h = area.height;
@@ -219,6 +240,18 @@ impl AppWindow for SysInfo {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        if let Some(hit) = self.ui.route(&m) {
+            if hit == Some(Cmd::Copy) {
+                let text: Vec<String> = self
+                    .lines()
+                    .iter()
+                    .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>())
+                    .collect();
+                crate::clipboard::copy(&text.join("\n"));
+                self.copied = true;
+            }
+            return Action::None;
+        }
         self.scroll.on_mouse(m, self.line_count, self.view_h);
         Action::None
     }

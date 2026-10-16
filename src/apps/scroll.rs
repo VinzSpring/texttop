@@ -1,6 +1,6 @@
 //! Shared vertical overflow scrolling for apps whose content can exceed the window.
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
@@ -11,6 +11,10 @@ use ratatui::Frame;
 #[derive(Clone, Copy, Default)]
 pub struct ScrollState {
     pub offset: u16,
+    /// Where the scrollbar was last drawn, so it can be clicked and dragged.
+    bar: Option<Rect>,
+    /// Dragging the thumb: keeps tracking even when the pointer leaves the bar.
+    dragging: bool,
 }
 
 impl ScrollState {
@@ -44,7 +48,8 @@ impl ScrollState {
         true
     }
 
-    /// Handle mouse wheel. Returns true if consumed.
+    /// Handle the mouse wheel and the scrollbar: its arrows step, a click on
+    /// the track jumps there, and the thumb drags. Returns true if consumed.
     pub fn on_mouse(&mut self, m: MouseEvent, content_len: usize, view_h: u16) -> bool {
         match m.kind {
             MouseEventKind::ScrollUp => {
@@ -55,12 +60,59 @@ impl ScrollState {
                 self.by(3, content_len, view_h);
                 true
             }
+            MouseEventKind::Down(MouseButton::Left) => {
+                let Some(bar) = self.bar.filter(|b| {
+                    m.column == b.x && m.row >= b.y && m.row < b.y + b.height
+                }) else {
+                    return false;
+                };
+                let arrows = bar.height >= 4;
+                if arrows && m.row == bar.y {
+                    self.by(-1, content_len, view_h);
+                } else if arrows && m.row == bar.y + bar.height - 1 {
+                    self.by(1, content_len, view_h);
+                } else {
+                    self.dragging = true;
+                    self.jump(m.row, content_len, view_h);
+                }
+                true
+            }
+            MouseEventKind::Drag(MouseButton::Left) if self.dragging => {
+                self.jump(m.row, content_len, view_h);
+                true
+            }
+            MouseEventKind::Up(_) if self.dragging => {
+                self.dragging = false;
+                true
+            }
             _ => false,
         }
     }
+
+    /// Scroll so the thumb centers on `row` of the track.
+    fn jump(&mut self, row: u16, content_len: usize, view_h: u16) {
+        let Some(bar) = self.bar else { return };
+        let (top, h) = track(bar);
+        let max = Self::max(content_len, view_h) as u32;
+        let rel = row.saturating_sub(top).min(h.saturating_sub(1)) as u32;
+        self.offset = if h <= 1 {
+            0
+        } else {
+            ((rel * max + (h as u32 - 1) / 2) / (h as u32 - 1)) as u16
+        };
+    }
 }
 
-/// Render `lines` into `area` with vertical scroll + a thin scrollbar when needed.
+/// The part of the bar between the arrows: (first row, height).
+fn track(bar: Rect) -> (u16, u16) {
+    if bar.height >= 4 {
+        (bar.y + 1, bar.height - 2)
+    } else {
+        (bar.y, bar.height)
+    }
+}
+
+/// Render `lines` into `area` with vertical scroll + a scrollbar when needed.
 pub fn render_scrollable(f: &mut Frame, area: Rect, lines: &[Line], scroll: &mut ScrollState) {
     if area.height == 0 || area.width == 0 {
         return;
@@ -78,14 +130,11 @@ pub fn render_scrollable(f: &mut Frame, area: Rect, lines: &[Line], scroll: &mut
         Paragraph::new(lines.to_vec()).scroll((scroll.offset, 0)),
         text_area,
     );
+    scroll.bar = None;
     if overflow {
-        draw_scrollbar(
-            f,
-            Rect::new(area.x + text_w, area.y, 1, view_h),
-            lines.len(),
-            view_h,
-            scroll.offset,
-        );
+        let bar = Rect::new(area.x + text_w, area.y, 1, view_h);
+        scroll.bar = Some(bar);
+        draw_scrollbar(f, bar, lines.len(), view_h, scroll.offset);
     }
 }
 
@@ -94,25 +143,38 @@ fn draw_scrollbar(f: &mut Frame, area: Rect, content_len: usize, view_h: u16, of
         return;
     }
     let buf = f.buffer_mut();
-    let track = Style::default().fg(Color::Rgb(40, 48, 70));
+    let track_s = Style::default().fg(Color::Rgb(40, 48, 70));
     let thumb = Style::default().fg(Color::Rgb(0, 170, 220));
-    for y in 0..area.height {
-        if let Some(c) = buf.cell_mut((area.x, area.y + y)) {
+    let arrow = Style::default()
+        .fg(Color::Rgb(200, 210, 235))
+        .bg(Color::Rgb(44, 54, 88));
+    let (top, h) = track(area);
+    if h != area.height {
+        if let Some(c) = buf.cell_mut((area.x, area.y)) {
+            c.set_symbol("▴");
+            c.set_style(arrow);
+        }
+        if let Some(c) = buf.cell_mut((area.x, area.y + area.height - 1)) {
+            c.set_symbol("▾");
+            c.set_style(arrow);
+        }
+    }
+    for y in 0..h {
+        if let Some(c) = buf.cell_mut((area.x, top + y)) {
             c.set_symbol("│");
-            c.set_style(track);
+            c.set_style(track_s);
         }
     }
     let max = ScrollState::max(content_len, view_h);
-    let thumb_h = ((view_h as usize * view_h as usize) / content_len.max(1))
-        .clamp(1, view_h as usize) as u16;
-    let travel = view_h.saturating_sub(thumb_h);
+    let thumb_h = ((h as usize * view_h as usize) / content_len.max(1)).clamp(1, h as usize) as u16;
+    let travel = h.saturating_sub(thumb_h);
     let thumb_y = if max == 0 {
         0
     } else {
         (offset as u32 * travel as u32 / max as u32) as u16
     };
     for dy in 0..thumb_h {
-        if let Some(c) = buf.cell_mut((area.x, area.y + thumb_y + dy)) {
+        if let Some(c) = buf.cell_mut((area.x, top + thumb_y + dy)) {
             c.set_symbol("█");
             c.set_style(thumb);
         }

@@ -6,11 +6,23 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, Mo
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::scroll::{self, ScrollState};
+use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    Search,
+    ClearSearch,
+    Refresh,
+    Kill,
+    ConfirmKill,
+    CancelKill,
+    CopyPid,
+    CopyName,
+}
 
 struct Proc {
     pid: String,
@@ -25,8 +37,8 @@ pub struct Processes {
     scroll: ScrollState,
     view_h: u16,
     filter: String,
-    filtering: bool,
     status: String,
+    ui: Controls<Cmd>,
     confirm_kill: Option<String>,
     tick: u32,
 }
@@ -40,8 +52,8 @@ impl Processes {
             scroll: ScrollState::default(),
             view_h: 20,
             filter: String::new(),
-            filtering: false,
             status: String::new(),
+            ui: Controls::new(),
             confirm_kill: None,
             tick: 0,
         };
@@ -52,7 +64,7 @@ impl Processes {
     fn refresh(&mut self) {
         self.procs = list_procs();
         self.apply_filter();
-        self.status = format!("{} processes", self.procs.len());
+        self.status.clear();
     }
 
     fn apply_filter(&mut self) {
@@ -78,6 +90,41 @@ impl Processes {
         self.filtered
             .get(self.sel)
             .and_then(|&i| self.procs.get(i))
+    }
+
+    fn ask_kill(&mut self) {
+        if let Some((pid, name)) = self.selected().map(|p| (p.pid.clone(), p.name.clone())) {
+            self.confirm_kill = Some(pid);
+            self.status = format!("end {name}?");
+        }
+    }
+
+    fn run(&mut self, c: Cmd) {
+        match c {
+            Cmd::Search => {}
+            Cmd::ClearSearch => {
+                self.filter.clear();
+                self.apply_filter();
+            }
+            Cmd::Refresh => self.refresh(),
+            Cmd::Kill => self.ask_kill(),
+            Cmd::ConfirmKill => self.kill_selected(),
+            Cmd::CancelKill => {
+                self.confirm_kill = None;
+                self.status.clear();
+            }
+            Cmd::CopyPid | Cmd::CopyName => {
+                if let Some(p) = self.selected() {
+                    let text = if c == Cmd::CopyPid { p.pid.clone() } else { p.name.clone() };
+                    crate::clipboard::copy(&text);
+                    self.status = format!("copied {text}");
+                }
+            }
+        }
+    }
+
+    fn body(area: Rect) -> Rect {
+        Rect::new(area.x, area.y + 2, area.width, area.height.saturating_sub(3))
     }
 
     fn kill_selected(&mut self) {
@@ -189,35 +236,69 @@ impl AppWindow for Processes {
         "Processes".into()
     }
 
-    fn render(&mut self, f: &mut Frame, area: Rect, _focused: bool) {
-        if area.height < 3 {
+    fn render(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        if area.height < 4 {
             return;
         }
-        let header = if self.filtering {
-            format!(" filter: {}█ ", self.filter)
-        } else if let Some(pid) = &self.confirm_kill {
-            format!(" kill PID {pid}? y/n ")
+        self.ui.begin();
+        let buf = f.buffer_mut();
+        let bar = Rect::new(area.x, area.y, area.width, 1);
+        if let Some(pid) = &self.confirm_kill {
+            let name = self.selected().map(|p| p.name.clone()).unwrap_or_default();
+            self.ui.toolbar(
+                buf,
+                bar,
+                &[Item::Label(format!(" End {name} (PID {pid})? "), Color::White)],
+                &[
+                    Item::with("✖ End task", Cmd::ConfirmKill, Look::Danger),
+                    Item::with("Cancel", Cmd::CancelKill, Look::Raised),
+                ],
+            );
         } else {
-            format!(" {} procs · / filter · Del kill · F5 refresh ", self.filtered.len())
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                header,
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Rgb(28, 36, 62))
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .style(Style::default().bg(Color::Rgb(28, 36, 62))),
-            Rect::new(area.x, area.y, area.width, 1),
-        );
+            let has = self.selected().is_some();
+            let field = self.ui.toolbar(
+                buf,
+                bar,
+                &[Item::btn("⟳ Refresh", Cmd::Refresh)],
+                &[Item::with("✖ End task", Cmd::Kill, Look::enabled_if(has))],
+            );
+            // The search box: always live, so typing anywhere filters.
+            let fx = field.x + 1;
+            let fw = field.width.saturating_sub(2).min(40);
+            if fw >= 8 {
+                let r = Rect::new(fx, bar.y, fw, 1);
+                let bg = Color::Rgb(12, 16, 30);
+                ui::fill_row(buf, r, bg);
+                let text = if self.filter.is_empty() {
+                    Span::styled(" 🔍 type to filter…", Style::default().fg(ui::DIM).bg(bg))
+                } else {
+                    let caret = if focused { "▏" } else { "" };
+                    Span::styled(
+                        format!(" 🔍 {}{caret}", self.filter),
+                        Style::default().fg(Color::White).bg(bg),
+                    )
+                };
+                buf.set_string(r.x, r.y, text.content.chars().take(fw as usize - 2).collect::<String>(), text.style);
+                self.ui.add(r, Cmd::Search);
+                if !self.filter.is_empty() {
+                    buf.set_string(r.x + r.width - 2, r.y, "✕ ", Style::default().fg(ui::FG).bg(bg));
+                    self.ui.add(Rect::new(r.x + r.width - 2, r.y, 2, 1), Cmd::ClearSearch);
+                }
+            }
+        }
 
-        let body = Rect::new(
+        // column headings
+        buf.set_string(
             area.x,
             area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
+            format!("{:<width$}", format!(" {:>7}  {:<24}  {}", "PID", "Name", MEM_HEAD), width = area.width as usize),
+            Style::default()
+                .fg(Color::Rgb(150, 160, 190))
+                .bg(Color::Rgb(22, 27, 45))
+                .add_modifier(Modifier::BOLD),
         );
+
+        let body = Self::body(area);
         let sel_bg = Color::Rgb(0, 90, 140);
         let lines: Vec<Line> = self
             .filtered
@@ -248,55 +329,34 @@ impl AppWindow for Processes {
         }
         scroll::render_scrollable(f, body, &lines, &mut self.scroll);
 
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {} ", self.status),
-                Style::default()
-                    .fg(Color::Rgb(140, 150, 175))
-                    .bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+        let status = if self.status.is_empty() || self.confirm_kill.is_some() {
+            format!("{} of {} processes", self.filtered.len(), self.procs.len())
+        } else {
+            self.status.clone()
+        };
+        ui::status_bar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            &status,
         );
+        self.ui.render_menu(f.buffer_mut(), area);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
-        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
-
-        if let Some(pid) = self.confirm_kill.clone() {
+        if self.ui.menu_open() && k.code == KeyCode::Esc {
+            self.ui.close_menu();
+            return Action::None;
+        }
+        if self.confirm_kill.is_some() {
             match k.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => self.kill_selected(),
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                    self.confirm_kill = None;
-                    self.status = format!("keep {pid}");
-                }
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => self.run(Cmd::ConfirmKill),
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => self.run(Cmd::CancelKill),
                 _ => {}
             }
             return Action::None;
         }
-
-        if self.filtering {
-            match k.code {
-                KeyCode::Esc => {
-                    self.filtering = false;
-                }
-                KeyCode::Enter => {
-                    self.filtering = false;
-                    self.apply_filter();
-                }
-                _ => {
-                    if super::text_edit(&mut self.filter, k) {
-                        self.apply_filter();
-                    }
-                }
-            }
-            return Action::None;
-        }
-
+        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         match k.code {
-            KeyCode::Char('/') => {
-                self.filtering = true;
-            }
             KeyCode::Up => self.sel = self.sel.saturating_sub(1),
             KeyCode::Down => {
                 if !self.filtered.is_empty() {
@@ -310,45 +370,61 @@ impl AppWindow for Processes {
                 }
             }
             KeyCode::F(5) => self.refresh(),
-            KeyCode::Enter => {
-                if let Some(p) = self.selected() {
-                    self.status = format!("PID {} · {}", p.pid, p.name);
+            KeyCode::Delete => self.ask_kill(),
+            KeyCode::Char('k') if ctrl => self.ask_kill(),
+            KeyCode::Esc if !self.filter.is_empty() => self.run(Cmd::ClearSearch),
+            KeyCode::Esc => return Action::Close,
+            _ => {
+                if super::text_edit(&mut self.filter, k) {
+                    self.apply_filter();
                 }
             }
-            KeyCode::Delete | KeyCode::Char('k') if ctrl || matches!(k.code, KeyCode::Delete) => {
-                if let Some((pid, name)) = self.selected().map(|p| (p.pid.clone(), p.name.clone())) {
-                    self.confirm_kill = Some(pid.clone());
-                    self.status = format!("kill {name} ({pid})?");
-                }
-            }
-            KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
-            _ => {}
         }
         Action::None
     }
 
     fn on_paste(&mut self, text: &str) -> Action {
-        if self.filtering {
-            super::paste_line(&mut self.filter, text);
-            self.apply_filter();
-        }
+        super::paste_line(&mut self.filter, text);
+        self.apply_filter();
         Action::None
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
-        let body = Rect::new(
-            area.x,
-            area.y + 1,
-            area.width,
-            area.height.saturating_sub(2),
-        );
+        if let Some(hit) = self.ui.route(&m) {
+            if let Some(c) = hit {
+                self.run(c);
+            }
+            return Action::None;
+        }
+        if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+            && self.scroll.on_mouse(m, self.filtered.len(), self.view_h)
+        {
+            // Dragging the scrollbar: carry the selection along so the
+            // keep-selection-visible rule in render does not snap back.
+            let top = self.scroll.offset as usize;
+            let bottom = (top + self.view_h as usize).saturating_sub(1);
+            self.sel = self.sel.clamp(top, bottom.max(top)).min(self.filtered.len().saturating_sub(1));
+            return Action::None;
+        }
+        let body = Self::body(area);
+        let in_body = m.row >= body.y && m.row < body.y + body.height;
         match m.kind {
-            MouseEventKind::Down(MouseButton::Left)
-                if m.row >= body.y && m.row < body.y + body.height =>
-            {
+            MouseEventKind::Down(b) if in_body && self.confirm_kill.is_none() => {
                 let idx = self.scroll.offset as usize + (m.row - body.y) as usize;
                 if idx < self.filtered.len() {
                     self.sel = idx;
+                    if b == MouseButton::Right {
+                        self.ui.open_menu(
+                            m.column,
+                            m.row,
+                            vec![
+                                ("✖ End task".into(), Some(Cmd::Kill)),
+                                (String::new(), None),
+                                ("Copy PID".into(), Some(Cmd::CopyPid)),
+                                ("Copy name".into(), Some(Cmd::CopyName)),
+                            ],
+                        );
+                    }
                 }
             }
             MouseEventKind::ScrollUp => self.sel = self.sel.saturating_sub(3),
@@ -364,11 +440,19 @@ impl AppWindow for Processes {
 
     fn on_tick(&mut self) {
         self.tick += 1;
-        if self.tick % 40 == 0 {
+        if self.tick % 40 == 0 && self.confirm_kill.is_none() {
+            let status = std::mem::take(&mut self.status);
             self.refresh();
+            self.status = status;
         }
     }
 }
+
+/// Heading of the third column: memory on Windows, the command line elsewhere.
+#[cfg(windows)]
+const MEM_HEAD: &str = "Memory";
+#[cfg(not(windows))]
+const MEM_HEAD: &str = "Command";
 
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {

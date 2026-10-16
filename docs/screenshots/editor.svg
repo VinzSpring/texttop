@@ -8,7 +8,10 @@
 <g transform="translate(18,48)" shape-rendering="crispEdges">
 <rect width="1260" height="756" fill="#0b0d14"/>
 <rect x="0" y="0" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="18" width="1260" height="18" fill="#0c0e16"/>
+<rect x="0" y="18" width="9" height="18" fill="#0c0e16"/>
+<rect x="9" y="18" width="1143" height="18" fill="#1c243e"/>
+<rect x="1152" y="18" width="99" height="18" fill="#006eaa"/>
+<rect x="1251" y="18" width="9" height="18" fill="#0c0e16"/>
 <rect x="0" y="36" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="54" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="72" width="1260" height="18" fill="#0c0e16"/>
@@ -38,10 +41,10 @@
 <rect x="0" y="504" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="522" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="540" width="1260" height="18" fill="#0c0e16"/>
-<rect x="0" y="558" width="54" height="18" fill="#0c0e16"/>
-<rect x="54" y="558" width="9" height="18" fill="#d2d6e4"/>
-<rect x="63" y="558" width="1197" height="18" fill="#0c0e16"/>
-<rect x="0" y="576" width="1260" height="18" fill="#0c0e16"/>
+<rect x="0" y="558" width="1260" height="18" fill="#0c0e16"/>
+<rect x="0" y="576" width="54" height="18" fill="#0c0e16"/>
+<rect x="54" y="576" width="9" height="18" fill="#d2d6e4"/>
+<rect x="63" y="576" width="1197" height="18" fill="#0c0e16"/>
 <rect x="0" y="594" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="612" width="1260" height="18" fill="#0c0e16"/>
 <rect x="0" y="630" width="1260" height="18" fill="#0c0e16"/>
@@ -185,6 +188,8 @@
 <path d="M1201.5,9.0 L1197.0,9.0 M1201.5,9.0 L1206.0,9.0" stroke="#ffc850" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,18.0 Q1255.5,9.0 1251.0,9.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,27.0 L4.5,18.0 M4.5,27.0 L4.5,36.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
+<path d="M175.5,27.0 L175.5,18.0 M175.5,27.0 L175.5,36.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
+<path d="M265.5,27.0 L265.5,18.0 M265.5,27.0 L265.5,36.0" stroke="#5a6482" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,27.0 L1255.5,18.0 M1255.5,27.0 L1255.5,36.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M4.5,45.0 L4.5,36.0 M4.5,45.0 L4.5,54.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
 <path d="M1255.5,45.0 L1255.5,36.0 M1255.5,45.0 L1255.5,54.0" stroke="#00beff" stroke-width="1.3" fill="none"/>
@@ -463,62 +468,61 @@
 <text x="45" y="13.7" fill="#ffffff" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">gfx.rs</text>
 <text x="1215" y="13.7" fill="#78dc82" textLength="9" lengthAdjust="spacingAndGlyphs">□</text>
 <text x="1233" y="13.7" fill="#ff5f5f" textLength="9" lengthAdjust="spacingAndGlyphs">✕</text>
-<text x="36" y="31.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
-<text x="54" y="31.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
-<text x="90" y="31.7" fill="#d2d6e4" textLength="27" lengthAdjust="spacingAndGlyphs">std</text>
-<text x="117" y="31.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="135" y="31.7" fill="#d2d6e4" textLength="36" lengthAdjust="spacingAndGlyphs">sync</text>
-<text x="171" y="31.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="189" y="31.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">atomic</text>
-<text x="243" y="31.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="261" y="31.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="270" y="31.7" fill="#d2d6e4" textLength="72" lengthAdjust="spacingAndGlyphs">AtomicU8</text>
-<text x="342" y="31.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">,</text>
-<text x="360" y="31.7" fill="#d2d6e4" textLength="72" lengthAdjust="spacingAndGlyphs">Ordering</text>
-<text x="432" y="31.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">};</text>
-<text x="36" y="49.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">2</text>
-<text x="36" y="67.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">3</text>
-<text x="54" y="67.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
-<text x="90" y="67.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">ratatui</text>
-<text x="153" y="67.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="171" y="67.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">buffer</text>
-<text x="225" y="67.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="243" y="67.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">Buffer</text>
-<text x="297" y="67.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
-<text x="36" y="85.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">4</text>
+<text x="18" y="31.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">File</text>
+<text x="72" y="31.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">Edit</text>
+<text x="126" y="31.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">View</text>
+<text x="189" y="31.7" fill="#d2daf0" textLength="18" lengthAdjust="spacingAndGlyphs">💾</text>
+<text x="216" y="31.7" fill="#d2daf0" textLength="36" lengthAdjust="spacingAndGlyphs">Save</text>
+<text x="279" y="31.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">✂</text>
+<text x="306" y="31.7" fill="#d2daf0" textLength="9" lengthAdjust="spacingAndGlyphs">⧉</text>
+<text x="333" y="31.7" fill="#d2daf0" textLength="18" lengthAdjust="spacingAndGlyphs">📋</text>
+<text x="1161" y="31.7" fill="#ffffff" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">🎨</text>
+<text x="1188" y="31.7" fill="#ffffff" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">Colors</text>
+<text x="36" y="49.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
+<text x="54" y="49.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
+<text x="90" y="49.7" fill="#d2d6e4" textLength="27" lengthAdjust="spacingAndGlyphs">std</text>
+<text x="117" y="49.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
+<text x="135" y="49.7" fill="#d2d6e4" textLength="36" lengthAdjust="spacingAndGlyphs">sync</text>
+<text x="171" y="49.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
+<text x="189" y="49.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">atomic</text>
+<text x="243" y="49.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
+<text x="261" y="49.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
+<text x="270" y="49.7" fill="#d2d6e4" textLength="72" lengthAdjust="spacingAndGlyphs">AtomicU8</text>
+<text x="342" y="49.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">,</text>
+<text x="360" y="49.7" fill="#d2d6e4" textLength="72" lengthAdjust="spacingAndGlyphs">Ordering</text>
+<text x="432" y="49.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">};</text>
+<text x="36" y="67.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">2</text>
+<text x="36" y="85.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">3</text>
 <text x="54" y="85.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
 <text x="90" y="85.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">ratatui</text>
 <text x="153" y="85.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="171" y="85.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">layout</text>
+<text x="171" y="85.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">buffer</text>
 <text x="225" y="85.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="243" y="85.7" fill="#d2d6e4" textLength="36" lengthAdjust="spacingAndGlyphs">Rect</text>
-<text x="279" y="85.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
-<text x="36" y="103.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">5</text>
+<text x="243" y="85.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">Buffer</text>
+<text x="297" y="85.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
+<text x="36" y="103.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">4</text>
 <text x="54" y="103.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
 <text x="90" y="103.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">ratatui</text>
 <text x="153" y="103.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="171" y="103.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">style</text>
-<text x="216" y="103.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="234" y="103.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="243" y="103.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">Color</text>
-<text x="288" y="103.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">,</text>
-<text x="306" y="103.7" fill="#d2d6e4" textLength="72" lengthAdjust="spacingAndGlyphs">Modifier</text>
-<text x="378" y="103.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">,</text>
-<text x="396" y="103.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">Style</text>
-<text x="441" y="103.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">};</text>
-<text x="36" y="121.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">6</text>
+<text x="171" y="103.7" fill="#d2d6e4" textLength="54" lengthAdjust="spacingAndGlyphs">layout</text>
+<text x="225" y="103.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
+<text x="243" y="103.7" fill="#d2d6e4" textLength="36" lengthAdjust="spacingAndGlyphs">Rect</text>
+<text x="279" y="103.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
+<text x="36" y="121.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">5</text>
 <text x="54" y="121.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">use</text>
 <text x="90" y="121.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">ratatui</text>
 <text x="153" y="121.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
-<text x="171" y="121.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">Frame</text>
-<text x="216" y="121.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
-<text x="36" y="139.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">7</text>
-<text x="36" y="157.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">8</text>
+<text x="171" y="121.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">style</text>
+<text x="216" y="121.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">::</text>
+<text x="234" y="121.7" fill="#d2d6e4" textLength="45" lengthAdjust="spacingAndGlyphs">Color</text>
+<text x="279" y="121.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
+<text x="36" y="139.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">6</text>
+<text x="36" y="157.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">7</text>
 <text x="54" y="157.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">//</text>
 <text x="108" y="157.7" fill="#6e768c" textLength="81" lengthAdjust="spacingAndGlyphs">truecolor</text>
 <text x="198" y="157.7" fill="#6e768c" textLength="81" lengthAdjust="spacingAndGlyphs">detection</text>
-<text x="36" y="175.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">9</text>
-<text x="27" y="193.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">10</text>
+<text x="36" y="175.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">8</text>
+<text x="36" y="193.7" fill="#5a5f78" textLength="9" lengthAdjust="spacingAndGlyphs">9</text>
 <text x="54" y="193.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="193.7" fill="#6e768c" textLength="9" lengthAdjust="spacingAndGlyphs">0</text>
 <text x="108" y="193.7" fill="#6e768c" textLength="9" lengthAdjust="spacingAndGlyphs">=</text>
@@ -536,7 +540,7 @@
 <text x="621" y="193.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">and</text>
 <text x="657" y="193.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">cached;</text>
 <text x="729" y="193.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">an</text>
-<text x="27" y="211.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">11</text>
+<text x="27" y="211.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">10</text>
 <text x="54" y="211.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="211.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">atomic</text>
 <text x="153" y="211.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">rather</text>
@@ -550,7 +554,7 @@
 <text x="558" y="211.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">both</text>
 <text x="603" y="211.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">paths</text>
 <text x="657" y="211.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">(see</text>
-<text x="27" y="229.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">12</text>
+<text x="27" y="229.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">11</text>
 <text x="54" y="229.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="229.7" fill="#6e768c" textLength="180" lengthAdjust="spacingAndGlyphs">[`force_truecolor`])</text>
 <text x="279" y="229.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">instead</text>
@@ -561,13 +565,13 @@
 <text x="531" y="229.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">whatever</text>
 <text x="612" y="229.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">terminal</text>
 <text x="693" y="229.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">happened</text>
-<text x="27" y="247.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">13</text>
+<text x="27" y="247.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">12</text>
 <text x="54" y="247.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="247.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">to</text>
 <text x="117" y="247.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">launch</text>
 <text x="180" y="247.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">`cargo</text>
 <text x="243" y="247.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">test`.</text>
-<text x="27" y="265.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="27" y="265.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">13</text>
 <text x="54" y="265.7" fill="#c678dd" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">static</text>
 <text x="117" y="265.7" fill="#d2d6e4" textLength="81" lengthAdjust="spacingAndGlyphs">TRUECOLOR</text>
 <text x="198" y="265.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">:</text>
@@ -578,8 +582,8 @@
 <text x="432" y="265.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">(</text>
 <text x="441" y="265.7" fill="#d19a66" textLength="9" lengthAdjust="spacingAndGlyphs">0</text>
 <text x="450" y="265.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">);</text>
-<text x="27" y="283.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">15</text>
-<text x="27" y="301.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">16</text>
+<text x="27" y="283.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="27" y="301.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">15</text>
 <text x="54" y="301.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="301.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">First</text>
 <text x="144" y="301.7" fill="#6e768c" textLength="108" lengthAdjust="spacingAndGlyphs">Terminal.app</text>
@@ -591,7 +595,7 @@
 <text x="567" y="301.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">which</text>
 <text x="621" y="301.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">arrived</text>
 <text x="693" y="301.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">in</text>
-<text x="27" y="319.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">17</text>
+<text x="27" y="319.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">16</text>
 <text x="54" y="319.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="319.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">macOS</text>
 <text x="144" y="319.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">26.</text>
@@ -605,7 +609,7 @@
 <text x="621" y="319.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">they</text>
 <text x="666" y="319.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">read</text>
 <text x="711" y="319.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">the</text>
-<text x="27" y="337.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">18</text>
+<text x="27" y="337.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">17</text>
 <text x="54" y="337.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="337.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">blue</text>
 <text x="135" y="337.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">byte</text>
@@ -623,7 +627,7 @@
 <text x="621" y="337.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">15</text>
 <text x="648" y="337.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">ships</text>
 <text x="702" y="337.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">455,</text>
-<text x="27" y="355.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">19</text>
+<text x="27" y="355.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">18</text>
 <text x="54" y="355.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="355.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">both</text>
 <text x="135" y="355.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">without</text>
@@ -637,7 +641,7 @@
 <text x="549" y="355.7" fill="#6e768c" textLength="108" lengthAdjust="spacingAndGlyphs">Terminal.app</text>
 <text x="666" y="355.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">does</text>
 <text x="711" y="355.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">not</text>
-<text x="27" y="373.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">20</text>
+<text x="27" y="373.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">19</text>
 <text x="54" y="373.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="373.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">reliably</text>
 <text x="171" y="373.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">set</text>
@@ -652,7 +656,7 @@
 <text x="639" y="373.7" fill="#6e768c" textLength="36" lengthAdjust="spacingAndGlyphs">this</text>
 <text x="684" y="373.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">guess</text>
 <text x="738" y="373.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">is</text>
-<text x="27" y="391.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">21</text>
+<text x="27" y="391.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">20</text>
 <text x="54" y="391.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">///</text>
 <text x="90" y="391.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">wrong</text>
 <text x="144" y="391.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">on</text>
@@ -663,7 +667,7 @@
 <text x="477" y="391.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">to</text>
 <text x="504" y="391.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">override</text>
 <text x="585" y="391.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">it.</text>
-<text x="27" y="409.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">22</text>
+<text x="27" y="409.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">21</text>
 <text x="54" y="409.7" fill="#c678dd" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">const</text>
 <text x="108" y="409.7" fill="#d2d6e4" textLength="216" lengthAdjust="spacingAndGlyphs">APPLE_TERMINAL_TRUECOLOR</text>
 <text x="324" y="409.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">:</text>
@@ -671,15 +675,15 @@
 <text x="378" y="409.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">=</text>
 <text x="396" y="409.7" fill="#d19a66" textLength="27" lengthAdjust="spacingAndGlyphs">460</text>
 <text x="423" y="409.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
-<text x="27" y="427.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">23</text>
-<text x="27" y="445.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">24</text>
+<text x="27" y="427.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">22</text>
+<text x="27" y="445.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">23</text>
 <text x="54" y="445.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">fn</text>
 <text x="81" y="445.7" fill="#61afef" textLength="144" lengthAdjust="spacingAndGlyphs">detect_truecolor</text>
 <text x="225" y="445.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">()</text>
 <text x="252" y="445.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">-&gt;</text>
 <text x="279" y="445.7" fill="#e5c07b" textLength="36" lengthAdjust="spacingAndGlyphs">bool</text>
 <text x="324" y="445.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="27" y="463.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">25</text>
+<text x="27" y="463.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">24</text>
 <text x="90" y="463.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">//</text>
 <text x="117" y="463.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">An</text>
 <text x="144" y="463.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">explicit</text>
@@ -692,7 +696,7 @@
 <text x="549" y="463.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">is</text>
 <text x="576" y="463.7" fill="#6e768c" textLength="45" lengthAdjust="spacingAndGlyphs">worth</text>
 <text x="630" y="463.7" fill="#6e768c" textLength="81" lengthAdjust="spacingAndGlyphs">fighting.</text>
-<text x="27" y="481.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
+<text x="27" y="481.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">25</text>
 <text x="90" y="481.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">if</text>
 <text x="117" y="481.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">let</text>
 <text x="153" y="481.7" fill="#56b6c2" textLength="18" lengthAdjust="spacingAndGlyphs">Ok</text>
@@ -708,7 +712,7 @@
 <text x="351" y="481.7" fill="#98c379" textLength="171" lengthAdjust="spacingAndGlyphs">&quot;TEXTTOP_TRUECOLOR&quot;</text>
 <text x="522" y="481.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">)</text>
 <text x="540" y="481.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="27" y="499.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">27</text>
+<text x="27" y="499.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
 <text x="126" y="499.7" fill="#c678dd" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">return</text>
 <text x="189" y="499.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">!</text>
 <text x="198" y="499.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">matches</text>
@@ -725,9 +729,9 @@
 <text x="558" y="499.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">|</text>
 <text x="576" y="499.7" fill="#98c379" textLength="36" lengthAdjust="spacingAndGlyphs">&quot;no&quot;</text>
 <text x="612" y="499.7" fill="#aab2bf" textLength="18" lengthAdjust="spacingAndGlyphs">);</text>
-<text x="27" y="517.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">28</text>
+<text x="27" y="517.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">27</text>
 <text x="90" y="517.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">}</text>
-<text x="27" y="535.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">29</text>
+<text x="27" y="535.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">28</text>
 <text x="90" y="535.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">//</text>
 <text x="117" y="535.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">The</text>
 <text x="153" y="535.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">de-facto</text>
@@ -740,7 +744,7 @@
 <text x="585" y="535.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">WezTerm</text>
 <text x="657" y="535.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">and</text>
 <text x="693" y="535.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">others.</text>
-<text x="27" y="553.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">30</text>
+<text x="27" y="553.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">29</text>
 <text x="90" y="553.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">//</text>
 <text x="117" y="553.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">Checked</text>
 <text x="189" y="553.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">before</text>
@@ -752,7 +756,7 @@
 <text x="540" y="553.7" fill="#6e768c" textLength="90" lengthAdjust="spacingAndGlyphs">advertises</text>
 <text x="639" y="553.7" fill="#6e768c" textLength="63" lengthAdjust="spacingAndGlyphs">support</text>
 <text x="711" y="553.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">is</text>
-<text x="27" y="571.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">31</text>
+<text x="27" y="571.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">30</text>
 <text x="90" y="571.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">//</text>
 <text x="117" y="571.7" fill="#6e768c" textLength="72" lengthAdjust="spacingAndGlyphs">believed</text>
 <text x="198" y="571.7" fill="#6e768c" textLength="90" lengthAdjust="spacingAndGlyphs">regardless</text>
@@ -763,7 +767,7 @@
 <text x="441" y="571.7" fill="#6e768c" textLength="54" lengthAdjust="spacingAndGlyphs">claims</text>
 <text x="504" y="571.7" fill="#6e768c" textLength="18" lengthAdjust="spacingAndGlyphs">to</text>
 <text x="531" y="571.7" fill="#6e768c" textLength="27" lengthAdjust="spacingAndGlyphs">be.</text>
-<text x="27" y="589.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">32</text>
+<text x="27" y="589.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">31</text>
 <text x="90" y="589.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">if</text>
 <text x="117" y="589.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">let</text>
 <text x="153" y="589.7" fill="#56b6c2" textLength="18" lengthAdjust="spacingAndGlyphs">Ok</text>
@@ -779,7 +783,7 @@
 <text x="351" y="589.7" fill="#98c379" textLength="99" lengthAdjust="spacingAndGlyphs">&quot;COLORTERM&quot;</text>
 <text x="450" y="589.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">)</text>
 <text x="468" y="589.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="27" y="607.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">33</text>
+<text x="27" y="607.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">32</text>
 <text x="126" y="607.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">if</text>
 <text x="153" y="607.7" fill="#d2d6e4" textLength="9" lengthAdjust="spacingAndGlyphs">v</text>
 <text x="171" y="607.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">==</text>
@@ -789,15 +793,15 @@
 <text x="351" y="607.7" fill="#61afef" textLength="18" lengthAdjust="spacingAndGlyphs">==</text>
 <text x="378" y="607.7" fill="#98c379" textLength="63" lengthAdjust="spacingAndGlyphs">&quot;24bit&quot;</text>
 <text x="450" y="607.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="27" y="625.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">34</text>
+<text x="27" y="625.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">33</text>
 <text x="162" y="625.7" fill="#c678dd" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">return</text>
 <text x="225" y="625.7" fill="#c678dd" font-weight="bold" textLength="36" lengthAdjust="spacingAndGlyphs">true</text>
 <text x="261" y="625.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">;</text>
-<text x="27" y="643.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">35</text>
+<text x="27" y="643.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">34</text>
 <text x="126" y="643.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">}</text>
-<text x="27" y="661.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">36</text>
+<text x="27" y="661.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">35</text>
 <text x="90" y="661.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">}</text>
-<text x="27" y="679.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">37</text>
+<text x="27" y="679.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">36</text>
 <text x="90" y="679.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">if</text>
 <text x="117" y="679.7" fill="#c678dd" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs">let</text>
 <text x="153" y="679.7" fill="#56b6c2" textLength="18" lengthAdjust="spacingAndGlyphs">Ok</text>
@@ -813,7 +817,7 @@
 <text x="351" y="679.7" fill="#98c379" textLength="126" lengthAdjust="spacingAndGlyphs">&quot;TERM_PROGRAM&quot;</text>
 <text x="477" y="679.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">)</text>
 <text x="495" y="679.7" fill="#aab2bf" textLength="9" lengthAdjust="spacingAndGlyphs">{</text>
-<text x="27" y="697.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">38</text>
+<text x="27" y="697.7" fill="#5a5f78" textLength="18" lengthAdjust="spacingAndGlyphs">37</text>
 <text x="126" y="697.7" fill="#c678dd" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs">if</text>
 <text x="153" y="697.7" fill="#d2d6e4" textLength="63" lengthAdjust="spacingAndGlyphs">matches</text>
 <text x="216" y="697.7" fill="#61afef" textLength="9" lengthAdjust="spacingAndGlyphs">!</text>
@@ -827,15 +831,6 @@
 <text x="225" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">1</text>
 <text x="252" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
 <text x="279" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">rust</text>
-<text x="333" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="360" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">Ctrl+S</text>
-<text x="423" y="715.7" fill="#8c96af" textLength="36" lengthAdjust="spacingAndGlyphs">save</text>
-<text x="468" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="486" y="715.7" fill="#8c96af" textLength="90" lengthAdjust="spacingAndGlyphs">Ctrl+C/X/V</text>
-<text x="585" y="715.7" fill="#8c96af" textLength="126" lengthAdjust="spacingAndGlyphs">copy/cut/paste</text>
-<text x="720" y="715.7" fill="#8c96af" textLength="9" lengthAdjust="spacingAndGlyphs">·</text>
-<text x="738" y="715.7" fill="#8c96af" textLength="108" lengthAdjust="spacingAndGlyphs">Shift+arrows</text>
-<text x="855" y="715.7" fill="#8c96af" textLength="54" lengthAdjust="spacingAndGlyphs">select</text>
 <text x="1251" y="733.7" fill="#00beff" textLength="9" lengthAdjust="spacingAndGlyphs">◢</text>
 <text x="9" y="751.7" fill="#ffffff" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⊞</text>
 <text x="27" y="751.7" fill="#ffffff" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">Start</text>
@@ -845,8 +840,8 @@
 <text x="243" y="751.7" fill="#ffffff" font-weight="bold" textLength="54" lengthAdjust="spacingAndGlyphs">gfx.rs</text>
 <text x="1017" y="751.7" fill="#ffc85a" font-weight="bold" textLength="9" lengthAdjust="spacingAndGlyphs">⎇</text>
 <text x="1035" y="751.7" fill="#ffc85a" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs">main*</text>
-<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">22:53</text>
-<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sat</text>
-<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">26</text>
-<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Sep</text>
+<text x="1098" y="751.7" fill="#c8d4eb" textLength="45" lengthAdjust="spacingAndGlyphs">23:21</text>
+<text x="1161" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Wed</text>
+<text x="1197" y="751.7" fill="#c8d4eb" textLength="18" lengthAdjust="spacingAndGlyphs">14</text>
+<text x="1224" y="751.7" fill="#c8d4eb" textLength="27" lengthAdjust="spacingAndGlyphs">Oct</text>
 </g></svg>

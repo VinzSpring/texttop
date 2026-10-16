@@ -16,7 +16,18 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::pin::{PinTo, PinnedApp};
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
+
+/// Buttons along the bottom row.
+#[derive(Clone, Copy, PartialEq)]
+enum Bar {
+    Close,
+    Back,
+    Run,
+    Detached,
+    Pin,
+}
 
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -62,6 +73,7 @@ pub struct AppLauncher {
     editing: bool,
     status: String,
     t: u64,
+    ui: Controls<Bar>,
 }
 
 impl AppLauncher {
@@ -76,6 +88,27 @@ impl AppLauncher {
             editing: false,
             status: String::new(),
             t: 0,
+            ui: Controls::new(),
+        }
+    }
+
+    /// Run one of the form's action rows, from its button.
+    fn run_form(&mut self, row: FormRow) -> Action {
+        match row {
+            FormRow::RunTerminal => Action::Launch(Launch::Terminal {
+                program: Some(self.path.clone()),
+                args: self.collected_args(),
+                cwd: None,
+            }),
+            FormRow::RunDetached => {
+                self.launch_detached();
+                Action::None
+            }
+            _ => Action::LaunchAndClose(Launch::PinEditor {
+                pin: self.pin_with_args(),
+                to: PinTo::Desktop,
+                edit: None,
+            }),
         }
     }
 
@@ -405,7 +438,7 @@ impl AppWindow for AppLauncher {
                 let header = if self.subpath.is_empty() {
                     format!("   ⚙ {}  — toggle options, then run", self.name())
                 } else {
-                    format!("   ⚙ {} {}  — Bksp goes up", self.name(), self.subpath.join(" "))
+                    format!("   ⚙ {} {}", self.name(), self.subpath.join(" "))
                 };
                 lines.push(Line::from(Span::styled(header, accent)));
                 lines.push(Line::default());
@@ -471,18 +504,25 @@ impl AppWindow for AppLauncher {
             Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)),
         );
 
-        let hint = match &self.stage {
-            Stage::Choose => " ↑↓ choose · Enter select · Esc close ",
-            Stage::Loading(_) => " Esc cancel ",
-            Stage::Form(_) => " Space toggle · Enter edit/run · Bksp back · Esc close ",
+        self.ui.begin();
+        let status = Item::Label(self.status.clone(), Color::Rgb(150, 158, 185));
+        let (left, right) = match &self.stage {
+            Stage::Choose => (vec![status], vec![Item::with("Close", Bar::Close, Look::Raised)]),
+            Stage::Loading(_) => (vec![status], vec![Item::with("Cancel", Bar::Back, Look::Raised)]),
+            Stage::Form(_) => (
+                vec![Item::btn("◀ Back", Bar::Back), status],
+                vec![
+                    Item::with("▶ Run", Bar::Run, Look::Primary),
+                    Item::btn("🚀 Detached", Bar::Detached),
+                    Item::btn("📌 Pin…", Bar::Pin),
+                ],
+            ),
         };
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(" {}  │{}", self.status, hint),
-                Style::default().fg(Color::Rgb(140, 150, 175)).bg(Color::Rgb(18, 22, 36)),
-            ))
-            .style(Style::default().bg(Color::Rgb(18, 22, 36))),
+        self.ui.toolbar(
+            f.buffer_mut(),
             Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+            &left,
+            &right,
         );
     }
 
@@ -613,34 +653,50 @@ impl AppWindow for AppLauncher {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, area: Rect) -> Action {
-        if let MouseEventKind::Down(MouseButton::Left) = m.kind {
-            match &self.stage {
-                Stage::Choose => {
-                    // choice rows are at offsets 4, 6, 8, 10 from area top
-                    let rel = m.row.saturating_sub(area.y);
-                    for (i, y) in [4u16, 6, 8, 10].iter().enumerate() {
-                        if rel == *y {
-                            self.sel = i;
-                            return self.on_key(KeyEvent::from(KeyCode::Enter));
-                        }
+        if let Some(hit) = self.ui.route(&m) {
+            let Some(b) = hit else { return Action::None };
+            return match b {
+                Bar::Close => Action::Close,
+                Bar::Back if matches!(self.stage, Stage::Loading(_)) => {
+                    self.stage = Stage::Choose;
+                    Action::None
+                }
+                Bar::Back => {
+                    self.editing = false;
+                    self.on_key(KeyEvent::from(KeyCode::Backspace))
+                }
+                Bar::Run => self.run_form(FormRow::RunTerminal),
+                Bar::Detached => self.run_form(FormRow::RunDetached),
+                Bar::Pin => self.run_form(FormRow::PinWithArgs),
+            };
+        }
+        let down = matches!(m.kind, MouseEventKind::Down(MouseButton::Left));
+        // the highlight follows the pointer; a click acts on the row at once
+        if !down && m.kind != MouseEventKind::Moved {
+            return Action::None;
+        }
+        let rel = m.row.saturating_sub(area.y);
+        match &self.stage {
+            Stage::Choose => {
+                // choice rows are at offsets 4, 6, 8, 10 from area top
+                if let Some(i) = [4u16, 6, 8, 10].iter().position(|y| rel == *y) {
+                    self.sel = i;
+                    if down {
+                        return self.on_key(KeyEvent::from(KeyCode::Enter));
                     }
                 }
-                Stage::Form(_) => {
-                    let rel = m.row.saturating_sub(area.y);
-                    if rel >= 2 {
-                        let idx = self.scroll + (rel - 2) as usize;
-                        if let Stage::Form(p) = &self.stage {
-                            if idx < Self::form_rows(p).len() {
-                                if idx == self.sel {
-                                    return self.on_key(KeyEvent::from(KeyCode::Enter));
-                                }
-                                self.sel = idx;
-                            }
-                        }
-                    }
-                }
-                _ => {}
             }
+            Stage::Form(p) if rel >= 2 && m.row + 1 < area.y + area.height => {
+                let idx = self.scroll + (rel - 2) as usize;
+                if idx < Self::form_rows(p).len() {
+                    self.sel = idx;
+                    if down {
+                        self.editing = false;
+                        return self.on_key(KeyEvent::from(KeyCode::Enter));
+                    }
+                }
+            }
+            _ => {}
         }
         Action::None
     }

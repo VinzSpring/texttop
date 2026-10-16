@@ -3,19 +3,25 @@
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
-use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
 use crate::gfx;
 
 const FIELD_BG: Color = Color::Rgb(8, 10, 16);
-const STATUS_FG: Color = Color::Rgb(140, 150, 175);
-const STATUS_BG: Color = Color::Rgb(18, 22, 36);
+
+#[derive(Clone, Copy, PartialEq)]
+enum Cmd {
+    StartPause,
+    NewGame,
+    Turn(i16, i16),
+    /// A click on the field steers toward it.
+    Field,
+}
 
 #[derive(PartialEq)]
 enum Phase {
@@ -38,6 +44,8 @@ pub struct Snake {
     best: u32,
     ticks: u32,
     rng: u64,
+    ui: Controls<Cmd>,
+    field: Rect,
 }
 
 impl Snake {
@@ -58,6 +66,8 @@ impl Snake {
             best: 0,
             ticks: 0,
             rng: seed,
+            ui: Controls::new(),
+            field: Rect::default(),
         };
         s.reset_round((30, 20));
         s
@@ -140,6 +150,45 @@ impl Snake {
         }
     }
 
+    fn start_pause(&mut self) {
+        self.phase = match self.phase {
+            Phase::Running => Phase::Paused,
+            Phase::Paused | Phase::Ready => Phase::Running,
+            Phase::Dead => {
+                self.new_game();
+                Phase::Running
+            }
+        };
+    }
+
+    fn new_game(&mut self) {
+        let grid = self.grid;
+        let best = self.best.max(self.score);
+        self.reset_round(grid);
+        self.best = best;
+    }
+
+    /// Turn toward a clicked cell: perpendicular to the current heading, to
+    /// whichever side the click is on.
+    fn steer_to(&mut self, col: u16, row: u16) {
+        let Some(&(hx, hy)) = self.body.front() else { return };
+        let tx = (col.saturating_sub(self.field.x) / 2) as i16;
+        let ty = row.saturating_sub(self.field.y) as i16;
+        let (dx, dy) = (tx - hx, ty - hy);
+        let heading = self.pending.back().copied().unwrap_or(self.dir);
+        let d = if self.phase == Phase::Ready {
+            // first move: go wherever the click points most
+            if dx.abs() >= dy.abs() { (dx.signum(), 0) } else { (0, dy.signum()) }
+        } else if heading.0 != 0 {
+            (0, dy.signum())
+        } else {
+            (dx.signum(), 0)
+        };
+        if d != (0, 0) {
+            self.turn(d);
+        }
+    }
+
     /// Ticks between moves: 150 ms at start, down to 75 ms.
     fn interval(&self) -> u32 {
         6u32.saturating_sub(self.score / 8).max(3)
@@ -179,7 +228,8 @@ impl AppWindow for Snake {
         if area.height < 5 || area.width < 16 {
             return;
         }
-        let field = Rect::new(area.x, area.y, area.width, area.height - 1);
+        let field = Rect::new(area.x, area.y + 1, area.width, area.height - 1);
+        self.field = field;
         let gw = (field.width / 2) as i16;
         let gh = field.height as i16;
         if self.grid != (gw, gh) {
@@ -224,9 +274,9 @@ impl AppWindow for Snake {
             Phase::Ready => self.overlay(
                 f,
                 field,
-                &["🐍 S N A K E", "", "press an arrow key to start"],
+                &["🐍 S N A K E", "", "click where to go, or press Start", "click beside the head to turn"],
             ),
-            Phase::Paused => self.overlay(f, field, &["paused — Space resumes"]),
+            Phase::Paused => self.overlay(f, field, &["paused"]),
             Phase::Dead => self.overlay(
                 f,
                 field,
@@ -234,23 +284,37 @@ impl AppWindow for Snake {
                     "game over",
                     "",
                     &format!("score {}  ·  best {}", self.score, self.best),
-                    "r restart · q close",
                 ][..]
                     .as_ref(),
             ),
             Phase::Running => {}
         }
 
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!(
-                    " score {} · best {} │ arrows/wasd steer · Space pause · r restart · q ",
-                    self.score, self.best
-                ),
-                Style::default().fg(STATUS_FG).bg(STATUS_BG),
-            ))
-            .style(Style::default().bg(STATUS_BG)),
-            Rect::new(area.x, area.y + area.height - 1, area.width, 1),
+        self.ui.begin();
+        self.ui.add(field, Cmd::Field);
+        let start = match self.phase {
+            Phase::Running => ("❚❚ Pause", Look::Plain),
+            Phase::Paused => ("▶ Resume", Look::Primary),
+            Phase::Ready => ("▶ Start", Look::Primary),
+            Phase::Dead => ("▶ Play again", Look::Primary),
+        };
+        let steer = if self.phase == Phase::Dead { Look::Disabled } else { Look::Plain };
+        self.ui.toolbar(
+            f.buffer_mut(),
+            Rect::new(area.x, area.y, area.width, 1),
+            &[
+                Item::with(start.0, Cmd::StartPause, start.1),
+                Item::btn("✦ New game", Cmd::NewGame),
+                Item::Sep,
+                Item::with("◀", Cmd::Turn(-1, 0), steer),
+                Item::with("▲", Cmd::Turn(0, -1), steer),
+                Item::with("▼", Cmd::Turn(0, 1), steer),
+                Item::with("▶", Cmd::Turn(1, 0), steer),
+            ],
+            &[Item::Label(
+                format!("score {}  best {}", self.score, self.best.max(self.score)),
+                Color::Rgb(220, 224, 238),
+            )],
         );
     }
 
@@ -260,21 +324,20 @@ impl AppWindow for Snake {
             KeyCode::Down | KeyCode::Char('s') => self.turn((0, 1)),
             KeyCode::Left | KeyCode::Char('a') => self.turn((-1, 0)),
             KeyCode::Right | KeyCode::Char('d') => self.turn((1, 0)),
-            KeyCode::Char(' ') => {
-                self.phase = match self.phase {
-                    Phase::Running => Phase::Paused,
-                    Phase::Paused => Phase::Running,
-                    Phase::Ready => Phase::Running,
-                    Phase::Dead => Phase::Dead,
-                };
-            }
-            KeyCode::Char('r') => {
-                let grid = self.grid;
-                let best = self.best.max(self.score);
-                self.reset_round(grid);
-                self.best = best;
-            }
+            KeyCode::Char(' ') if self.phase != Phase::Dead => self.start_pause(),
+            KeyCode::Char('r') => self.new_game(),
             KeyCode::Char('q') | KeyCode::Esc => return Action::Close,
+            _ => {}
+        }
+        Action::None
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        match self.ui.route(&m) {
+            Some(Some(Cmd::StartPause)) => self.start_pause(),
+            Some(Some(Cmd::NewGame)) => self.new_game(),
+            Some(Some(Cmd::Turn(dx, dy))) if self.phase != Phase::Dead => self.turn((dx, dy)),
+            Some(Some(Cmd::Field)) if self.phase != Phase::Dead => self.steer_to(m.column, m.row),
             _ => {}
         }
         Action::None
