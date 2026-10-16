@@ -1,0 +1,182 @@
+name: Release
+
+# Run by hand: Actions → Release → Run workflow. Builds texttop with every
+# default feature on each supported platform and publishes one GitHub
+# release with all the archives and a SHA256SUMS file.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.3.0 (empty = the version in Cargo.toml)"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark as a pre-release"
+        type: boolean
+        default: false
+      draft:
+        description: "Create as a draft (publish it yourself later)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    name: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Work out the version and check the tag is free
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          version="${INPUT_VERSION#v}"
+          version="${version:-$crate}"
+          if [ "$version" != "$crate" ]; then
+            echo "::warning::Releasing $version but Cargo.toml says $crate — the binary will report $crate."
+          fi
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag already exists. Bump the version or delete the old release first."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
+
+  build:
+    name: build (${{ matrix.name }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+          # Oldest maintained Ubuntu with WebKitGTK 4.1: links against an
+          # older glibc, so the binary runs on more distributions.
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: macos-arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: macos-x86_64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libwebkit2gtk-4.1-dev
+      - name: Test
+        run: cargo test --locked --release --target ${{ matrix.target }}
+      - name: Build
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "texttop-${{ needs.prepare.outputs.tag }}-${{ matrix.name }}"
+          New-Item -ItemType Directory -Force "dist/$name" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/texttop.exe" "dist/$name/"
+          Copy-Item README.md, CHANGELOG.md, LICENSE-MIT, LICENSE-APACHE "dist/$name/"
+          Compress-Archive -Path "dist/$name" -DestinationPath "dist/$name.zip"
+      - name: Package (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          name="texttop-${{ needs.prepare.outputs.tag }}-${{ matrix.name }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/texttop" "dist/$name/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: publish
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          # The "## <version>" section, up to the next "## " heading.
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if (index($0, "## " v " ") == 1 || $0 == "## " v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          {
+            echo
+            echo "### Downloads"
+            echo
+            echo "| Platform | File |"
+            echo "| --- | --- |"
+            for f in dist/*.zip dist/*.tar.gz; do
+              b=$(basename "$f")
+              p=${b#texttop-$TAG-}
+              p=${p%.zip}
+              p=${p%.tar.gz}
+              echo "| $p | \`$b\` |"
+            done
+            echo
+            echo "Linux needs WebKitGTK 4.1 and ALSA at runtime (Ubuntu/Debian: \`libwebkit2gtk-4.1-0 libasound2\`)."
+            echo "Verify downloads with \`sha256sum -c SHA256SUMS\`."
+          } >> notes.md
+          cat notes.md
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          [ "$DRAFT" = "true" ] && flags+=(--draft)
+          # Changelog section empty: let GitHub list the merged changes.
+          if [ -z "$(sed -n '/### Downloads/q;p' notes.md | tr -d '[:space:]')" ]; then
+            flags+=(--generate-notes)
+          fi
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "texttop $TAG" \
+            --notes-file notes.md \
+            "${flags[@]}" \
+            dist/*

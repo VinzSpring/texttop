@@ -99,6 +99,15 @@ group, tabs, the directory watcher, a web page through WebKitGTK, the folder
 picker, App Groups settings and Contribute's clone. Each step's screen is
 saved in `target/linux-e2e`. Add `-e E2E_NO_NETWORK=1` to skip the clone.
 
+## Releasing
+
+Bump `version` in `Cargo.toml` and add a `## <version>` section to
+`CHANGELOG.md`, then run **Actions → Release → Run workflow** on GitHub. It
+tests and builds every platform (Windows x64, Linux x64, macOS Apple Silicon
+and Intel) and publishes a `v<version>` release with the archives, a
+`SHA256SUMS` file, and that changelog section as its notes. Options: a
+different version, pre-release, or draft.
+
 ## Known limitations
 
 - **Studio** needs the `audio` feature (on by default). Dropped samples are referenced by path (relative to the `.ttstudio` file when they sit beside it), not copied in; keep those wav/mp3 files around.
