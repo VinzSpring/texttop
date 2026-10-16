@@ -42,6 +42,7 @@ mod imp {
     };
     use windows_core::BOOL;
 
+    use crate::apps::scroll::ScrollState;
     use crate::apps::ui::{Controls, Item, Look};
     use crate::apps::{Action, AppWindow};
     use crate::engine::{next_seq, Frame as PixFrame, MouseKind};
@@ -604,6 +605,9 @@ mod imp {
         cache: gfx::RgbCache,
         note: String,
         ui: Controls<Btn>,
+        bar: ScrollState,
+        /// Visible rows of the window list at the last frame.
+        pick_rows: usize,
     }
 
     impl AppHost {
@@ -628,6 +632,8 @@ mod imp {
                 cache: gfx::RgbCache::default(),
                 note,
                 ui: Controls::new(),
+                bar: ScrollState::default(),
+                pick_rows: 0,
             }
         }
 
@@ -852,6 +858,11 @@ mod imp {
                             Style::default().fg(fg).bg(bg),
                         );
                     }
+                    self.pick_rows = rows;
+                    self.bar.offset = *off as u16;
+                    let bar = (list.len() > rows)
+                        .then(|| Rect::new(content.x + content.width - 1, content.y + 2, 1, rows as u16));
+                    self.bar.show_bar(buf, bar, list.len(), rows as u16);
                     if list.is_empty() {
                         buf.set_string(
                             content.x + 2,
@@ -1143,6 +1154,17 @@ mod imp {
             }
             match &mut self.state {
                 State::Wait { .. } => {}
+                State::Pick { list, sel, off, .. }
+                    if {
+                        self.bar.offset = *off as u16;
+                        self.bar.on_mouse(m, list.len(), self.pick_rows as u16)
+                    } =>
+                {
+                    // The list keeps the selection in view, so bring it along.
+                    *off = self.bar.offset as usize;
+                    let last = (*off + self.pick_rows).saturating_sub(1);
+                    *sel = (*sel).clamp(*off, last.max(*off)).min(list.len().saturating_sub(1));
+                }
                 State::Pick { list, sel, off, .. } => match m.kind {
                     // the highlight follows the pointer
                     MouseEventKind::Moved => {

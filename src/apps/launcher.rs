@@ -16,6 +16,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 use super::pin::{PinTo, PinnedApp};
+use super::scroll::ScrollState;
 use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
 
@@ -74,6 +75,10 @@ pub struct AppLauncher {
     status: String,
     t: u64,
     ui: Controls<Bar>,
+    bar: ScrollState,
+    /// Option rows and visible height of the form at the last frame.
+    form_len: usize,
+    list_h: usize,
 }
 
 impl AppLauncher {
@@ -87,6 +92,9 @@ impl AppLauncher {
             extra: String::new(),
             editing: false,
             status: String::new(),
+            bar: ScrollState::default(),
+            form_len: 0,
+            list_h: 0,
             t: 0,
             ui: Controls::new(),
         }
@@ -444,6 +452,8 @@ impl AppWindow for AppLauncher {
                 lines.push(Line::default());
 
                 let list_h = area.height.saturating_sub(3) as usize;
+                self.form_len = rows.len();
+                self.list_h = list_h;
                 if self.sel < self.scroll {
                     self.scroll = self.sel;
                 }
@@ -503,6 +513,11 @@ impl AppWindow for AppLauncher {
             Paragraph::new(lines),
             Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)),
         );
+        let form = matches!(self.stage, Stage::Form(_));
+        self.bar.offset = self.scroll as u16;
+        let bar = (form && self.form_len > self.list_h)
+            .then(|| Rect::new(area.x + area.width - 1, area.y + 2, 1, self.list_h as u16));
+        self.bar.show_bar(f.buffer_mut(), bar, self.form_len, self.list_h as u16);
 
         self.ui.begin();
         let status = Item::Label(self.status.clone(), Color::Rgb(150, 158, 185));
@@ -669,6 +684,16 @@ impl AppWindow for AppLauncher {
                 Bar::Detached => self.run_form(FormRow::RunDetached),
                 Bar::Pin => self.run_form(FormRow::PinWithArgs),
             };
+        }
+        if matches!(self.stage, Stage::Form(_)) {
+            self.bar.offset = self.scroll as u16;
+            if self.bar.on_mouse(m, self.form_len, self.list_h as u16) {
+                // The form keeps the selection in view, so bring it along.
+                self.scroll = self.bar.offset as usize;
+                let last = (self.scroll + self.list_h).saturating_sub(1);
+                self.sel = self.sel.clamp(self.scroll, last.max(self.scroll));
+                return Action::None;
+            }
         }
         let down = matches!(m.kind, MouseEventKind::Down(MouseButton::Left));
         // the highlight follows the pointer; a click acts on the row at once

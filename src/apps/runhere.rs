@@ -4,13 +4,14 @@
 
 use std::path::{Path, PathBuf};
 
-use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use super::pin::{fill_template, split_args, PinnedApp};
+use super::scroll::ScrollState;
 use super::ui::{self, Controls, Item, Look};
 use super::{launch_for_path, Action, AppWindow, Launch};
 
@@ -96,6 +97,9 @@ pub struct RunHere {
     view_h: usize,
     status: String,
     ui: Controls<Btn>,
+    bar: ScrollState,
+    /// Keep the selection in view (off while the wheel or scrollbar scroll).
+    follow: bool,
 }
 
 impl RunHere {
@@ -145,6 +149,8 @@ impl RunHere {
             view_h: 12,
             status: String::new(),
             ui: Controls::new(),
+            bar: ScrollState::default(),
+            follow: true,
         };
         // Start on the first app that can do something with the selection.
         s.sel = (0..s.choices.len()).find(|&i| s.plan(i).is_ok()).unwrap_or(0);
@@ -271,6 +277,7 @@ impl RunHere {
         if n > 0 {
             self.sel = (self.sel as isize + delta).rem_euclid(n) as usize;
             self.status.clear();
+            self.follow = true;
             self.ensure_visible();
         }
     }
@@ -397,7 +404,9 @@ impl AppWindow for RunHere {
         let list_top = area.y + 2;
         let list_h = area.height.saturating_sub(3).max(1) as usize;
         self.view_h = list_h;
-        self.ensure_visible();
+        if self.follow {
+            self.ensure_visible();
+        }
         self.scroll = self.scroll.min(self.rows.len().saturating_sub(list_h));
         let name_w = self
             .choices
@@ -458,6 +467,11 @@ impl AppWindow for RunHere {
             }
         }
 
+        self.bar.offset = self.scroll as u16;
+        let bar = (self.rows.len() > list_h)
+            .then(|| Rect::new(area.x + area.width - 1, list_top, 1, list_h as u16));
+        self.bar.show_bar(buf, bar, self.rows.len(), list_h as u16);
+
         // Bottom bar: status on the left, Run / Cancel on the right.
         let (_, ok) = self.hint(self.sel);
         let run = format!(
@@ -508,6 +522,12 @@ impl AppWindow for RunHere {
     }
 
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
+        self.bar.offset = self.scroll as u16;
+        if self.bar.on_mouse(m, self.rows.len(), self.view_h as u16) {
+            self.scroll = self.bar.offset as usize;
+            self.follow = false;
+            return Action::None;
+        }
         match self.ui.route(&m) {
             Some(Some(Btn::Row(i))) => {
                 self.sel = i;
@@ -521,11 +541,6 @@ impl AppWindow for RunHere {
             Some(Some(Btn::Cancel)) => return Action::Close,
             Some(None) => {}
             None => match m.kind {
-                MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
-                MouseEventKind::ScrollDown => {
-                    let max = self.rows.len().saturating_sub(self.view_h);
-                    self.scroll = (self.scroll + 1).min(max);
-                }
                 _ => {}
             },
         }

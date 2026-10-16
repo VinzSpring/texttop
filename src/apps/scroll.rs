@@ -1,6 +1,7 @@
 //! Shared vertical overflow scrolling for apps whose content can exceed the window.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::Line;
@@ -22,6 +23,16 @@ impl ScrollState {
         content_len
             .saturating_sub(view_h.max(1) as usize)
             .min(u16::MAX as usize) as u16
+    }
+
+    /// For apps that draw their own rows: show the scrollbar in `bar` (one
+    /// column wide) at the current offset and remember it for clicks and
+    /// drags. `None` hides it.
+    pub fn show_bar(&mut self, buf: &mut Buffer, bar: Option<Rect>, content_len: usize, view_h: u16) {
+        self.bar = bar;
+        if let Some(b) = bar {
+            paint_scrollbar(buf, b, content_len, view_h, self.offset);
+        }
     }
 
     pub fn clamp(&mut self, content_len: usize, view_h: u16) {
@@ -138,11 +149,15 @@ pub fn render_scrollable(f: &mut Frame, area: Rect, lines: &[Line], scroll: &mut
     }
 }
 
-fn draw_scrollbar(f: &mut Frame, area: Rect, content_len: usize, view_h: u16, offset: u16) {
+/// Draw a vertical scrollbar (arrows, track, thumb) into a one-column `area`.
+pub fn draw_scrollbar(f: &mut Frame, area: Rect, content_len: usize, view_h: u16, offset: u16) {
+    paint_scrollbar(f.buffer_mut(), area, content_len, view_h, offset);
+}
+
+fn paint_scrollbar(buf: &mut Buffer, area: Rect, content_len: usize, view_h: u16, offset: u16) {
     if area.height == 0 {
         return;
     }
-    let buf = f.buffer_mut();
     let track_s = Style::default().fg(Color::Rgb(40, 48, 70));
     let thumb = Style::default().fg(Color::Rgb(0, 170, 220));
     let arrow = Style::default()

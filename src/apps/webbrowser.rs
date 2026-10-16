@@ -14,6 +14,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::scroll::ScrollState;
 use super::ui::{Controls, Item, Look};
 use super::webdata::{self, Bookmarks, History, Settings};
 use super::{Action, AppWindow};
@@ -162,6 +163,7 @@ pub struct WebBrowser {
     bookmarks: Bookmarks,
     settings: Settings,
     panel: Panel,
+    panel_bar: ScrollState,
     /// Selected row within the open panel.
     sel: usize,
     /// Live filter typed while a list panel is open.
@@ -203,6 +205,7 @@ impl WebBrowser {
             bookmarks: Bookmarks::load(),
             settings,
             panel: Panel::None,
+            panel_bar: ScrollState::default(),
             sel: 0,
             filter: String::new(),
             cookies: Vec::new(),
@@ -742,6 +745,10 @@ impl WebBrowser {
                 );
             }
         }
+        self.panel_bar.offset = top as u16;
+        let bar = (rows.len() > list_h)
+            .then(|| Rect::new(rect.x + rect.width - 1, rect.y + 2, 1, list_h as u16));
+        self.panel_bar.show_bar(buf, bar, rows.len(), list_h as u16);
         buf.set_string(
             rect.x + 1,
             rect.y + rect.height - 1,
@@ -1164,6 +1171,23 @@ impl AppWindow for WebBrowser {
                     self.run_tool(tool);
                 }
                 return Action::None;
+            }
+            // Scrollbar: the window follows the selection, so dragging moves
+            // the selection to the bottom of the view it asks for.
+            if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+                let n = self.matches().len();
+                let list_h = list_height(panel_rect(content, n));
+                self.panel_bar.offset = scroll_top(self.sel, list_h) as u16;
+                if self.panel_bar.on_mouse(m, n, list_h as u16) {
+                    let top = self.panel_bar.offset as usize;
+                    self.sel = if top == 0 {
+                        self.sel.min(list_h.saturating_sub(1))
+                    } else {
+                        top + list_h - 1
+                    }
+                    .min(n.saturating_sub(1));
+                    return Action::None;
+                }
             }
             match m.kind {
                 MouseEventKind::ScrollUp => self.sel = self.sel.saturating_sub(3),

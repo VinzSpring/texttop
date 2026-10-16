@@ -8,6 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+use super::scroll::ScrollState;
 use super::ui::{self, Controls, Item, Look};
 use super::{Action, AppWindow, Launch};
 use crate::gfx;
@@ -32,6 +33,7 @@ pub struct HexViewer {
     /// Visible data rows at the last render, for paging.
     rows: usize,
     ui: Controls<Cmd>,
+    bar: ScrollState,
 }
 
 impl HexViewer {
@@ -44,6 +46,7 @@ impl HexViewer {
             cols: 16,
             rows: 20,
             ui: Controls::new(),
+            bar: ScrollState::default(),
         };
         if let Some(p) = path {
             hv.load(p);
@@ -78,6 +81,17 @@ impl HexViewer {
         let max = self.max_offset(self.rows) as isize;
         self.offset = (self.offset as isize + step).clamp(0, max.max(0)) as usize;
         self.offset -= self.offset % self.cols;
+    }
+
+    /// Scrollbar units: rows, scaled down for files longer than a u16 of rows.
+    fn bar_scale(&self) -> usize {
+        let total = self.data.len().div_ceil(self.cols.max(1));
+        total.div_ceil(u16::MAX as usize - 1).max(1)
+    }
+
+    fn sync_bar(&mut self) {
+        let scale = self.bar_scale();
+        self.bar.offset = (self.offset / self.cols.max(1) / scale) as u16;
     }
 
     fn run(&mut self, c: Cmd) -> Action {
@@ -144,6 +158,9 @@ impl AppWindow for HexViewer {
         let area = Rect::new(full.x, full.y + 1, full.width, full.height - 1);
         let rows = area.height.saturating_sub(1) as usize;
         self.rows = rows;
+        let total_rows = self.data.len().div_ceil(self.cols.max(1));
+        let overflow = total_rows > rows;
+        let area = Rect::new(area.x, area.y, area.width - u16::from(overflow), area.height);
 
         let addr = Style::default().fg(Color::Rgb(100, 180, 255));
         let hex = Style::default().fg(Color::Rgb(210, 215, 230));
@@ -196,6 +213,10 @@ impl AppWindow for HexViewer {
         }
 
         f.render_widget(Paragraph::new(lines), Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1)));
+        self.sync_bar();
+        let scale = self.bar_scale();
+        let bar = overflow.then(|| Rect::new(area.x + area.width, area.y, 1, rows as u16));
+        self.bar.show_bar(f.buffer_mut(), bar, total_rows.div_ceil(scale), (rows / scale).max(1) as u16);
         f.render_widget(
             Paragraph::new(Span::styled(
                 if loaded {
@@ -237,6 +258,17 @@ impl AppWindow for HexViewer {
     fn on_mouse(&mut self, m: MouseEvent, _area: Rect) -> Action {
         if let Some(hit) = self.ui.route(&m) {
             return hit.map_or(Action::None, |c| self.run(c));
+        }
+        if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+            self.sync_bar();
+            let scale = self.bar_scale();
+            let total = self.data.len().div_ceil(self.cols.max(1)).div_ceil(scale);
+            if self.bar.on_mouse(m, total, (self.rows / scale).max(1) as u16) {
+                let row = self.bar.offset as usize * scale;
+                self.offset = (row * self.cols).min(self.max_offset(self.rows));
+                self.offset -= self.offset % self.cols.max(1);
+                return Action::None;
+            }
         }
         match m.kind {
             MouseEventKind::ScrollUp => self.scroll_by(-3),

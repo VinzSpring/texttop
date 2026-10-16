@@ -504,6 +504,45 @@ fn lcs_diff<'a>(a: &[&'a str], b: &[&'a str]) -> Vec<Edit<'a>> {
     out
 }
 
+/// Merge two versions of a text line by line: shared lines stay, and each
+/// run where they differ becomes a git-style conflict block
+/// (`<<<<<<< yours` / `=======` / `>>>>>>> on disk`). Returns the merged lines
+/// and how many conflict blocks it holds.
+pub fn conflict_merge(mine: &[String], disk: &[String]) -> (Vec<String>, usize) {
+    let a: Vec<&str> = mine.iter().map(|s| s.as_str()).collect();
+    let b: Vec<&str> = disk.iter().map(|s| s.as_str()).collect();
+    let mut out = Vec::new();
+    let mut blocks = 0;
+    let (mut ours, mut theirs): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
+    let flush = |out: &mut Vec<String>, ours: &mut Vec<&str>, theirs: &mut Vec<&str>, blocks: &mut usize| {
+        if ours.is_empty() && theirs.is_empty() {
+            return;
+        }
+        *blocks += 1;
+        out.push(CONFLICT_MINE.to_string());
+        out.extend(ours.drain(..).map(String::from));
+        out.push(CONFLICT_SPLIT.to_string());
+        out.extend(theirs.drain(..).map(String::from));
+        out.push(CONFLICT_DISK.to_string());
+    };
+    for e in lcs_diff(&a, &b) {
+        match e {
+            Edit::Equal(s) => {
+                flush(&mut out, &mut ours, &mut theirs, &mut blocks);
+                out.push(s.to_string());
+            }
+            Edit::Delete(s) => ours.push(s),
+            Edit::Insert(s) => theirs.push(s),
+        }
+    }
+    flush(&mut out, &mut ours, &mut theirs, &mut blocks);
+    (out, blocks)
+}
+
+pub const CONFLICT_MINE: &str = "<<<<<<< yours";
+pub const CONFLICT_SPLIT: &str = "=======";
+pub const CONFLICT_DISK: &str = ">>>>>>> on disk";
+
 #[cfg(test)]
 mod tests {
     use super::*;

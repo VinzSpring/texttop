@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 — 2026-10-17
+
+### Added
+- **App groups** — "virtual apps" made of several frames (file explorer, terminal, editor, git, …) docked around a tab area and started together in one folder. Listed in the start menu and in Run app here; edited in the new **App Groups** settings with a live layout sketch. A group's top bar has **Open folder/file** (a file-explorer picker) and **Settings**; frames resize by dragging their edge.
+- **IDE** — built-in app group (explorer left, terminal bottom, everything opened inside lands in a tab), with its own desktop icon.
+- **Contribute / Customize** — downloads texttop's source with git into its data folder and opens it in the IDE.
+- **Run app here…** in Files — start any built-in app, app group or pinned app in the current folder, or open the selected files with it.
+- Text editor: **find and replace** bar (Ctrl+F, Ctrl+H, F3 / Shift+F3, match case, replace one or all), double-click selects a word, triple-click a line, Shift+click extends the selection, Ctrl+←/→ jump by word, Ctrl+Home/End.
+- Text editor: **live reload** — a file changed on disk reloads by itself; with unsaved edits a warning bar offers **Show conflicts** (both versions marked inline), **Use disk version** or **Keep mine**.
+- Scrollbars in the editor, Hex Viewer, Detected Apps, Run app here, the App Launcher form, the App Host window list and the browser's History / Bookmarks / Cookies panels.
+- Files follows the folder live: changes made elsewhere show up on their own.
+- Linux test container (`tests/linux`) that builds with WebKitGTK and ALSA, runs the tests and drives the real binary end to end.
+- Manually run **Release** workflow that builds Windows, Linux and macOS and publishes a GitHub release.
+
+### Changed
+- Every built-in app's actions live in visible buttons and menus (shared toolkit), with keys as accelerators only.
+- Narrow file lists drop the date, then the size column, so names stay readable.
+- Ctrl+H in the editor now opens Replace; syntax colors stay on the toolbar and View menu.
+- The mouse wheel in the editor scrolls the view instead of moving the cursor.
+
+### Fixed
+- Library warnings (GTK, WebKit) no longer print over the desktop on Linux and macOS; they go to `.texttop_stderr.log`.
+- git can no longer stop on a password prompt drawn over the desktop.
+- Clicking in the editor after scrolling sideways put the cursor in the wrong column.
+
 ## 0.2.0 — 2026-09-09
 
 ### Added

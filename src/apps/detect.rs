@@ -15,6 +15,7 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use super::pin::{PinTo, PinnedApp};
+use super::scroll::ScrollState;
 use super::ui::{Controls, Item, Look};
 use super::{Action, AppWindow};
 
@@ -647,6 +648,7 @@ pub struct DetectedAppsChooser {
     scroll: usize,
     view_h: usize,
     ui: Controls<Btn>,
+    bar: ScrollState,
 }
 
 impl DetectedAppsChooser {
@@ -660,6 +662,7 @@ impl DetectedAppsChooser {
             scroll: 0,
             view_h: 12,
             ui: Controls::new(),
+            bar: ScrollState::default(),
         }
     }
 
@@ -850,6 +853,10 @@ impl AppWindow for DetectedAppsChooser {
             );
             row += 1;
         }
+        self.bar.offset = self.scroll as u16;
+        let bar = (self.apps.len() > list_h)
+            .then(|| Rect::new(area.x + area.width - 1, list_top, 1, list_h as u16));
+        self.bar.show_bar(f.buffer_mut(), bar, self.apps.len(), list_h as u16);
     }
 
     fn on_key(&mut self, k: KeyEvent) -> Action {
@@ -904,6 +911,15 @@ impl AppWindow for DetectedAppsChooser {
             Some(Some(Btn::Cancel)) => return Action::Close,
             Some(None) => return Action::None,
             None => {}
+        }
+        if !matches!(m.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+            self.bar.offset = self.scroll as u16;
+            if self.bar.on_mouse(m, self.apps.len(), self.view_h as u16) {
+                self.scroll = self.bar.offset as usize;
+                let last = (self.scroll + self.view_h).saturating_sub(1);
+                self.sel = self.sel.clamp(self.scroll, last.max(self.scroll));
+                return Action::None;
+            }
         }
         match m.kind {
             MouseEventKind::ScrollUp => {
